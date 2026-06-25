@@ -9,7 +9,8 @@ all: $(TARGET)
 $(TARGET): $(TARGET).c
 
 install: $(TARGET)
-	install -m 755 $(TARGET) $(PREFIX)/bin
+	install -d -o root -g root -m 0755 $(PREFIX)/bin
+	install -o root -g root -m 0755 $(TARGET) $(PREFIX)/bin/$(TARGET)
 
 uninstall:
 	rm -f $(PREFIX)/bin/$(TARGET)

@@ -65,8 +65,11 @@ static int score_keyboard(struct udev_device* dev) {
 
   if (sp.find("/devices/virtual/") != std::string::npos) return -100; // injector — exclude
   int score = 10;                                                     // real hardware path
+  // T2 USB bridge: apple-bce upstream, t2bce on some forks (the "t2bce"
+  // substring also catches a renamed "t2bce-vhci"). Soft boost, not a gate.
   if (sp.find("apple-bce") != std::string::npos
-      || sp.find("bce-vhci") != std::string::npos) score += 50;       // built-in T2 keyboard
+      || sp.find("bce-vhci") != std::string::npos
+      || sp.find("t2bce") != std::string::npos) score += 50;          // built-in T2 keyboard
   return score;
 }
 

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import dbus from 'dbus-next';
 import { findHyprDir } from './hyprland';
+import { findNiriSocket } from './niri';
 
 // Session detection that works under sudo, where XDG_SESSION_TYPE,
 // WAYLAND_DISPLAY etc. are usually stripped: sockets on disk are the source
@@ -11,7 +12,7 @@ import { findHyprDir } from './hyprland';
 export interface Session {
   type: 'wayland' | 'xorg' | 'unknown';
   /** Compositor (Wayland) or desktop (Xorg) when we can tell. */
-  desktop: 'hyprland' | 'gnome' | 'plasma' | 'unknown';
+  desktop: 'hyprland' | 'niri' | 'gnome' | 'plasma' | 'unknown';
 }
 
 // Candidate runtime dirs: the env one, the invoking user's when under sudo,
@@ -73,6 +74,7 @@ async function kwinRunning(): Promise<boolean> {
 
 async function detectDesktop(): Promise<Session['desktop']> {
   if (findHyprDir()) return 'hyprland';
+  if (findNiriSocket()) return 'niri';
   const xdg = (process.env.XDG_CURRENT_DESKTOP ?? '').toLowerCase();
   if (xdg.includes('gnome') || await gnomeShellRunning()) return 'gnome';
   if (xdg.includes('kde') || xdg.includes('plasma') || await kwinRunning()) return 'plasma';

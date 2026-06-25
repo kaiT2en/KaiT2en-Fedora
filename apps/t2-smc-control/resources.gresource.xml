@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/org/t2smccontrol/gtk/icons">
+    <file alias="hicolor/index.theme">assets/icons/hicolor/index.theme</file>
+    <file alias="hicolor/scalable/apps/org.t2smccontrol.gtk.svg" preprocess="xml-stripblanks">assets/icons/hicolor/scalable/apps/org.t2smccontrol.gtk.svg</file>
+  </gresource>
+</gresources>

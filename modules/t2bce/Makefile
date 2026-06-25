@@ -14,9 +14,10 @@ KVERSION := $(shell uname -r)
 endif
 
 KDIR := /lib/modules/$(KVERSION)/build
+MODDEST ?= /lib/modules/$(KVERSION)/updates
 PWD := $(shell pwd)
 
-.PHONY: all
+.PHONY: all clean install
 
 all:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
@@ -26,4 +27,7 @@ clean:
 	find $(PWD) -type f \( -name '*.o' -o -name '*.ko' -o -name '*.mod' -o -name '*.mod.c' -o -name '.*.cmd' -o -name 'Module.symvers' -o -name 'modules.order' \) -delete
 
 install:
-	$(MAKE) -C $(KDIR) M=$(PWD) modules_install
+	@test -f t2bce.ko || { echo "t2bce.ko not found; run make first"; exit 1; }
+	install -d -o root -g root -m 0755 $(MODDEST)
+	install -o root -g root -m 0644 t2bce.ko $(MODDEST)/t2bce.ko
+	depmod -a $(KVERSION)

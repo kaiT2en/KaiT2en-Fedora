@@ -5,7 +5,7 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib.sh"
 require_root
 require_repo_root
 require_fedora
-require_command grubby awk cp date install mktemp rm
+require_command grubby awk date install mktemp rm
 
 REMOVE_ARGS=(
 	intel_iommu
@@ -57,7 +57,7 @@ repair_etc_default_grub() {
 
 	backup="$file.kait2en.bak.$(date +%Y%m%d-%H%M%S)"
 	tmp="$(mktemp)"
-	cp -a "$file" "$backup"
+	install -o root -g root -m 0644 "$file" "$backup"
 
 	awk -v args="$KERNEL_ARGS" '
 		BEGIN { done = 0 }
@@ -74,7 +74,7 @@ repair_etc_default_grub() {
 		}
 	' "$file" >"$tmp"
 
-	install -m 0644 "$tmp" "$file"
+	install -o root -g root -m 0644 "$tmp" "$file"
 	rm -f "$tmp"
 	info "backed up $file to $backup"
 }

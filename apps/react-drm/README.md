@@ -47,7 +47,7 @@ Supported installer environments:
 - Ubuntu 25.10 or newer and Ubuntu derivatives that provide Node.js 20.19.0
   or newer
 - Arch Linux and supported Arch derivatives
-- GNOME, KDE Plasma or Hyprland on Wayland
+- GNOME, KDE Plasma , Niri or Hyprland on Wayland
 - Any Xorg desktop with `xprop`
 
 Ubuntu 24.04 is not supported because its repositories provide Node.js 18.
@@ -92,11 +92,12 @@ names differ between distributions, so install the equivalents of:
 - systemd/logind and a systemd user session for suspend handling and the
   supplied service
 
-The kernel must provide `appletbdrm` and `hid-appletb-bl`. Verify both before
-continuing:
+The kernel must provide the Touch Bar DRM driver (`appletbdrm` upstream, or
+`t2bdrm` on some forks) and `hid-appletb-bl`. Verify both before continuing
+(either DRM driver name is fine):
 
 ```sh
-modinfo appletbdrm
+modinfo appletbdrm || modinfo t2bdrm
 modinfo hid-appletb-bl
 ```
 

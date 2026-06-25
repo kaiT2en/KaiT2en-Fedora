@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { execFile, execFileSync } from 'child_process';
 import fs from 'fs';
-import { Box, Text, Button } from 'react-drm';
+import { Box, Text, Button, DISPLAY_BACKLIGHT_NAMES } from 'react-drm';
 import { MdBrightness4, MdBrightness6, MdBrightness7, MdKeyboard } from 'react-icons/md';
 import { BackButton } from '../components/BackButton';
 import { useLayers } from './index';
@@ -14,13 +14,11 @@ import { useLayers } from './index';
 // 'apple::kbd_backlight'. Auto-detect instead of hardcoding so the sliders work
 // across machines and don't spam "Device not found" from the poll loop.
 // Display candidate list mirrors tiny-dfr's find_display_backlight().
-const DISPLAY_CANDIDATES = ['apple-panel-bl', 'gmux_backlight', 'intel_backlight', 'acpi_video0'];
-
 function findDevice(base: string, match: (name: string) => boolean): string | null {
   try { return fs.readdirSync(base).find(match) ?? null; } catch { return null; }
 }
 
-const DISPLAY_DEVICE  = findDevice('/sys/class/backlight', n => DISPLAY_CANDIDATES.some(c => n.includes(c)));
+const DISPLAY_DEVICE  = findDevice('/sys/class/backlight', n => DISPLAY_BACKLIGHT_NAMES.some(c => n.includes(c)));
 const KEYBOARD_DEVICE = findDevice('/sys/class/leds', n => n.includes('kbd_backlight'));
 const AUTO_HIDE_MS = 5000;
 

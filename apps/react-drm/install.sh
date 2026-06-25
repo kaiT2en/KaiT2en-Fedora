@@ -18,7 +18,10 @@ REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || print
 readonly TOUCHBAR_VENDOR_ID="05ac"
 readonly TOUCHBAR_PRODUCT_ID="8302"
 readonly REQUIRED_TINY_DAEMONS=(tiny-dfr mac-touchbar-plus)
-readonly REQUIRED_KERNEL_MODULES=(appletbdrm hid-appletb-bl)
+# Each entry is a '|'-separated group; the group is satisfied when at least one
+# of its alternatives is loadable. The Touch Bar DRM driver ships under either
+# name depending on the kernel/fork (appletbdrm upstream, t2bdrm on some forks).
+readonly REQUIRED_KERNEL_MODULES=('appletbdrm|t2bdrm' hid-appletb-bl)
 readonly COMMON_RUNTIME_PACKAGES=(brightnessctl cava)
 
 ANALYSIS_MISSING_COMMANDS=()
@@ -225,7 +228,7 @@ detect_session() {
     *gnome*) WINDOW_BACKEND=gnome ;;
     *kde*|*plasma*) WINDOW_BACKEND=plasma ;;
     *hyprland*) WINDOW_BACKEND=hyprland ;;
-    *niri*) WINDOW_BACKEND=niri; DESKTOP_SUPPORTED=0; DESKTOP_ABORT_REASON="Niri has no active-window backend" ;;
+    *niri*) WINDOW_BACKEND=niri ;;
     *) WINDOW_BACKEND=unsupported; DESKTOP_SUPPORTED=0; DESKTOP_ABORT_REASON="no active-window backend exists for this Wayland desktop" ;;
   esac
 }
@@ -288,9 +291,13 @@ check_deploy_files() {
 }
 
 detect_kernel_modules() {
-  local module
-  for module in "${REQUIRED_KERNEL_MODULES[@]}"; do
-    modinfo "$module" >/dev/null 2>&1 || ANALYSIS_MISSING_MODULES+=("$module")
+  local group alt found
+  for group in "${REQUIRED_KERNEL_MODULES[@]}"; do
+    found=0
+    for alt in ${group//|/ }; do
+      if modinfo "$alt" >/dev/null 2>&1; then found=1; break; fi
+    done
+    [[ $found -eq 1 ]] || ANALYSIS_MISSING_MODULES+=("$group")
   done
 }
 
@@ -496,7 +503,7 @@ analyze() {
     exit 2
   fi
   if [[ $DESKTOP_SUPPORTED -eq 0 ]]; then
-    fail "$DESKTOP_ABORT_REASON; react-drm currently supports GNOME, Plasma and Hyprland on Wayland, plus Xorg"
+    fail "$DESKTOP_ABORT_REASON; react-drm currently supports GNOME, Plasma, Hyprland and Niri on Wayland, plus Xorg"
   fi
   if [[ "$DISTRO_FAMILY" == fedora ]]; then
     [[ "$OS_VERSION_ID" =~ ^[0-9]+$ ]] || fail "unable to determine the Fedora version"
@@ -619,7 +626,8 @@ configure_user_groups() {
 
 install_udev_rules() {
   info "Installing udev rules"
-  sudo install -m 0644 "$REPO_ROOT/system/99-react-drm.rules" /etc/udev/rules.d/99-react-drm.rules
+  sudo install -d -o root -g root -m 0755 /etc/udev/rules.d
+  sudo install -o root -g root -m 0644 "$REPO_ROOT/system/99-react-drm.rules" /etc/udev/rules.d/99-react-drm.rules
   sudo udevadm control --reload
   sudo udevadm trigger --action=add --subsystem-match=usb --subsystem-match=backlight
   sudo udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput

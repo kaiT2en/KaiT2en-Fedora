@@ -27,7 +27,8 @@ modules:
 
 install:
 	@test -f t2smc.ko || { echo "t2smc.ko not found; run make first"; exit 1; }
-	install -D -m 0644 t2smc.ko $(MODDEST)/t2smc.ko
+	install -d -o root -g root -m 0755 $(MODDEST)
+	install -o root -g root -m 0644 t2smc.ko $(MODDEST)/t2smc.ko
 	depmod -a $(KERNEL_RELEASE)
 
 uninstall:
@@ -38,7 +39,4 @@ clean:
 	$(MAKE) -C $(KERNEL_SRC) M=$(PWD) clean
 	find $(PWD) -type f \( -name '*.o' -o -name '*.ko' -o -name '*.mod' -o -name '*.mod.c' -o -name '.*.cmd' -o -name 'Module.symvers' -o -name 'modules.order' \) -delete
 
-modules_install:
-	$(MAKE) -C $(KERNEL_SRC) M=$(PWD) modules_install
-
-.PHONY: all modules install uninstall clean modules_install
+.PHONY: all modules install uninstall clean

@@ -15,6 +15,13 @@ export type { GifProps } from './components/Gif';
 export type { SwipeZoneProps } from './components/SwipeZone';
 export type { ScrollRowProps } from './components/ScrollRow';
 export { DrmDisplay, usbReset } from './native/binding';
+export {
+  TOUCHBAR_DRM_DRIVERS,
+  TOUCHBAR_BACKLIGHT_NAMES,
+  DISPLAY_BACKLIGHT_NAMES,
+  TOUCHBAR_USB_VENDOR_ID,
+  TOUCHBAR_USB_PRODUCT_ID,
+} from './native/hardware';
 export { TouchReader, KeyInjector, FKEY_CODES, KEY } from './native/input';
 export type { GestureOptions, TouchReaderOptions } from './native/input';
 export { KeyboardReader, KEY_NAMES, resolveKeyCode } from './native/keyboard';

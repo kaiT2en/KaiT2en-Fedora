@@ -14,9 +14,9 @@ SCRIPT_SRC="$REPO_ROOT/scripts/fedora/kait2en-suspend.sh"
 [[ -f "$SCRIPT_SRC" ]] || fail "missing $SCRIPT_SRC"
 
 info "installing Kait2en suspend helper"
-install -d -m 0755 /usr/local/libexec/kait2en
-install -m 0755 "$SCRIPT_SRC" /usr/local/libexec/kait2en/kait2en-suspend.sh
-install -m 0644 "$SERVICE_SRC" /etc/systemd/system/kait2en-suspend.service
+install -d -o root -g root -m 0755 /usr/local/libexec/kait2en
+install -o root -g root -m 0755 "$SCRIPT_SRC" /usr/local/libexec/kait2en/kait2en-suspend.sh
+install -o root -g root -m 0644 "$SERVICE_SRC" /etc/systemd/system/kait2en-suspend.service
 
 systemctl daemon-reload
 systemctl enable kait2en-suspend.service

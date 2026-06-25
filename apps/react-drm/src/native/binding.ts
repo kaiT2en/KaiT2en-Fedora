@@ -1,6 +1,9 @@
 import fs from 'fs';
 import { loadAddon } from './load-addon';
+import { TOUCHBAR_DRM_DRIVERS } from './hardware';
 import type { DrawCommand, BinaryFrame } from '../scene/serialize';
+
+const TOUCHBAR_DRM_RE = new RegExp(`DRIVER=(${TOUCHBAR_DRM_DRIVERS.join('|')})`, 'i');
 
 function resolveCardPath(devicePath?: string): string {
   if (devicePath) return devicePath;
@@ -8,12 +11,12 @@ function resolveCardPath(devicePath?: string): string {
   const envPath = process.env.REACT_DRM_DEVICE_PATH;
   if (envPath) return envPath;
 
-  // Prefer appletbdrm (Touch Bar) if present
+  // Prefer the Touch Bar DRM card if present.
   try {
     const cards = fs.readdirSync('/sys/class/drm').filter(n => /^card\d+$/.test(n));
     for (const card of cards) {
       const uevent = fs.readFileSync(`/sys/class/drm/${card}/device/uevent`, 'utf8');
-      if (/DRIVER=appletbdrm/i.test(uevent)) return `/dev/dri/${card}`;
+      if (TOUCHBAR_DRM_RE.test(uevent)) return `/dev/dri/${card}`;
     }
   } catch (_) { /* fall through */ }
 

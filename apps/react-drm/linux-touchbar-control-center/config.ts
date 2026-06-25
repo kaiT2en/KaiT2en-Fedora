@@ -68,10 +68,10 @@ export const LAYER_TRANSITION = {
 // ─── Active window tracking ─────────────────────────────────────────────────
 
 export const ACTIVE_WINDOW = {
-  // 'auto' detects the session (Xorg vs Wayland, then Hyprland / GNOME / KDE
-  // Plasma — sudo-safe, via sockets not env vars) and picks the matching
+  // 'auto' detects the session (Xorg vs Wayland, then Hyprland / niri / GNOME /
+  // KDE Plasma — sudo-safe, via sockets not env vars) and picks the matching
   // backend. Set a backend name to skip detection and force one.
-  backend: 'auto' as 'auto' | 'hyprland' | 'gnome' | 'plasma' | 'xorg',
+  backend: 'auto' as 'auto' | 'hyprland' | 'niri' | 'gnome' | 'plasma' | 'xorg',
 };
 
 // ─── Screenshots ────────────────────────────────────────────────────────────

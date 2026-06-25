@@ -6,7 +6,7 @@
 #
 # Seat assignment: move the Touch Bar display and its touch input to their
 # own logind seat so the main compositor never claims them.
-SUBSYSTEM=="drm", KERNEL=="card*", DRIVERS=="adp|appletbdrm", TAG-="master-of-seat", ENV{ID_SEAT}="seat-touchbar"
+SUBSYSTEM=="drm", KERNEL=="card*", DRIVERS=="adp|appletbdrm|t2bdrm", TAG-="master-of-seat", ENV{ID_SEAT}="seat-touchbar"
 SUBSYSTEM=="input", ATTR{name}=="Apple Inc. Touch Bar Display Touchpad", ENV{ID_SEAT}="seat-touchbar"
 SUBSYSTEM=="input", ATTR{name}=="MacBookPro17,1 Touch Bar", ENV{ID_SEAT}="seat-touchbar"
 SUBSYSTEM=="input", ATTR{name}=="Mac14,7 Touch Bar", ENV{ID_SEAT}="seat-touchbar"
@@ -30,7 +30,7 @@ SUBSYSTEM=="input", ATTR{name}=="Mac14,7 Touch Bar", ENV{ID_SEAT}="seat-touchbar
 ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8302", GROUP="video", MODE="0660", RUN+="/bin/chown root:video /sys%p/bConfigurationValue", RUN+="/bin/chmod g+w /sys%p/bConfigurationValue", ATTR{power/control}="on", ATTR{power/autosuspend_delay_ms}="-1"
 
 # Backlight: let the video group set Touch Bar brightness without sudo.
-ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="appletb_backlight", RUN+="/bin/chown root:video /sys/class/backlight/%k/brightness", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
+ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="appletb_backlight|t2tb_backlight", RUN+="/bin/chown root:video /sys/class/backlight/%k/brightness", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
 
 # Key injection: let members of the input group create the virtual keyboard.
 SUBSYSTEM=="misc", KERNEL=="uinput", GROUP="input", MODE="0660"

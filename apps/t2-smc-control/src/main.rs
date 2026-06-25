@@ -9,7 +9,7 @@ use std::rc::Rc;
 #[allow(unused_imports)]
 use adw::prelude::*;
 use glib::timeout_add_local;
-use gtk4::glib;
+use gtk4::{gio, glib};
 
 const APP_ID: &str = "org.t2smccontrol.gtk";
 const HWMON_NAMES: &[&str] = &["t2smc", "macsmc"];
@@ -398,7 +398,11 @@ fn rebuild_sensor_rows(
 }
 
 fn main() {
-    let app = adw::Application::builder().application_id(APP_ID).build();
+    register_embedded_resources();
+    let app = adw::Application::builder()
+        .application_id(APP_ID)
+        .resource_base_path("/org/t2smccontrol/gtk")
+        .build();
 
     app.connect_activate(|app| {
         let hwmon = Rc::new(RefCell::new(find_hwmon()));
@@ -663,4 +667,9 @@ fn main() {
     });
 
     app.run();
+}
+
+fn register_embedded_resources() {
+    gio::resources_register_include!("t2-smc-control.gresource")
+        .expect("failed to register embedded GTK resources");
 }

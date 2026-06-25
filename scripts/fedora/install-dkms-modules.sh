@@ -5,7 +5,7 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib.sh"
 require_root
 require_repo_root
 require_fedora
-require_command dkms make install rm
+require_command dkms make install rm chown mktemp
 
 MODULES=(
 	t2bce
@@ -25,8 +25,12 @@ restore_dkms_post_transaction() {
 }
 
 disable_dkms_post_transaction() {
-	install -d -m 0755 /etc/dkms/framework.conf.d
-	printf 'post_transaction=""\n' >"$DKMS_POST_TRANSACTION_OVERRIDE"
+	local tmp
+	install -d -o root -g root -m 0755 /etc/dkms/framework.conf.d
+	tmp="$(mktemp)"
+	printf 'post_transaction=""\n' >"$tmp"
+	install -o root -g root -m 0644 "$tmp" "$DKMS_POST_TRANSACTION_OVERRIDE"
+	rm -f "$tmp"
 	trap restore_dkms_post_transaction EXIT
 }
 
@@ -40,7 +44,7 @@ copy_module_source() {
 
 	info "copying $name source to $dst"
 	rm -rf "$dst"
-	mkdir -p "$dst"
+	install -d -o root -g root -m 0755 "$dst"
 	tar -C "$src" \
 		--exclude='.git' \
 		--exclude='*.ko' \
@@ -51,6 +55,7 @@ copy_module_source() {
 		--exclude='Module.symvers' \
 		--exclude='modules.order' \
 		-cf - . | tar -C "$dst" -xf -
+	chown -R root:root "$dst"
 
 	MODULE_VERSION="$version"
 }

@@ -8,6 +8,7 @@ BUILD_DIR := target/release
 BIN_SRC := $(BUILD_DIR)/$(BIN_NAME)
 DESKTOP_SRC := $(APP_ID).desktop
 ICON_SRC := assets/icons/hicolor/scalable/apps/$(APP_ID).svg
+ICON_THEME_SRC := assets/icons/hicolor/index.theme
 UNIT_SRC := systemd/t2-fancontrol.service
 
 PREFIX ?= /usr/local
@@ -32,11 +33,13 @@ build:
 
 install:
 	@if systemctl list-unit-files t2fanrd.service >/dev/null 2>&1; then systemctl disable --now t2fanrd.service || true; fi
-	$(INSTALL) -Dm755 $(BIN_SRC) $(BIN_DIR)/$(BIN_NAME)
-	$(INSTALL) -Dm644 $(DESKTOP_SRC) $(APPS_DIR)/$(APP_ID).desktop
-	$(INSTALL) -Dm644 $(ICON_SRC) $(ICONS_DIR)/$(APP_ID).svg
-	$(INSTALL) -Dm644 $(UNIT_SRC) $(UNIT_DIR)/t2-fancontrol.service
-	@if [ -f "$(ICON_THEME_DIR)/index.theme" ]; then $(GTK_UPDATE_ICON_CACHE) $(ICON_THEME_DIR); fi
+	$(INSTALL) -d -o root -g root -m 0755 $(BIN_DIR) $(APPS_DIR) $(ICONS_DIR) $(ICON_THEME_DIR) $(UNIT_DIR)
+	$(INSTALL) -o root -g root -m 0755 $(BIN_SRC) $(BIN_DIR)/$(BIN_NAME)
+	$(INSTALL) -o root -g root -m 0644 $(DESKTOP_SRC) $(APPS_DIR)/$(APP_ID).desktop
+	$(INSTALL) -o root -g root -m 0644 $(ICON_THEME_SRC) $(ICON_THEME_DIR)/index.theme
+	$(INSTALL) -o root -g root -m 0644 $(ICON_SRC) $(ICONS_DIR)/$(APP_ID).svg
+	$(INSTALL) -o root -g root -m 0644 $(UNIT_SRC) $(UNIT_DIR)/t2-fancontrol.service
+	$(GTK_UPDATE_ICON_CACHE) $(ICON_THEME_DIR)
 	systemctl daemon-reload
 	systemctl enable --now t2-fancontrol.service
 
@@ -51,10 +54,12 @@ uninstall:
 	@if systemctl list-unit-files t2fanrd.service >/dev/null 2>&1; then systemctl enable --now t2fanrd.service || true; fi
 
 install-user:
-	$(INSTALL) -Dm755 $(BIN_SRC) $(USER_BIN_DIR)/$(BIN_NAME)
-	$(INSTALL) -Dm644 $(DESKTOP_SRC) $(USER_APPS_DIR)/$(APP_ID).desktop
-	$(INSTALL) -Dm644 $(ICON_SRC) $(USER_ICONS_DIR)/$(APP_ID).svg
-	@if [ -f "$(USER_ICON_THEME_DIR)/index.theme" ]; then $(GTK_UPDATE_ICON_CACHE) $(USER_ICON_THEME_DIR); fi
+	$(INSTALL) -d -m 0755 $(USER_BIN_DIR) $(USER_APPS_DIR) $(USER_ICONS_DIR) $(USER_ICON_THEME_DIR)
+	$(INSTALL) -m 0755 $(BIN_SRC) $(USER_BIN_DIR)/$(BIN_NAME)
+	$(INSTALL) -m 0644 $(DESKTOP_SRC) $(USER_APPS_DIR)/$(APP_ID).desktop
+	$(INSTALL) -m 0644 $(ICON_THEME_SRC) $(USER_ICON_THEME_DIR)/index.theme
+	$(INSTALL) -m 0644 $(ICON_SRC) $(USER_ICONS_DIR)/$(APP_ID).svg
+	$(GTK_UPDATE_ICON_CACHE) $(USER_ICON_THEME_DIR)
 
 uninstall-user:
 	rm -f $(USER_BIN_DIR)/$(BIN_NAME)

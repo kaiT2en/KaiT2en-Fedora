@@ -13,10 +13,10 @@ all:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 install: all
-	install -d $(MODDEST)
-	install -m 0644 t2hid.ko $(MODDEST)/
-	install -m 0644 t2touchbar_bl.ko $(MODDEST)/
-	install -m 0644 t2touchbar_kbd.ko $(MODDEST)/
+	install -d -o root -g root -m 0755 $(MODDEST)
+	install -o root -g root -m 0644 t2hid.ko $(MODDEST)/
+	install -o root -g root -m 0644 t2touchbar_bl.ko $(MODDEST)/
+	install -o root -g root -m 0644 t2touchbar_kbd.ko $(MODDEST)/
 	depmod -a $(KVER)
 
 clean:

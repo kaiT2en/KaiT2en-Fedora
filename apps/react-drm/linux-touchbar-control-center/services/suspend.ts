@@ -2,8 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import dbus from 'dbus-next';
-import { usbReset } from 'react-drm';
+import { usbReset, TOUCHBAR_DRM_DRIVERS, TOUCHBAR_USB_VENDOR_ID, TOUCHBAR_USB_PRODUCT_ID } from 'react-drm';
 import { SLEEP } from '../config';
+
+const TOUCHBAR_DRM_RE = new RegExp(`DRIVER=(${TOUCHBAR_DRM_DRIVERS.join('|')})`, 'i');
 
 /**
  * In-app Touch Bar lifecycle: suspend/resume handling for every run mode
@@ -77,8 +79,8 @@ function findTouchBarUsb(): string | null {
     for (const d of fs.readdirSync(USB_DEVICES)) {
       const dir = path.join(USB_DEVICES, d);
       try {
-        if (fs.readFileSync(path.join(dir, 'idVendor'), 'utf8').trim() === '05ac'
-         && fs.readFileSync(path.join(dir, 'idProduct'), 'utf8').trim() === '8302') return dir;
+        if (fs.readFileSync(path.join(dir, 'idVendor'), 'utf8').trim() === TOUCHBAR_USB_VENDOR_ID
+         && fs.readFileSync(path.join(dir, 'idProduct'), 'utf8').trim() === TOUCHBAR_USB_PRODUCT_ID) return dir;
       } catch { /* not a device dir */ }
     }
   } catch { /* no sysfs */ }
@@ -101,7 +103,7 @@ function appletbdrmCardNode(): string | null {
     const cards = fs.readdirSync('/sys/class/drm').filter(n => /^card\d+$/.test(n));
     for (const card of cards) {
       try {
-        if (/DRIVER=appletbdrm/i.test(fs.readFileSync(`/sys/class/drm/${card}/device/uevent`, 'utf8')))
+        if (TOUCHBAR_DRM_RE.test(fs.readFileSync(`/sys/class/drm/${card}/device/uevent`, 'utf8')))
           return `/dev/dri/${card}`;
       } catch { /* card with no uevent */ }
     }

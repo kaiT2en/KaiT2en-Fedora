@@ -16,6 +16,7 @@ import { KeyboardReader, findKeyboardDevices, findPointerDevices, findLidDevice 
 import type { SceneNode, RootContainer } from '../scene/types';
 import type { LayoutBox } from '../scene/layout';
 import type { DrmDisplay } from '../native/binding';
+import { TOUCHBAR_BACKLIGHT_NAMES, DISPLAY_BACKLIGHT_NAMES } from '../native/hardware';
 
 export interface RenderOptions {
   /**
@@ -335,8 +336,8 @@ function watchLid(onLid: (closed: boolean) => void): () => void {
 // Controls the Touch Bar backlight via sysfs so the "off" state actually turns
 // the panel off and wake from off reliably restores it.
 
-const TB_BACKLIGHT_NAMES  = ['display-pipe', 'appletb_backlight'];
-const DISP_BACKLIGHT_NAMES = ['apple-panel-bl', 'gmux_backlight', 'intel_backlight', 'acpi_video0'];
+const TB_BACKLIGHT_NAMES  = TOUCHBAR_BACKLIGHT_NAMES;
+const DISP_BACKLIGHT_NAMES = DISPLAY_BACKLIGHT_NAMES;
 
 // After resume the appletb_backlight HID interface re-binds late; re-apply and
 // verify the level on this cadence until the panel confirms it (or the window
@@ -344,7 +345,7 @@ const DISP_BACKLIGHT_NAMES = ['apple-panel-bl', 'gmux_backlight', 'intel_backlig
 const SETTLE_INTERVAL_MS = 1000;
 const SETTLE_WINDOW_MS   = 20_000;
 
-function findBacklightDir(candidates: string[]): string | null {
+function findBacklightDir(candidates: readonly string[]): string | null {
   try {
     const base = '/sys/class/backlight';
     const name = fs.readdirSync(base).find(n => candidates.some(c => n.includes(c)));
