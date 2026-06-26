@@ -31,7 +31,6 @@ ADD_ARGS=(
 	"'acpi_osi=Windows 2012'"
 	"pcie_ports=native"
 	"mem_sleep_default=deep"
-	"t2gmux.force_igd=0"
 	"initcall_blacklist=cmos_init,magicmouse_driver_init"
 )
 
