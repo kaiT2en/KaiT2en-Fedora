@@ -20,7 +20,7 @@ try_unload() {
 	fi
 
 	log "unloading $module"
-	if modprobe -r "$module"; then
+	if rmmod -f "$module"; then
 		touch "$STATE_DIR/$module.unloaded"
 	else
 		log "could not unload $module"
@@ -57,19 +57,19 @@ needs_amdgpu_suspend_fix() {
 }
 
 has_bcm4377() {
-	local dev driver_module
-
-	if is_loaded hci_bcm4377; then
-		return 0
-	fi
+	local dev device
 
 	for dev in /sys/bus/pci/devices/*; do
 		[[ -r "$dev/vendor" ]] || continue
 		[[ "$(cat "$dev/vendor")" == "0x14e4" ]] || continue
-		if [[ -e "$dev/driver/module" ]]; then
-			driver_module="$(basename "$(readlink -f "$dev/driver/module")")"
-			[[ "$driver_module" == "hci_bcm4377" ]] && return 0
-		fi
+		[[ -r "$dev/device" ]] || continue
+		device="$(cat "$dev/device")"
+
+		case "$device" in
+			0x5f69|0x5f71|0x5f72|0x5fa0)
+				return 0
+				;;
+		esac
 	done
 
 	return 1
