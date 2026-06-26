@@ -12,6 +12,7 @@ STEPS=(
 	install-kernel-args.sh
 	install-dkms-modules.sh
 	install-networkmanager-rules.sh
+	install-t2-ncm-debug-service.sh
 	rebuild-initramfs.sh
 	install-suspend-service.sh
 	install-apps.sh

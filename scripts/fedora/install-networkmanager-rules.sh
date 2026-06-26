@@ -20,7 +20,8 @@ cat >"$RULE_FILE" <<'EOF'
 #
 # 05ac:8233 = Apple T2 Controller
 # cdc_ncm   = internal USB CDC-NCM network function
-ACTION=="add|change", SUBSYSTEM=="net", ENV{ID_BUS}=="usb", ENV{ID_VENDOR_ID}=="05ac", ENV{ID_MODEL_ID}=="8233", DRIVERS=="cdc_ncm", ENV{NM_UNMANAGED}="1"
+ACTION=="add", SUBSYSTEM=="net", ENV{ID_BUS}=="usb", ENV{ID_VENDOR_ID}=="05ac", ENV{ID_MODEL_ID}=="8233", DRIVERS=="cdc_ncm", NAME:="t2_ncm", ENV{NM_UNMANAGED}="1", TAG+="systemd", ENV{SYSTEMD_WANTS}+="kait2en-t2-ncm-down.service"
+ACTION=="change", SUBSYSTEM=="net", KERNEL=="t2_ncm", ENV{NM_UNMANAGED}="1", TAG+="systemd", ENV{SYSTEMD_WANTS}+="kait2en-t2-ncm-down.service"
 EOF
 
 chmod 0644 "$RULE_FILE"
@@ -28,4 +29,4 @@ chmod 0644 "$RULE_FILE"
 udevadm control --reload-rules
 
 info "installed $RULE_FILE"
-info "the internal T2 network interface will be unmanaged after reboot"
+info "the internal T2 debug network interface will be renamed to t2_ncm and unmanaged after reboot"
