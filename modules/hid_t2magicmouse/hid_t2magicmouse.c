@@ -16,6 +16,7 @@
 #include <linux/input/mt.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/version.h>
 #include <linux/workqueue.h>
 
 #include "hid-ids.h"
@@ -67,6 +68,16 @@ MODULE_PARM_DESC(report_undeciphered, "Report undeciphered multi-touch state fie
 #define USB_BATTERY_TIMEOUT_SEC 60
 
 #define MAX_CONTACTS 16
+
+#ifndef HID_SPI_DEVICE
+#define HID_SPI_DEVICE(ven, prod) HID_DEVICE(BUS_SPI, HID_GROUP_ANY, ven, prod)
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)
+#define magicmouse_is_spi_mouse(hdev) ((hdev)->type == HID_TYPE_SPI_MOUSE)
+#else
+#define magicmouse_is_spi_mouse(hdev) true
+#endif
 
 /* These definitions are not precise, but they're close enough.  (Bits
  * 0x03 seem to indicate the aspect ratio of the touch, bits 0x70 seem
@@ -1469,7 +1480,7 @@ static int magicmouse_probe(struct hid_device *hdev,
 	int ret;
 
 	if ((id->bus == BUS_SPI || id->bus == BUS_HOST) && id->vendor == SPI_VENDOR_ID_APPLE &&
- 	    hdev->type != HID_TYPE_SPI_MOUSE)
+ 	    !magicmouse_is_spi_mouse(hdev))
  		return -ENODEV;
 
 	switch (id->product) {

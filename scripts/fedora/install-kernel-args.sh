@@ -31,25 +31,12 @@ ADD_ARGS=(
 	"'acpi_osi=Windows 2012'"
 	"pcie_ports=native"
 	"mem_sleep_default=deep"
+	"t2gmux.force_igd=0"
 	"initcall_blacklist=cmos_init,magicmouse_driver_init"
 )
 
 MODULE_BLACKLIST="module_blacklist=acpi_tad,applesmc,macsmc,hid_apple,hid_appletb_bl,hid_appletb_kbd,hid_magicmouse,appletbdrm,thunderbolt,apple_bce,apple_mfi_fastcharge,apple_gmux"
 
-model_specific_args() {
-	local model
-	[[ -r /sys/class/dmi/id/product_name ]] || return
-	read -r model </sys/class/dmi/id/product_name
-
-	case "$model" in
-		MacBookPro15,1|MacBookPro15,3|MacBookPro16,1|MacBookPro16,4)
-			ADD_ARGS+=("t2gmux.force_igd=1")
-			info "enabling t2gmux.force_igd=1 for $model"
-			;;
-	esac
-}
-
-model_specific_args
 ADD_ARGS+=("$MODULE_BLACKLIST")
 KERNEL_ARGS="${ADD_ARGS[*]}"
 

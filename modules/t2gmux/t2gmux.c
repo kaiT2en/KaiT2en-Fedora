@@ -957,7 +957,7 @@ get_version:
 		if (pdev) {
 			pr_info("Switching to IGD");
 			gmux_switchto(VGA_SWITCHEROO_IGD);
-			vga_set_default_device(pdev);
+			pci_dev_put(pdev);
 		} else {
 			pr_err("force_idg is true, but couldn't find iGPU at 00:02.0! Is apple-set-os working?");
 		}

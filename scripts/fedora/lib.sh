@@ -41,3 +41,19 @@ require_command() {
 kernel_release() {
 	printf '%s\n' "${KERNEL_RELEASE:-$(uname -r)}"
 }
+
+require_min_kernel() {
+	local min_major=$1 min_minor=$2 release major minor
+
+	release="$(kernel_release)"
+	if [[ ! "$release" =~ ^([0-9]+)\.([0-9]+) ]]; then
+		fail "unable to determine Linux kernel version from: $release"
+	fi
+
+	major="${BASH_REMATCH[1]}"
+	minor="${BASH_REMATCH[2]}"
+
+	if (( major < min_major || (major == min_major && minor < min_minor) )); then
+		fail "KaiT2en requires Linux kernel ${min_major}.${min_minor} or newer. Update Fedora first, reboot into the updated kernel, then run this installer again. Current kernel: $release"
+	fi
+}

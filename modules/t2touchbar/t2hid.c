@@ -20,6 +20,7 @@
 #include <linux/device.h>
 #include <linux/hid.h>
 #include <linux/jiffies.h>
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/timer.h>
@@ -53,6 +54,16 @@
 #define HID_USAGE_MAGIC_BL			0xff00000f
 #define APPLE_MAGIC_REPORT_ID_POWER		3
 #define APPLE_MAGIC_REPORT_ID_BRIGHTNESS	1
+
+#ifndef HID_SPI_DEVICE
+#define HID_SPI_DEVICE(ven, prod) HID_DEVICE(BUS_SPI, HID_GROUP_ANY, ven, prod)
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)
+#define apple_is_spi_keyboard(hdev) ((hdev)->type == HID_TYPE_SPI_KEYBOARD)
+#else
+#define apple_is_spi_keyboard(hdev) true
+#endif
 
 static unsigned int fnmode = 3;
 module_param(fnmode, uint, 0644);
@@ -993,7 +1004,7 @@ static int apple_probe(struct hid_device *hdev,
 	int ret;
 
 	if ((id->bus == BUS_SPI || id->bus == BUS_HOST) && id->vendor == SPI_VENDOR_ID_APPLE &&
-	    hdev->type != HID_TYPE_SPI_KEYBOARD)
+	    !apple_is_spi_keyboard(hdev))
 		return -ENODEV;
 
 	if (quirks & APPLE_IGNORE_MOUSE && hdev->type == HID_TYPE_USBMOUSE)

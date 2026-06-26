@@ -5,7 +5,7 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib.sh"
 require_root
 require_repo_root
 require_fedora
-require_command dkms make install rm chown mktemp
+require_command dkms make install rm chown mktemp depmod
 
 MODULES=(
 	t2bce
@@ -67,10 +67,10 @@ install_module() {
 	version="$MODULE_VERSION"
 
 	info "registering $name/$version with DKMS"
-	dkms remove -m "$name" -v "$version" --all >/dev/null 2>&1 || true
+	dkms remove --no-depmod -m "$name" -v "$version" --all >/dev/null 2>&1 || true
 	dkms add -m "$name" -v "$version"
 	dkms build -m "$name" -v "$version"
-	dkms install --force -m "$name" -v "$version"
+	dkms install --no-depmod --force -m "$name" -v "$version"
 }
 
 disable_dkms_post_transaction
