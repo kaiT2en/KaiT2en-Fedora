@@ -188,18 +188,10 @@ journalctl -b -k --grep='brcmfmac'
 Successful output should include a firmware version and should not include
 missing `brcmfmac` firmware errors. Wi-Fi should work now.
 
-## Bluetooth
+## Bluetooth (experimental, only non-BCM4377 controllers)
 
 If your Mac uses BCM4377 Bluetooth, stop here. The UART Bluetooth steps below do
 not apply to BCM4377.
-
-The UART Bluetooth path is used on machines where Linux logs a missing `.hcd`
-file, for example:
-
-```text
-Bluetooth: hci0: BCM: firmware Patch file not found, tried:
-Bluetooth: hci0: BCM: 'brcm/BCM.hcd'
-```
 
 Check this with:
 
@@ -207,18 +199,36 @@ Check this with:
 journalctl -b -k --grep='BCM:.*hcd\|hci_bcm4377'
 ```
 
-If the log mentions `hci_bcm4377`, do not run the script below.
+If the output shows something with `hci_bcm4377`, this guide does not apply to
+you and you can continue with the next document. If it shows the output below,
+the guide applies to you.
 
-For everyone else: The `firmware` folder should contain one
-UART Bluetooth MiniDriver file:
+```text
+Bluetooth: hci0: BCM: firmware Patch file not found, tried:
+Bluetooth: hci0: BCM: 'brcm/BCM.hcd'
+```
+
+The message means the kernel is searching for a missing patch/firmware file.
+The guide below explains how to convert the .hex file we extracted
+from macOS earlier into a .hcd file Linux understands and where to put it.
+
+Note, this is experimental. Using the Apple BT firmware on Linux may
+or may not work on your device. We are not sure yet why the behaviour is
+inconsistent. There are log messages below that indicate a fatal state. When you
+see those, just remove `BCM.hcd` again.
+
+However, when it works it seems to cure BT-Audio stutters, but
+you will need to unload `hci_uart` on suspend using a systemd service because
+the Bluetooth controller will refuse to go into `D3cold` as a trade-off.
+Interestingly, this is the same behaviour the single-chip BCM4377 chip shows OOTB.
+
+The KaiT2en `firmware` folder should contain one UART Bluetooth MiniDriver file:
 
 ```text
 *-MiniDriver-uart.hex
 ```
 
-Run this from the root folder of the KaiT2en repository on your USB drive.
-
-Then copy, paste and run:
+Run this from the root folder of the KaiT2en repository on your USB drive:
 
 ```bash
 bash <(cat << 'EOF'
@@ -315,67 +325,20 @@ journalctl -b -k --grep='Bluetooth|BCM|hci0'
 ```
 
 The log should no longer include `firmware Patch file not found`.
-Below is the output of a MacBook Pro 15,1. Remaining error messages are
-known on this hardware and point to driver-level UART handling issues.
-But they settle after the initialization.
-This is the best working condition of the Apple Broadcom Bluetooth chip
-the driver and firmware currently offer, which is usually fine as daily
-driver. The errors are explained below.
+
+**How to know your BT does not work with the Apple firmware:**
 
 ```text
-kernel: Bluetooth: Core ver 2.22
-kernel: Bluetooth: HCI device and connection manager initialized
-kernel: Bluetooth: HCI socket layer initialized
-kernel: Bluetooth: L2CAP socket layer initialized
-kernel: Bluetooth: SCO socket layer initialized
-kernel: Bluetooth: HCI UART driver ver 2.3
-kernel: Bluetooth: HCI UART protocol H4 registered
-kernel: Bluetooth: HCI UART protocol BCSP registered
-kernel: Bluetooth: HCI UART protocol LL registered
-kernel: Bluetooth: HCI UART protocol ATH3K registered
-kernel: Bluetooth: HCI UART protocol Three-wire (H5) registered
-kernel: Bluetooth: HCI UART protocol Intel registered
-kernel: Bluetooth: HCI UART protocol Broadcom registered
-kernel: Bluetooth: HCI UART protocol QCA registered
-kernel: Bluetooth: HCI UART protocol AG6XX registered
-kernel: Bluetooth: HCI UART protocol Marvell registered
-kernel: Bluetooth: hci0: BCM: failed to write update baudrate (-16)
-kernel: Bluetooth: hci0: Failed to set baudrate
-kernel: Bluetooth: hci0: BCM: chip id 123
-kernel: Bluetooth: hci0: BCM: features 0x0f
-kernel: Bluetooth: hci0: BCM4364B0 Maui Olympic GEN (MFG)
-kernel: Bluetooth: hci0: BCM (001.000.122) build 0343
-kernel: Bluetooth: hci0: BCM 'brcm/BCM.hcd' Patch
-kernel: brcmfmac: brcmf_fw_alloc_request: using brcm/brcmfmac4364b2-pcie for chip BCM4364/3
-kernel: Bluetooth: hci0: Frame reassembly failed (-84)
-kernel: brcmfmac: brcmf_c_preinit_dcmds: Firmware: BCM4364/3 wl0: ....
-kernel: Bluetooth: hci0: command 0xfc18 tx timeout
-kernel: Bluetooth: hci0: BCM: failed to write update baudrate (-110)
-kernel: Bluetooth: BNEP (Ethernet Emulation) ver 1.3
-kernel: Bluetooth: BNEP filters: protocol multicast
-kernel: Bluetooth: BNEP socket layer initialized
-kernel: Bluetooth: hci0: command 0xfc18 tx timeout
-kernel: Bluetooth: hci0: BCM: Reset failed (-110)
+Frame reassembly failed (-84) # fatal, bad HCD or wrong patch stream
+command 0xfc18 tx timeout # fatal, controller no longer responds
+Reset failed (-110) # fatal follow-up
+missing Bluetooth: MGMT ver # fatal, controller did not come up
 ```
 
-The remaining error messages mean:
+Known non-fatal message, but likely related to audio stutters:
 
-`failed to write update baudrate (-16)` comes from the Broadcom UART baudrate
-command `0xfc18`. On this hardware the driver tries to change the controller
-baudrate early, but the controller is not ready for that command yet.
-This error will disappear, but show up again on re-initialization, like
-for example on resume after suspend.
-
-`command 0xfc18 tx timeout` and `failed to write update baudrate (-110)` are the
-same baudrate command timing out later during setup.
-
-`Frame reassembly failed (-84)` comes from the H4 UART receive parser. `-84`
-means the driver received a byte sequence that does not start with a known HCI
-packet type. This is a parser or UART state problem caused by Apple-specific protocols
-but should be addressed in the driver. This has no noticeable effect
-on everyday functionality.
-
-`Reset failed (-110)` means the final HCI reset command timed out. Bluetooth
-still comes up, but this confirms that the UART setup is not clean yet.
+```text
+failed to write update baudrate (-16)
+```
 
 Next: [Install KaiT2en modules and apps](04-install-kait2en-modules-and-apps.md)
