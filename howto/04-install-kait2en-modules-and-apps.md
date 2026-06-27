@@ -8,6 +8,8 @@
 
 Previous: [Install Broadcom firmware on Fedora](03-install-broadcom-firmware.md) | [Back to README](../README.md)
 
+This step will install DKMS modules, scripts and apps.
+
 Run this command from the KaiT2en repository root on your Fedora system:
 
 ```bash
@@ -16,17 +18,7 @@ sudo bash ./scripts/fedora/install.sh
 
 This runs all required installation steps in order:
 
-- Fedora dependencies
-- KaiT2en kernel arguments
-- KaiT2en DKMS modules
-- NetworkManager exclusion for the internal T2 CDC-NCM debug interface
-- systemd helper to keep the internal T2 CDC-NCM debug interface down
-- initramfs rebuild
-- KaiT2en suspend helper service
-- KaiT2en apps
-- react-drm, last and only on Touch Bar Macs
-
-This will take a few minutes.
+It will take a few minutes to compile the modules and apps against the kernel.
 Stay around to enter needed confirmations while the script is running.
 Please reboot after the script completed without errors.
 
@@ -34,25 +26,49 @@ Please reboot after the script completed without errors.
 sudo reboot
 ```
 
-The installer also installs the required KaiT2en apps:
+## Apps
+
+The installer installs the required KaiT2en apps:
 
 - t2-fan-control # Adjustable fan curves with GUI
 - t2-smc-control # Battery charge limit and SMC sensors in a GUI
-- react-drm # Touchbar daemon, last and only on Touch Bar Macs
+- react-drm # Touchbar daemon - only on Touch Bar Macs
 
 t2-fan-control and t2-smc-control can be found in the GNOME-App-Drawer
 after installation is finished.
 
-The installer also enables `kait2en-suspend.service`. It runs before suspend and
-after resume. The helper detects the local hardware and only applies fixes that
-match the machine.
+`t2-fan-control` installs:
 
-The installer also installs a udev rule that renames the internal Apple T2
-CDC-NCM interface to `t2_ncm` and tells NetworkManager to ignore it. A separate
-oneshot systemd service is started for that device and keeps it down because
-KaiT2en uses it only for debugging, not for normal networking.
+- Binary: `/usr/local/bin/t2-fancontrol-gtk`
+- Desktop file: `/usr/local/share/applications/org.t2fancontrol.gtk.desktop`
+- Icon: `/usr/local/share/icons/hicolor/scalable/apps/org.t2fancontrol.gtk.svg`
+- systemd service: `/usr/local/lib/systemd/system/t2-fancontrol.service`
+- The service is enabled with `systemctl enable --now t2-fancontrol.service`
+
+`t2-smc-control` installs:
+
+- Binary: `/usr/local/bin/t2-smc-control`
+- Desktop file: `/usr/local/share/applications/org.t2smccontrol.gtk.desktop`
+- Icon: `/usr/local/share/icons/hicolor/scalable/apps/org.t2smccontrol.gtk.svg`
+
+`react-drm` installs:
+
+- Source and build directory: `$HOME/react-drm` for the user who invoked `sudo`
+- udev rule: `/etc/udev/rules.d/99-react-drm.rules`
+- User service: `$HOME/.config/systemd/user/react-drm.service`
+- The service is enabled with `systemctl --user enable --now react-drm.service`
+- Service `WorkingDirectory`: `$HOME/react-drm/linux-touchbar-control-center`
+- Service `ExecStart`: `node $HOME/react-drm/linux-touchbar-control-center/dist/index.js`
+
+The installer builds `t2-fan-control` and `t2-smc-control` as the user who
+invoked `sudo`, then installs them system-wide below `/usr/local`. `react-drm`
+is copied into that user's home directory and built there.
 
 ## Suspend helper
+
+The installer creates and enables `kait2en-suspend.service`. It runs before suspend and
+after resume. The helper detects the local hardware and only applies fixes that
+match the machine.
 
 The suspend helper is installed as:
 
@@ -72,12 +88,21 @@ scripts/fedora/install-suspend-service.sh
 The service runs before `sleep.target` and again after resume. On affected
 dual-GPU MacBook Pro models it unloads `amdgpu` before suspend and loads it
 again after resume. On BCM4377 systems it unloads `brcmfmac_wcc`, `brcmfmac`
-and `hci_bcm4377` before suspend, then loads only the modules it unloaded after
+and `hci_bcm4377` before suspend, then loads the modules again after
 resume.
 
 If the helper does not detect matching hardware, it does not unload anything.
 
 ## T2 CDC-NCM debug interface helper
+
+The installer installs a udev rule that renames the internal Apple T2
+CDC-NCM interface to `t2_ncm` and tells NetworkManager to ignore it. A separate
+oneshot systemd service is started for that device and keeps it down. When you remove
+this, NetworkManager will annoy you with notifications about failed connections from
+`USB-Ethernet`, which actually is a debugging interface and not meant to be used for
+intranet/internet connections.
+
+As an alternative, you can disable `USB-Ethernet` auto connect in network settings.
 
 The T2 CDC-NCM debug interface helper is installed as:
 

@@ -4,44 +4,38 @@
 
 # KaiT2en Fedora
 
-KaiT2en is a practical Fedora path for developers and users on Apple T2 Macs.
-Our goal is to keep T2 Macs usable on stock Linux, move real fixes upstream, and
-reduce the need for special T2 distributions over time.
-It can be installed on top of existing T2linux.org Fedora installations or
-on top of stock Fedora. In our opinion this is T2linux as it should be to speed
-up development and provide users with a properly working upstream kernel.
+KaiT2en [ˈkaɪ̯zɛn] refers to the Japanese philosophy of "kaizen". Which
+means constant small improvements.
 
-It blacklists already upstreamed drivers and replaces them with its own.
-This makes it possible for developers to quickly test patches without the need
-of recompiling the kernel. Also users can profit quickly from the latest efforts.
+Kait2en is using DKMS modules to add T2 Mac driver support to stock Fedora.
 
-It is not a separate distribution or a repackaged Fedora image. The
-base system is stock or T2linux Fedora. KaiT2en adds the missing T2-specific firmware
-steps, kernel arguments, DKMS modules and helper apps from this repository. It also
-installs small udev and systemd helpers for suspend quirks and to rename the internal
-T2 CDC-NCM debug interface to `t2_ncm` while keeping it out of normal networking.
-
-KaiT2en targets Fedora as a deliberate choice and "single source of truth" for
-development and debugging. Clean installs start from stock Fedora. Existing T2
-Linux Fedora installations can use the installer to replace their current T2
-drivers with KaiT2en DKMS modules and apps. Note there will be still remnants
-of T2linux stuff when doing so.
-
-A plain Fedora installer still needs an external keyboard and mouse,
-because the stock kernel does not drive the internal T2 input devices yet.
-In our opinion the clean install is still the best way of installing KaiT2en.
-This makes sure old T2linux workarounds are out of your way.
-
-The setup is intentionally explicit. You will use the terminal, inspect logs and
-know which file was installed where.
+It also ships with the latest workarounds to make suspend working and includes
+T2 specific apps and tools.
 
 The DKMS modules in this repository build against the currently installed
-kernel. That lets KaiT2en react to driver fixes without rebuilding and shipping
-a whole patched kernel for every change.
+kernel. This makes it possible for developers to quickly test patches without
+the need of recompiling the kernel. Also users can profit quickly from the
+latest efforts. Modules and Kernels are updated separately.
+So you will always get the latest
+kernel from upstream Fedora and decide for yourself if you want to update
+the modules from this repo.
+
+KaiT2en can also be installed on top of existing T2linux.org kernels.
+It blacklists already upstreamed drivers and replaces them with its own.
+*Note there will be still remnants of T2linux stuff when doing so, what is
+not helpful when dealing with issues.* That's why we recommend installing
+KaiT2en on top of stock Fedora.
+
+KaiT2en will not work on other distros than Fedora. This was a deliberate choice.
+In the first place we want a unified clean platform for debugging. We do not
+support ports to other distros.
 
 The repository is meant to be used as an offline USB kit. Copy it to a USB
 drive, keep that drive connected, and run all commands from the repository root
 unless a guide says otherwise.
+
+The setup is intentionally explicit. You will use the terminal, inspect logs and
+know which file was installed where.
 
 ## Start here
 
@@ -67,20 +61,20 @@ still needed before the KaiT2en patches can become normal upstream Linux
 support. Contributions that move these items toward clean upstreamable fixes are
 welcome.
 
-| Area | Daily-driver state | Upstream state | Remaining work |
+| Area | Daily-driver state | Upstreamed | Remaining work |
 | --- | --- | --- | --- |
-| Audio | Working | Needs upstream work | Provided through `t2bce`. Audio should be split out of BCE internals. |
-| Bluetooth | Partially working | Partial | `brcmfmac` and `hci_bcm4377` need firmware and suspend quirks. UART Bluetooth still has driver-level rough edges. |
-| Camera | Working | Needs upstream work | Provided through the T2 BCE path. |
-| Hybrid graphics | Partially working | Partial | `amdgpu` and `gmux` behavior needs proper fixes instead of suspend-time workarounds. |
-| Keyboard | Working | Needs upstream work | Depends on the T2 BCE VHCI path and KaiT2en input drivers. |
-| Suspend | Partially working | Needs upstream work | KaiT2en installs a suspend helper for model-specific `amdgpu` and BCM4377 handling. These are workarounds, not final fixes. |
-| Thunderbolt | Working | Partial | Requires `pcie_ports=native` and the KaiT2en Thunderbolt path until the needed behavior is reliable upstream. |
-| Touch Bar | Partially working | Partial | Requires KaiT2en Touch Bar modules and `react-drm` on Touch Bar models. |
-| Touch ID | Not working | No driver yet | Needs reverse engineering. |
-| T2 AVE | Not working | No driver yet | Needs reverse engineering. |
-| Trackpad | Working | Needs upstream work | Depends on T2 BCE VHCI and `hid_t2magicmouse`. Trackpad support should be upstreamed as clean HID changes. |
-| Wi-Fi | Working | Upstream driver, local firmware | Requires firmware copied from macOS. Firmware handling must stay user-local. |
+| Audio | Working | No | Provided through `t2bce`. Audio should be split out of BCE internals. |
+| Bluetooth | Working | Partial | `brcmfmac` and `hci_bcm4377` need firmware and suspend quirks. |
+| Camera | Working | No | Provided through the T2 BCE path. |
+| Hybrid graphics | Working | Partial | `amdgpu` and `gmux` behavior needs proper fixes instead of suspend-time workarounds. |
+| Keyboard | Working | Yes | Depends on the T2 BCE VHCI path and KaiT2en input drivers. |
+| Suspend | Working | No | We install suspend helpers for model-specific `amdgpu` and BCM4377 handling. Which need fixes in drivers. |
+| Thunderbolt | Working | Yes | We added further fixes that need upstreaming |
+| Touch Bar | Working | Yes | Depends on T2 BCE VHCI which is not upstreamed |
+| Touch ID | Not working | No | Needs reverse engineering. |
+| T2 AVE | Not working | No | Needs reverse engineering. |
+| Trackpad | Working | Yes | Depends on T2 BCE VHCI which is not upstreamed |
+| Wi-Fi | Working | Yes | Requires firmware copied from macOS. Firmware handling must stay user-local. |
 
 The largest remaining kernel task is `t2bce` aka `apple-bce`. It should be
 broken into smaller upstreamable pieces instead of staying as one large T2
@@ -115,10 +109,6 @@ read.
 
 Contributions are welcome, especially when they move KaiT2en fixes closer to
 clean upstream Linux support.
-
-Useful work includes driver cleanup, splitting large drivers into upstreamable
-pieces, suspend and resume fixes, model testing, documentation fixes and Fedora
-installer testing on real T2 Macs.
 
 Please keep changes focused. A good contribution should explain what hardware
 was tested, which Fedora kernel was used and what changed in the logs or device

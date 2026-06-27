@@ -12,48 +12,46 @@
 
 [Back to README](../README.md) | Next: [Get Broadcom firmware from macOS](01-get-broadcom-firmware.md)
 
-KaiT2en is a practical Fedora path for developers and users on Apple T2 Macs.
-Our goal is to keep T2 Macs usable on stock Linux, move real fixes upstream, and
-reduce the need for special T2 distributions over time.
-It can be installed on top of existing T2linux.org Fedora installations or
-on top of stock Fedora. In our opinion this is T2linux as it should be to speed
-up development and provide users with a properly working upstream kernel.
+KaiT2en [ˈkaɪ̯zɛn] refers to the Japanese philosophy of "kaizen". Which
+means constant small improvements.
 
-It blacklists already upstreamed drivers and replaces them with its own.
-This makes it possible for developers to quickly test patches without the need
-of recompiling the kernel. Also users can quickly profit from the latest efforts.
+Kait2en is using DKMS modules to add T2 Mac driver support to stock Fedora.
 
-It is not a separate distribution or a repackaged Fedora image. The
-base system is stock or T2linux Fedora. KaiT2en adds the missing T2-specific firmware
-steps, kernel arguments, DKMS modules and helper apps from this repository.
-
-KaiT2en targets Fedora as a deliberate choice and "single source of truth" for
-development and debugging. Clean installs start from stock Fedora. Existing T2
-Linux Fedora installations can use the installer to replace their current T2
-drivers with KaiT2en DKMS modules and apps. Note there will be still remnants
-of T2linux stuff when doing so.
-
-A plain Fedora installer still needs an external keyboard and mouse at first,
-because the stock kernel does not drive the internal T2 input devices yet.
-In our opinion this is still the best way of installing KaiT2en and you can
-be sure to have old workaround out of your way.
-
-The setup is intentionally explicit. You will use the terminal, inspect logs and
-know which file was installed where.
+It also ships with the latest workarounds to make suspend working and includes
+T2 specific apps and tools. 
 
 The DKMS modules in this repository build against the currently installed
-kernel. That lets KaiT2en react to driver fixes without rebuilding and shipping
-a whole patched kernel for every change.
+kernel. This makes it possible for developers to quickly test patches without the need
+of recompiling the kernel. Also users can profit quickly from the latest efforts.
+Modules and Kernels are updated separately. 
+So you will always get the latest
+kernel from upstream Fedora and decide for yourself if you want to update
+the modules from this repo.
+
+KaiT2en can also be installed on top of existing T2linux.org kernels.
+It blacklists already upstreamed drivers and replaces them with its own.
+*Note there will be still remnants of T2linux stuff when doing so, what is
+not helpful when dealing with issues.* That's why we recommend installing 
+KaiT2en on top of stock Fedora.
+
+KaiT2en will not work on other distros than Fedora. This was a deliberate choice.
+In the first place we want a unified clean platform for debugging. We do not
+support ports to other distros.
 
 The repository is meant to be used as an offline USB kit. Copy it to a USB
 drive, keep that drive connected, and run all commands from the repository root
 unless a guide says otherwise.
 
-**This repository is meant to be copied to a USB drive before installation. Keep
-that drive connected while working through the guides. Whenever a guide asks you
+The setup is intentionally explicit. You will use the terminal, inspect logs and
+know which file was installed where. 
+
+**On clean Fedora install internal keyboard and trackpad won't work on MacBooks.
+Also WiFi will not. USB ethernet will work though. 
+This repository is meant to be copied to a USB drive before installation. Keep
+that drive connected while working through these guides. Whenever a guide asks you
 to run a script or paste a command block, open a terminal in the root folder of
-this repository first.** The guides use relative paths, so files are expected below
-that folder.
+this repository first.** The guides and scripts use relative paths, so files are 
+expected below that folder.
 
 **macOS must stay installed.** It is the clean source for Apple firmware, it can
 recover T2/bridgeOS hardware states, and it is the only place where bridgeOS
