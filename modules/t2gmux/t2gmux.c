@@ -78,6 +78,9 @@ struct apple_gmux_data {
 	/* debugfs data */
 	u8 selected_port;
 	struct dentry *debug_dentry;
+
+	struct pci_dev *dgpu_pdev;
+	enum apple_gmux_type type;
 };
 
 static struct apple_gmux_data *apple_gmux_data;
@@ -513,12 +516,54 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 	reinit_completion(&gmux_data->powerchange_done);
 
 	if (state == VGA_SWITCHEROO_ON) {
-		gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
-		gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
+		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO &&
+		    gmux_data->dgpu_pdev) {
+			acpi_handle dgpu_handle =
+				ACPI_HANDLE(&gmux_data->dgpu_pdev->dev);
+			void __iomem *bar;
+			u16 val;
+			u16 ms;
+
+			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 2);
+			msleep(100);
+			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
+			acpi_evaluate_object(dgpu_handle, "PWG1", NULL, NULL);
+
+			for (ms = 0; ms < 1000; ms++) {
+				pci_read_config_word(gmux_data->dgpu_pdev,
+						     PCI_VENDOR_ID, &val);
+				if (val != 0xffff)
+					break;
+				msleep(1);
+			}
+			if (val == 0xffff) {
+				pr_err("Timed out waiting for DGPU to power on\n");
+				return -ETIMEDOUT;
+			}
+
+			bar = pci_iomap(gmux_data->dgpu_pdev, 0, 0);
+			if (!bar)
+				return -ENOMEM;
+
+			iowrite32(ioread32(bar + 0x8c340) & 0x3fffffff,
+				  bar + 0x8c340);
+			pci_iounmap(gmux_data->dgpu_pdev, bar);
+
+			acpi_evaluate_object(dgpu_handle, "PWG3", NULL, NULL);
+		} else {
+			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
+			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
+		}
 		pr_debug("Discrete card powered up\n");
 	} else {
-		gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
-		gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
+		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO) {
+			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
+			msleep(10);
+			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
+		} else {
+			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
+			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
+		}
 		pr_debug("Discrete card powered down\n");
 	}
 
@@ -552,8 +597,11 @@ static enum vga_switcheroo_client_id gmux_get_client_id(struct pci_dev *pdev)
 	else if (pdev->vendor == PCI_VENDOR_ID_NVIDIA &&
 		 pdev->device == 0x0863)
 		return VGA_SWITCHEROO_IGD;
-	else
+	else {
+		if (!apple_gmux_data->dgpu_pdev)
+			apple_gmux_data->dgpu_pdev = pdev;
 		return VGA_SWITCHEROO_DIS;
+	}
 }
 
 static const struct vga_switcheroo_handler gmux_handler_no_ddc = {
@@ -803,6 +851,7 @@ static int gmux_probe(struct pnp_dev *pnp, const struct pnp_device_id *id)
 	if (!gmux_data)
 		return -ENOMEM;
 	pnp_set_drvdata(pnp, gmux_data);
+	gmux_data->type = type;
 
 	switch (type) {
 	case APPLE_GMUX_TYPE_MMIO:
