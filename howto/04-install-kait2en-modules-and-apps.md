@@ -19,10 +19,12 @@ This runs all required installation steps in order:
 - Fedora dependencies
 - KaiT2en kernel arguments
 - KaiT2en DKMS modules
+- NetworkManager exclusion for the internal T2 CDC-NCM debug interface
+- systemd helper to keep the internal T2 CDC-NCM debug interface down
 - initramfs rebuild
+- KaiT2en suspend helper service
 - KaiT2en apps
 - react-drm, last and only on Touch Bar Macs
-- KaiT2en suspend helper service
 
 This will take a few minutes.
 Stay around to enter needed confirmations while the script is running.
@@ -44,6 +46,11 @@ after installation is finished.
 The installer also enables `kait2en-suspend.service`. It runs before suspend and
 after resume. The helper detects the local hardware and only applies fixes that
 match the machine.
+
+The installer also installs a udev rule that renames the internal Apple T2
+CDC-NCM interface to `t2_ncm` and tells NetworkManager to ignore it. A separate
+oneshot systemd service is started for that device and keeps it down because
+KaiT2en uses it only for debugging, not for normal networking.
 
 ## Suspend helper
 
@@ -69,3 +76,28 @@ and `hci_bcm4377` before suspend, then loads only the modules it unloaded after
 resume.
 
 If the helper does not detect matching hardware, it does not unload anything.
+
+## T2 CDC-NCM debug interface helper
+
+The T2 CDC-NCM debug interface helper is installed as:
+
+```text
+/etc/systemd/system/kait2en-t2-ncm-down.service # systemd service triggered for the debug interface
+/usr/local/libexec/kait2en/kait2en-t2-ncm-down.sh # actual script
+/etc/udev/rules.d/90-kait2en-t2-network.rules # NetworkManager exclusion
+```
+
+The source files in this repository are:
+
+```text
+systemd/kait2en-t2-ncm-down.service
+scripts/fedora/kait2en-t2-ncm-down.sh
+scripts/fedora/install-t2-ncm-debug-service.sh
+scripts/fedora/install-networkmanager-rules.sh
+```
+
+The udev rule detects the internal Apple T2 CDC-NCM interface by USB vendor and
+product ID plus the `cdc_ncm` driver, renames it to `t2_ncm`, marks it
+unmanaged for NetworkManager and asks systemd to start the helper service for
+that device. The helper then forces `t2_ncm` back down for a short retry window
+so late boot activity does not leave the debug interface up.

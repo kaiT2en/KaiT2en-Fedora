@@ -1,0 +1,8 @@
+[Unit]
+Description=Kait2en T2 CDC-NCM debug interface shutdown
+BindsTo=sys-subsystem-net-devices-t2_ncm.device
+After=sys-subsystem-net-devices-t2_ncm.device NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/kait2en/kait2en-t2-ncm-down.sh

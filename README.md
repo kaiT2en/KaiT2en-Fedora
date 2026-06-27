@@ -17,7 +17,9 @@ of recompiling the kernel. Also users can profit quickly from the latest efforts
 
 It is not a separate distribution or a repackaged Fedora image. The
 base system is stock or T2linux Fedora. KaiT2en adds the missing T2-specific firmware
-steps, kernel arguments, DKMS modules and helper apps from this repository.
+steps, kernel arguments, DKMS modules and helper apps from this repository. It also
+installs small udev and systemd helpers for suspend quirks and to rename the internal
+T2 CDC-NCM debug interface to `t2_ncm` while keeping it out of normal networking.
 
 KaiT2en targets Fedora as a deliberate choice and "single source of truth" for
 development and debugging. Clean installs start from stock Fedora. Existing T2
