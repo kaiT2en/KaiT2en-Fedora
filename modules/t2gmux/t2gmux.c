@@ -22,6 +22,7 @@
 #include <linux/pci.h>
 #include <linux/vga_switcheroo.h>
 #include <linux/debugfs.h>
+#include <linux/mutex.h>
 #include <acpi/video.h>
 #include <asm/io.h>
 
@@ -69,6 +70,7 @@ struct apple_gmux_data {
 	acpi_handle dhandle;
 	int gpe;
 	bool external_switchable;
+	enum vga_switcheroo_client_id switch_state_boot;
 	enum vga_switcheroo_client_id switch_state_display;
 	enum vga_switcheroo_client_id switch_state_ddc;
 	enum vga_switcheroo_client_id switch_state_external;
@@ -79,11 +81,15 @@ struct apple_gmux_data {
 	u8 selected_port;
 	struct dentry *debug_dentry;
 
+	struct mutex switch_lock;
 	struct pci_dev *dgpu_pdev;
 	enum apple_gmux_type type;
 };
 
 static struct apple_gmux_data *apple_gmux_data;
+
+void apple_gmux_switch(enum vga_switcheroo_client_id id);
+void apple_gmux_switch_default(void);
 
 struct apple_gmux_config {
 	u8 (*read8)(struct apple_gmux_data *gmux_data, int port);
@@ -482,6 +488,40 @@ static int gmux_switchto(enum vga_switcheroo_client_id id)
 
 	return 0;
 }
+
+static void gmux_switch_display(struct apple_gmux_data *gmux_data,
+				enum vga_switcheroo_client_id id)
+{
+	if (!gmux_data || gmux_data->type == APPLE_GMUX_TYPE_PIO)
+		return;
+
+	mutex_lock(&gmux_data->switch_lock);
+	gmux_read_switch_state(gmux_data);
+
+	if (gmux_data->switch_state_display != id) {
+		gmux_data->switch_state_display = id;
+		gmux_write_switch_state(gmux_data);
+	}
+
+	mutex_unlock(&gmux_data->switch_lock);
+}
+
+void apple_gmux_switch(enum vga_switcheroo_client_id id)
+{
+	gmux_switch_display(apple_gmux_data, id);
+}
+EXPORT_SYMBOL(apple_gmux_switch);
+
+void apple_gmux_switch_default(void)
+{
+	struct apple_gmux_data *gmux_data = apple_gmux_data;
+
+	if (!gmux_data)
+		return;
+
+	gmux_switch_display(gmux_data, gmux_data->switch_state_boot);
+}
+EXPORT_SYMBOL(apple_gmux_switch_default);
 
 static int gmux_switch_ddc(enum vga_switcheroo_client_id id)
 {
@@ -989,10 +1029,12 @@ get_version:
 	if (!gmux_data->external_switchable)
 		gmux_write8(gmux_data, GMUX_PORT_SWITCH_EXTERNAL, 3);
 
-	apple_gmux_data = gmux_data;
 	init_completion(&gmux_data->powerchange_done);
+	mutex_init(&gmux_data->switch_lock);
 	gmux_enable_interrupts(gmux_data);
 	gmux_read_switch_state(gmux_data);
+	gmux_data->switch_state_boot = gmux_data->switch_state_display;
+	apple_gmux_data = gmux_data;
 
 	/*
 	 * Retina MacBook Pros cannot switch the panel's AUX separately
