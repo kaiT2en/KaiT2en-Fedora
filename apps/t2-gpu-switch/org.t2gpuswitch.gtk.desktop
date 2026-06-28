@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=T2 GPU Switch
+Comment=Switch between integrated and discrete GPU
+Exec=/usr/local/bin/t2-gpu-switch
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=GPU;graphics;switcheroo;T2;Mac;
+StartupNotify=true
