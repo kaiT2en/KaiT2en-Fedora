@@ -1,0 +1,105 @@
+From 552d8b1ff614398f57c2e82fee75a6df9501843e Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <andre.eikmeyer@gmail.com>
+Date: Sun, 28 Jun 2026 01:07:58 +0200
+Subject: [PATCH 2/2] drm/i915: temporarily switch gmux display during probe
+ and resume
+
+On Retina MacBook Pros with indexed or MMIO gmux, the internal panel may
+be routed to the discrete GPU when i915 probes. In that state i915 can
+fail to retrieve eDP link information and disables the panel.
+
+Temporarily switch the gmux display path to IGD while i915 probes or
+resumes, then restore the previous display owner. The gmux helper is a
+no-op on machines where this is not supported, so i915 does not need
+model-specific logic.
+
+Signed-off-by: Andre Eikmeyer <andre.eikmeyer@gmail.com>
+---
+ drivers/gpu/drm/i915/i915_driver.c | 15 +++++++++++++--
+ drivers/gpu/drm/i915/i915_pci.c    |  8 ++++++++
+ 2 files changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/i915_driver.c b/drivers/gpu/drm/i915/i915_driver.c
+index f0105c5..54d8cb5 100755
+--- a/drivers/gpu/drm/i915/i915_driver.c
++++ b/drivers/gpu/drm/i915/i915_driver.c
+@@ -28,6 +28,7 @@
+  */
+ 
+ #include <linux/aperture.h>
++#include <linux/apple-gmux.h>
+ #include <linux/acpi.h>
+ #include <linux/device.h>
+ #include <linux/module.h>
+@@ -1239,13 +1240,18 @@ static int i915_drm_resume(struct drm_device *dev)
+ 	struct drm_i915_private *dev_priv = to_i915(dev);
+ 	struct intel_display *display = dev_priv->display;
+ 	struct intel_gt *gt;
++	enum vga_switcheroo_client_id old_display;
++	bool gmux_switched;
+ 	int ret, i;
+ 
++	gmux_switched = apple_gmux_switch_display(VGA_SWITCHEROO_IGD,
++						  &old_display);
++
+ 	disable_rpm_wakeref_asserts(&dev_priv->runtime_pm);
+ 
+ 	ret = i915_pcode_init(dev_priv);
+ 	if (ret)
+-		return ret;
++		goto out_gmux_restore;
+ 
+ 	sanitize_gpu(dev_priv);
+ 
+@@ -1315,8 +1321,13 @@ static int i915_drm_resume(struct drm_device *dev)
+ 	intel_gvt_resume(dev_priv);
+ 
+ 	enable_rpm_wakeref_asserts(&dev_priv->runtime_pm);
++	ret = 0;
+ 
+-	return 0;
++out_gmux_restore:
++	if (gmux_switched)
++		apple_gmux_restore_display(old_display);
++
++	return ret;
+ }
+ 
+ static int i915_drm_resume_early(struct drm_device *dev)
+diff --git a/drivers/gpu/drm/i915/i915_pci.c b/drivers/gpu/drm/i915/i915_pci.c
+index d966a00..acfd935 100755
+--- a/drivers/gpu/drm/i915/i915_pci.c
++++ b/drivers/gpu/drm/i915/i915_pci.c
+@@ -22,6 +22,8 @@
+  *
+  */
+ 
++#include <linux/apple-gmux.h>
++
+ #include <drm/drm_color_mgmt.h>
+ #include <drm/drm_drv.h>
+ #include <drm/intel/pciids.h>
+@@ -956,6 +958,8 @@ static int i915_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
+ {
+ 	struct intel_device_info *intel_info =
+ 		(struct intel_device_info *) ent->driver_data;
++	enum vga_switcheroo_client_id old_display;
++	bool gmux_switched;
+ 	int err;
+ 
+ 	if (intel_info->require_force_probe && !id_forced(pdev->device)) {
+@@ -995,7 +999,11 @@ static int i915_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
+ 	if (intel_display_driver_probe_defer(pdev))
+ 		return -EPROBE_DEFER;
+ 
++	gmux_switched = apple_gmux_switch_display(VGA_SWITCHEROO_IGD,
++						  &old_display);
+ 	err = i915_driver_probe(pdev, ent);
++	if (gmux_switched)
++		apple_gmux_restore_display(old_display);
+ 	if (err)
+ 		return err;
+ 
+-- 
+2.54.0
+
