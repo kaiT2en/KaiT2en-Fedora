@@ -15,6 +15,7 @@ MODULES=(
 	hid_t2magicmouse
 	t2mfi_fastcharge
 	t2gmux
+	i915
 	t2thunderbolt
 )
 
