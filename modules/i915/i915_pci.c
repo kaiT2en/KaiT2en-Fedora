@@ -41,7 +41,8 @@
 
 bool apple_gmux_switch_display(enum vga_switcheroo_client_id id,
 			       enum vga_switcheroo_client_id *old);
-void apple_gmux_restore_display(enum vga_switcheroo_client_id old);
+void apple_gmux_restore_display(enum vga_switcheroo_client_id old,
+				enum vga_switcheroo_client_id expected);
 
 __diag_push();
 __diag_ignore_all("-Woverride-init", "Allow field initialization overrides for device info");
@@ -1007,7 +1008,7 @@ static int i915_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 						  &old_display);
 	err = i915_driver_probe(pdev, ent);
 	if (gmux_switched)
-		apple_gmux_restore_display(old_display);
+		apple_gmux_restore_display(old_display, VGA_SWITCHEROO_IGD);
 	if (err)
 		return err;
 

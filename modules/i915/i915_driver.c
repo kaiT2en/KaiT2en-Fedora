@@ -124,7 +124,8 @@
 
 bool apple_gmux_switch_display(enum vga_switcheroo_client_id id,
 			       enum vga_switcheroo_client_id *old);
-void apple_gmux_restore_display(enum vga_switcheroo_client_id old);
+void apple_gmux_restore_display(enum vga_switcheroo_client_id old,
+				enum vga_switcheroo_client_id expected);
 
 static const struct drm_driver i915_drm_driver;
 
@@ -1328,7 +1329,7 @@ static int i915_drm_resume(struct drm_device *dev)
 
 out_gmux_restore:
 	if (gmux_switched)
-		apple_gmux_restore_display(old_display);
+		apple_gmux_restore_display(old_display, VGA_SWITCHEROO_IGD);
 
 	return ret;
 }
