@@ -1,0 +1,240 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SWITCH=/sys/kernel/debug/vgaswitcheroo/switch
+LOG=/var/log/t2-gpu-switch.log
+DM=display-manager.service
+WAIT_TIMEOUT=10
+DM_STOP_TIMEOUT=10
+DRM_SETTLE_DELAY=3
+SYSTEMD_UNIT=t2-gpu-switch.service
+
+usage() {
+	echo "Usage: t2-gpu-switch-helper {status|igd|dis}" >&2
+	exit 2
+}
+
+log() {
+	printf '%s %s\n' "$(date '+%F %T')" "$*" | tee -a "$LOG"
+}
+
+require_root() {
+	[[ ${EUID:-$(id -u)} -eq 0 ]] || {
+		echo "t2-gpu-switch-helper must run as root" >&2
+		exit 1
+	}
+}
+
+require_switcheroo() {
+	[[ -r "$SWITCH" ]] || {
+		echo "$SWITCH is not readable; is debugfs mounted and vga_switcheroo enabled?" >&2
+		exit 1
+	}
+}
+
+target_user() {
+	local uid user
+
+	if [[ -n "${PKEXEC_UID:-}" ]]; then
+		uid=$PKEXEC_UID
+		user=$(getent passwd "$uid" | cut -d: -f1 || true)
+		[[ -n "$user" ]] && {
+			printf '%s\n' "$user"
+			return
+		}
+	fi
+
+	if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != root ]]; then
+		printf '%s\n' "$SUDO_USER"
+	fi
+}
+
+run_user_systemctl() {
+	local user=$1 uid
+	shift
+
+	uid=$(id -u "$user")
+	[[ -S "/run/user/$uid/bus" ]] || return 0
+
+	sudo -H -u "$user" env \
+		XDG_RUNTIME_DIR="/run/user/$uid" \
+		DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+		systemctl --user "$@" >/dev/null 2>&1 || true
+}
+
+stop_audio_users() {
+	local user=$1
+
+	if [[ -n "$user" ]]; then
+		log "stopping user audio services for $user"
+		run_user_systemctl "$user" stop \
+			wireplumber.service \
+			pipewire-pulse.service \
+			pipewire.service \
+			pipewire-pulse.socket \
+			pipewire.socket
+	fi
+
+	log "stopping alsa-state.service"
+	systemctl stop alsa-state.service >/dev/null 2>&1 || true
+}
+
+start_audio_users() {
+	local user=$1
+
+	log "starting alsa-state.service"
+	systemctl start alsa-state.service >/dev/null 2>&1 || true
+
+	if [[ -n "$user" ]]; then
+		log "starting user audio services for $user"
+		run_user_systemctl "$user" start \
+			pipewire.socket \
+			pipewire-pulse.socket \
+			pipewire.service \
+			wireplumber.service \
+			pipewire-pulse.service
+	fi
+}
+
+wait_for_free_devices() {
+	local devices=(
+		/dev/dri/card1
+		/dev/dri/card2
+		/dev/dri/renderD128
+		/dev/dri/renderD129
+		/dev/snd/controlC1
+	)
+	local existing=() device i
+
+	for device in "${devices[@]}"; do
+		[[ -e "$device" ]] && existing+=("$device")
+	done
+	[[ ${#existing[@]} -gt 0 ]] || return 0
+
+	log "waiting up to ${WAIT_TIMEOUT}s for DRM/audio users to exit"
+	for ((i = 0; i < WAIT_TIMEOUT * 10; i++)); do
+		if ! lsof "${existing[@]}" >/tmp/t2-gpu-switch-lsof.out 2>&1; then
+			rm -f /tmp/t2-gpu-switch-lsof.out
+			log "DRM/audio nodes look free"
+			return 0
+		fi
+		sleep 0.1
+	done
+
+	log "remaining DRM/audio users after timeout:"
+	cat /tmp/t2-gpu-switch-lsof.out | tee -a "$LOG" || true
+	rm -f /tmp/t2-gpu-switch-lsof.out
+}
+
+stop_display_manager() {
+	local i state
+
+	log "stopping $DM"
+	systemctl stop "$DM"
+
+	log "waiting up to ${DM_STOP_TIMEOUT}s for $DM to stop"
+	for ((i = 0; i < DM_STOP_TIMEOUT * 10; i++)); do
+		state=$(systemctl is-active "$DM" 2>/dev/null || true)
+		case "$state" in
+			inactive|failed|unknown)
+				log "$DM state is $state"
+				log "settling DRM for ${DRM_SETTLE_DELAY}s"
+				sleep "$DRM_SETTLE_DELAY"
+				return 0
+				;;
+		esac
+		sleep 0.1
+	done
+
+	state=$(systemctl is-active "$DM" 2>/dev/null || true)
+	log "$DM still reports state $state after timeout"
+	log "settling DRM for ${DRM_SETTLE_DELAY}s anyway"
+	sleep "$DRM_SETTLE_DELAY"
+}
+
+show_status() {
+	require_switcheroo
+	cat "$SWITCH"
+}
+
+switch_gpu() {
+	local target=$1 user=${2:-}
+
+	require_root
+	require_switcheroo
+	[[ -w "$SWITCH" ]] || {
+		echo "$SWITCH is not writable" >&2
+		exit 1
+	}
+
+	: >>"$LOG"
+	log "requested target=$target"
+	log "initial switch state:"
+	cat "$SWITCH" | tee -a "$LOG"
+
+	stop_audio_users "$user"
+
+	stop_display_manager
+
+	wait_for_free_devices
+
+	log "writing $target to $SWITCH"
+	printf '%s\n' "$target" >"$SWITCH"
+	sleep 2
+
+	log "switch state after request:"
+	cat "$SWITCH" | tee -a "$LOG"
+
+	log "starting $DM"
+	systemctl start "$DM"
+
+	start_audio_users "$user"
+	log "done"
+}
+
+run_detached() {
+	local command=$1
+	local env_args=("--setenv=T2_GPU_SWITCH_SYSTEMD=1")
+
+	[[ -n "${PKEXEC_UID:-}" ]] && env_args+=("--setenv=PKEXEC_UID=$PKEXEC_UID")
+	[[ -n "${SUDO_USER:-}" ]] && env_args+=("--setenv=SUDO_USER=$SUDO_USER")
+
+	systemd-run \
+		--unit="$SYSTEMD_UNIT" \
+		--collect \
+		"${env_args[@]}" \
+		/usr/bin/bash "$0" "$command"
+}
+
+main() {
+	local command=${1:-} user
+
+	case "$command" in
+		status)
+			show_status
+			;;
+		igd|IGD)
+			require_root
+			if [[ "${T2_GPU_SWITCH_SYSTEMD:-0}" != 1 ]]; then
+				run_detached igd
+				exit 0
+			fi
+			user=$(target_user || true)
+			switch_gpu IGD "$user"
+			;;
+		dis|DIS)
+			require_root
+			if [[ "${T2_GPU_SWITCH_SYSTEMD:-0}" != 1 ]]; then
+				run_detached dis
+				exit 0
+			fi
+			user=$(target_user || true)
+			switch_gpu DIS "$user"
+			;;
+		*)
+			usage
+			;;
+	esac
+}
+
+main "$@"

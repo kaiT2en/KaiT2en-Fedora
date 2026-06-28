@@ -49,6 +49,12 @@ install_rust_app() {
 	make -C "$path" install
 }
 
+install_make_app() {
+	local path=$1 name=$2
+	info "installing $name"
+	make -C "$path" install
+}
+
 systemd_escape_path() {
 	local value=$1
 	[[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] ||
@@ -216,6 +222,7 @@ install_react_drm() {
 
 install_rust_app "$REPO_ROOT/apps/t2-fan-control" "t2-fan-control"
 install_rust_app "$REPO_ROOT/apps/t2-smc-control" "t2-smc-control"
+install_make_app "$REPO_ROOT/apps/t2-gpu-switch" "t2-gpu-switch"
 install_react_drm
 
 info "apps installed"
