@@ -26,6 +26,8 @@
 #include <drm/drm_drv.h>
 #include <drm/intel/pciids.h>
 
+#include <linux/vga_switcheroo.h>
+
 #include "display/intel_display_driver.h"
 #include "gt/intel_gt_regs.h"
 #include "gt/intel_sa_media.h"
@@ -36,6 +38,10 @@
 #include "i915_pci.h"
 #include "i915_reg.h"
 #include "intel_pci_config.h"
+
+bool apple_gmux_switch_display(enum vga_switcheroo_client_id id,
+			       enum vga_switcheroo_client_id *old);
+void apple_gmux_restore_display(enum vga_switcheroo_client_id old);
 
 __diag_push();
 __diag_ignore_all("-Woverride-init", "Allow field initialization overrides for device info");
@@ -956,6 +962,8 @@ static int i915_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	struct intel_device_info *intel_info =
 		(struct intel_device_info *) ent->driver_data;
+	enum vga_switcheroo_client_id old_display;
+	bool gmux_switched;
 	int err;
 
 	if (intel_info->require_force_probe && !id_forced(pdev->device)) {
@@ -995,7 +1003,11 @@ static int i915_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (intel_display_driver_probe_defer(pdev))
 		return -EPROBE_DEFER;
 
+	gmux_switched = apple_gmux_switch_display(VGA_SWITCHEROO_IGD,
+						  &old_display);
 	err = i915_driver_probe(pdev, ent);
+	if (gmux_switched)
+		apple_gmux_restore_display(old_display);
 	if (err)
 		return err;
 

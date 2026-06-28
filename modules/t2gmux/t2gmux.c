@@ -70,7 +70,6 @@ struct apple_gmux_data {
 	acpi_handle dhandle;
 	int gpe;
 	bool external_switchable;
-	enum vga_switcheroo_client_id switch_state_boot;
 	enum vga_switcheroo_client_id switch_state_display;
 	enum vga_switcheroo_client_id switch_state_ddc;
 	enum vga_switcheroo_client_id switch_state_external;
@@ -88,8 +87,9 @@ struct apple_gmux_data {
 
 static struct apple_gmux_data *apple_gmux_data;
 
-void apple_gmux_switch(enum vga_switcheroo_client_id id);
-void apple_gmux_switch_default(void);
+bool apple_gmux_switch_display(enum vga_switcheroo_client_id id,
+			       enum vga_switcheroo_client_id *old);
+void apple_gmux_restore_display(enum vga_switcheroo_client_id old);
 
 struct apple_gmux_config {
 	u8 (*read8)(struct apple_gmux_data *gmux_data, int port);
@@ -489,39 +489,65 @@ static int gmux_switchto(enum vga_switcheroo_client_id id)
 	return 0;
 }
 
-static void gmux_switch_display(struct apple_gmux_data *gmux_data,
-				enum vga_switcheroo_client_id id)
+bool apple_gmux_switch_display(enum vga_switcheroo_client_id id,
+			       enum vga_switcheroo_client_id *old)
 {
+	struct apple_gmux_data *gmux_data = apple_gmux_data;
+	enum vga_switcheroo_client_id old_display;
+	enum vga_switcheroo_client_id new_display;
+
+	if (!gmux_data || gmux_data->type == APPLE_GMUX_TYPE_PIO)
+		return false;
+
+	mutex_lock(&gmux_data->switch_lock);
+	gmux_read_switch_state(gmux_data);
+	old_display = gmux_data->switch_state_display;
+
+	if (old)
+		*old = old_display;
+
+	if (old_display != id) {
+		gmux_data->switch_state_display = id;
+		gmux_write_switch_state(gmux_data);
+		gmux_read_switch_state(gmux_data);
+	}
+	new_display = gmux_data->switch_state_display;
+
+	pr_info("switch display requested=%d old=%d current=%d type=%d\n",
+		id, old_display, new_display, gmux_data->type);
+
+	mutex_unlock(&gmux_data->switch_lock);
+
+	return true;
+}
+EXPORT_SYMBOL(apple_gmux_switch_display);
+
+void apple_gmux_restore_display(enum vga_switcheroo_client_id old)
+{
+	struct apple_gmux_data *gmux_data = apple_gmux_data;
+	enum vga_switcheroo_client_id old_display;
+	enum vga_switcheroo_client_id new_display;
+
 	if (!gmux_data || gmux_data->type == APPLE_GMUX_TYPE_PIO)
 		return;
 
 	mutex_lock(&gmux_data->switch_lock);
 	gmux_read_switch_state(gmux_data);
+	old_display = gmux_data->switch_state_display;
 
-	if (gmux_data->switch_state_display != id) {
-		gmux_data->switch_state_display = id;
+	if (old_display != old) {
+		gmux_data->switch_state_display = old;
 		gmux_write_switch_state(gmux_data);
+		gmux_read_switch_state(gmux_data);
 	}
+	new_display = gmux_data->switch_state_display;
+
+	pr_info("restore display requested=%d old=%d current=%d type=%d\n",
+		old, old_display, new_display, gmux_data->type);
 
 	mutex_unlock(&gmux_data->switch_lock);
 }
-
-void apple_gmux_switch(enum vga_switcheroo_client_id id)
-{
-	gmux_switch_display(apple_gmux_data, id);
-}
-EXPORT_SYMBOL(apple_gmux_switch);
-
-void apple_gmux_switch_default(void)
-{
-	struct apple_gmux_data *gmux_data = apple_gmux_data;
-
-	if (!gmux_data)
-		return;
-
-	gmux_switch_display(gmux_data, gmux_data->switch_state_boot);
-}
-EXPORT_SYMBOL(apple_gmux_switch_default);
+EXPORT_SYMBOL(apple_gmux_restore_display);
 
 static int gmux_switch_ddc(enum vga_switcheroo_client_id id)
 {
@@ -1033,7 +1059,6 @@ get_version:
 	mutex_init(&gmux_data->switch_lock);
 	gmux_enable_interrupts(gmux_data);
 	gmux_read_switch_state(gmux_data);
-	gmux_data->switch_state_boot = gmux_data->switch_state_display;
 	apple_gmux_data = gmux_data;
 
 	/*

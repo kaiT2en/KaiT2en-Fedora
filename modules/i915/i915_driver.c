@@ -122,6 +122,10 @@
 #include "vlv_iosf_sb.h"
 #include "vlv_suspend.h"
 
+bool apple_gmux_switch_display(enum vga_switcheroo_client_id id,
+			       enum vga_switcheroo_client_id *old);
+void apple_gmux_restore_display(enum vga_switcheroo_client_id old);
+
 static const struct drm_driver i915_drm_driver;
 
 static int i915_workqueues_init(struct drm_i915_private *dev_priv)
@@ -1239,13 +1243,18 @@ static int i915_drm_resume(struct drm_device *dev)
 	struct drm_i915_private *dev_priv = to_i915(dev);
 	struct intel_display *display = dev_priv->display;
 	struct intel_gt *gt;
+	enum vga_switcheroo_client_id old_display;
+	bool gmux_switched;
 	int ret, i;
+
+	gmux_switched = apple_gmux_switch_display(VGA_SWITCHEROO_IGD,
+						  &old_display);
 
 	disable_rpm_wakeref_asserts(&dev_priv->runtime_pm);
 
 	ret = i915_pcode_init(dev_priv);
 	if (ret)
-		return ret;
+		goto out_gmux_restore;
 
 	sanitize_gpu(dev_priv);
 
@@ -1315,8 +1324,13 @@ static int i915_drm_resume(struct drm_device *dev)
 	intel_gvt_resume(dev_priv);
 
 	enable_rpm_wakeref_asserts(&dev_priv->runtime_pm);
+	ret = 0;
 
-	return 0;
+out_gmux_restore:
+	if (gmux_switched)
+		apple_gmux_restore_display(old_display);
+
+	return ret;
 }
 
 static int i915_drm_resume_early(struct drm_device *dev)
