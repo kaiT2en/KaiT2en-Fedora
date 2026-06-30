@@ -91,6 +91,7 @@ bool apple_gmux_switch_display(enum vga_switcheroo_client_id id,
 			       enum vga_switcheroo_client_id *old);
 void apple_gmux_restore_display(enum vga_switcheroo_client_id old,
 				enum vga_switcheroo_client_id expected);
+void apple_gmux_reset_display_link(void);
 
 struct apple_gmux_config {
 	u8 (*read8)(struct apple_gmux_data *gmux_data, int port);
@@ -552,6 +553,33 @@ void apple_gmux_restore_display(enum vga_switcheroo_client_id old,
 	mutex_unlock(&gmux_data->switch_lock);
 }
 EXPORT_SYMBOL(apple_gmux_restore_display);
+
+void apple_gmux_reset_display_link(void)
+{
+	struct apple_gmux_data *gmux_data = apple_gmux_data;
+	enum vga_switcheroo_client_id prev_display;
+
+	if (!gmux_data || gmux_data->type == APPLE_GMUX_TYPE_PIO)
+		return;
+
+	mutex_lock(&gmux_data->switch_lock);
+	gmux_read_switch_state(gmux_data);
+	/* Cycle the eDP mux to force the T2 chip to re-establish
+	 * the DisplayPort link after a GPU reset.  Always cycle
+	 * regardless of current state.
+	 */
+	gmux_data->switch_state_display = VGA_SWITCHEROO_IGD;
+	gmux_write_switch_state(gmux_data);
+	mdelay(200);
+	gmux_data->switch_state_display = VGA_SWITCHEROO_DIS;
+	gmux_write_switch_state(gmux_data);
+	mdelay(200);
+	gmux_read_switch_state(gmux_data);
+
+	pr_info("reset display link type=%d\n", gmux_data->type);
+	mutex_unlock(&gmux_data->switch_lock);
+}
+EXPORT_SYMBOL(apple_gmux_reset_display_link);
 
 static int gmux_switch_ddc(enum vga_switcheroo_client_id id)
 {
