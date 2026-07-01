@@ -270,6 +270,7 @@ static void aaudio_resume_work(struct work_struct *ws)
     }
 
     aaudio->resume_deferred = false;
+    aaudio_reset_streams(aaudio);
     dev_info(aaudio->dev, "resume deferred path complete\n");
 }
 

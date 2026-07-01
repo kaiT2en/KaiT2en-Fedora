@@ -7,8 +7,6 @@
 #include <linux/module.h>
 #include <linux/version.h>
 
-#define BCE_VHCI_RESUME_GATE_TIMEOUT_MS 5000
-
 static dev_t bce_vhci_chrdev;
 static struct class *bce_vhci_class;
 static const struct hc_driver bce_vhci_driver;
@@ -24,6 +22,9 @@ enum bce_vhci_port_status_bits {
     BCE_VHCI_PORT_STATUS_HIGH_SPEED    = 0x200,
     BCE_VHCI_PORT_STATUS_C_CONNECTION  = 0x40000,
 };
+
+#define BCE_VHCI_PORT_STATUS_READY \
+    (BCE_VHCI_PORT_STATUS_CONNECTED | BCE_VHCI_PORT_STATUS_ENABLED)
 
 static int bce_vhci_create_event_queues(struct bce_vhci *vhci);
 static void bce_vhci_destroy_event_queues(struct bce_vhci *vhci);
@@ -63,10 +64,9 @@ int bce_vhci_create(struct t2bce_device *dev, struct bce_vhci *vhci)
     INIT_DELAYED_WORK(&vhci->w_port_status_change, bce_vhci_port_status_change_w);
     vhci->port_change_pending = 0;
     vhci->port_change_waiting = 0;
-    vhci->port_resume_requested = 0;
-    vhci->port_resume_pass1_done = 0;
+    vhci->port_ep0_ready = 0;
+    memset(vhci->port_ep0_hold_start, 0, sizeof(vhci->port_ep0_hold_start));
     memset(vhci->port_resume_tries, 0, sizeof(vhci->port_resume_tries));
-    vhci->stateful_resume_gating = false;
 
     vhci->hcd = usb_create_hcd(&bce_vhci_driver, vhci->vdev, "bce-vhci");
     if (!vhci->hcd) {
@@ -100,6 +100,7 @@ fail_dev:
 void bce_vhci_destroy(struct bce_vhci *vhci)
 {
     cancel_work_sync(&vhci->w_add_hcd);
+    cancel_work_sync(&vhci->w_fw_events);
     cancel_delayed_work_sync(&vhci->w_port_status_change);
     bce_vhci_remove_hcd(vhci);
     bce_vhci_destroy_event_queues(vhci);
@@ -239,7 +240,6 @@ static int bce_vhci_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue, u1
 {
     struct bce_vhci *vhci = bce_vhci_from_hcd(hcd);
     int status;
-    int retries;
     struct usb_hub_descriptor *hd;
     struct usb_hub_status *hs;
     struct usb_port_status *ps;
@@ -266,26 +266,6 @@ static int bce_vhci_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue, u1
         ps->wPortStatus = 0;
         ps->wPortChange = 0;
 
-        if (vhci->stateful_resume_gating && READ_ONCE(vhci->port_change_waiting))
-            pr_info("bce-vhci: hub GetPortStatus gate enter port=%u waiting=%lx\n",
-                    wIndex, READ_ONCE(vhci->port_change_waiting));
-
-        for (retries = 0; vhci->stateful_resume_gating &&
-                         READ_ONCE(vhci->port_change_waiting) &&
-                         retries < BCE_VHCI_RESUME_GATE_TIMEOUT_MS / 20;
-             retries++)
-            msleep(20);
-
-        if (vhci->stateful_resume_gating && READ_ONCE(vhci->port_change_waiting)) {
-            pr_warn("bce-vhci: hub GetPortStatus gate timeout port=%u waiting=%lx\n",
-                    wIndex, READ_ONCE(vhci->port_change_waiting));
-            vhci->stateful_resume_gating = false;
-        }
-
-        if (retries)
-            pr_info("bce-vhci: hub GetPortStatus gate exit port=%u retries=%d waiting=%lx\n",
-                    wIndex, retries, READ_ONCE(vhci->port_change_waiting));
-
         if (vhci->port_power_mask & BIT(wIndex))
             ps->wPortStatus |= USB_PORT_STAT_POWER;
 
@@ -306,9 +286,18 @@ static int bce_vhci_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue, u1
         if (port_status & BCE_VHCI_PORT_STATUS_HIGH_SPEED)
             ps->wPortStatus |= USB_PORT_STAT_HIGH_SPEED;
 
-        if (port_status & BCE_VHCI_PORT_STATUS_C_CONNECTION)
+        /*
+         * Only report C_CONNECTION to the hub driver when the port worker
+         * is NOT already handling this port.  If port_change_waiting is set,
+         * the worker owns the state transition and will signal usbcore via
+         * port_change_pending once the firmware is truly ready.  Reporting
+         * C_CONNECTION here would make the hub driver issue a spurious
+         * SetPortFeature RESET that tears down the device we just created.
+         */
+        if ((port_status & BCE_VHCI_PORT_STATUS_C_CONNECTION) &&
+            !test_bit(wIndex - 1, &vhci->port_change_waiting))
             ps->wPortChange |= USB_PORT_STAT_C_CONNECTION;
-        pr_info("bce-vhci: hub GetPortStatus port=%u raw=%x status=%x change=%x\n",
+        pr_debug("bce-vhci: hub GetPortStatus port=%u raw=%x status=%x change=%x\n",
                 wIndex, port_status, ps->wPortStatus, ps->wPortChange);
         return 0;
     } else if (typeReq == SetPortFeature) {
@@ -372,6 +361,19 @@ static int bce_vhci_enable_device(struct usb_hcd *hcd, struct usb_device *udev)
     bce_vhci_device_t devid;
     pr_info("bce_vhci_enable_device\n");
 
+    /*
+     * Gate EP0 traffic until the port worker verifies the firmware is
+     * truly ready.  Clear any stale ready flag from a previous worker
+     * run (e.g. after bce_vhci_reset_device) so EP0 URBs are held until
+     * the firmware's endpoint is initialised.  Schedule with a short
+     * delay to give firmware time before the first poll.
+     */
+    clear_bit(udev->portnum - 1, &vhci->port_ep0_ready);
+    vhci->port_ep0_hold_start[udev->portnum] = jiffies;
+    set_bit(udev->portnum - 1, &vhci->port_change_waiting);
+    queue_delayed_work(vhci->tq_state_wq, &vhci->w_port_status_change,
+                       msecs_to_jiffies(100));
+
     if (vhci->port_to_device[udev->portnum])
         return 0;
 
@@ -390,6 +392,7 @@ static int bce_vhci_enable_device(struct usb_hcd *hcd, struct usb_device *udev)
     vdev->tq_mask |= BIT(0);
 
     bce_vhci_cmd_endpoint_create(&vhci->cq, devid, &udev->ep0.desc);
+
     return 0;
 }
 
@@ -437,6 +440,10 @@ static int bce_vhci_reset_device(struct bce_vhci *vhci, int index, u16 timeout)
     int status;
     enum dma_data_direction dir;
     pr_info("bce_vhci_reset_device %i\n", index);
+
+    /* Device is about to be destroyed; stale ready flag is invalid. */
+    clear_bit(index - 1, &vhci->port_ep0_ready);
+    vhci->port_ep0_hold_start[index] = 0;
 
     devid = vhci->port_to_device[index];
     if (devid) {
@@ -513,12 +520,12 @@ static int bce_vhci_suspend_quiesce(struct usb_hcd *hcd)
                 if (!list_empty(&tq->endp->urb_list)) {
                     urb = list_first_entry(&tq->endp->urb_list, struct urb, urb_list);
                     vurb = urb->hcpriv;
-                    pr_info("bce-vhci: suspend tq pre: dev=%u ep=%02x active=%u paused_by=%x stalled=%u has_urb=1 first_state=%x\n",
-                            tq->dev_addr, tq->endp_addr, tq->active, tq->paused_by, tq->stalled,
-                            vurb ? vurb->state : 0xffffffff);
+                    pr_debug("bce-vhci: suspend tq pre: dev=%u ep=%02x active=%u paused_by=%x stalled=%u has_urb=1 first_state=%x\n",
+                             tq->dev_addr, tq->endp_addr, tq->active, tq->paused_by, tq->stalled,
+                             vurb ? vurb->state : 0xffffffff);
                 } else {
-                    pr_info("bce-vhci: suspend tq pre: dev=%u ep=%02x active=%u paused_by=%x stalled=%u has_urb=0\n",
-                            tq->dev_addr, tq->endp_addr, tq->active, tq->paused_by, tq->stalled);
+                    pr_debug("bce-vhci: suspend tq pre: dev=%u ep=%02x active=%u paused_by=%x stalled=%u has_urb=0\n",
+                             tq->dev_addr, tq->endp_addr, tq->active, tq->paused_by, tq->stalled);
                 }
                 spin_unlock_irqrestore(&tq->urb_lock, flags);
             }
@@ -531,12 +538,12 @@ static int bce_vhci_suspend_quiesce(struct usb_hcd *hcd)
                 if (!list_empty(&tq->endp->urb_list)) {
                     urb = list_first_entry(&tq->endp->urb_list, struct urb, urb_list);
                     vurb = urb->hcpriv;
-                    pr_info("bce-vhci: suspend tq post: dev=%u ep=%02x active=%u paused_by=%x stalled=%u has_urb=1 first_state=%x\n",
-                            tq->dev_addr, tq->endp_addr, tq->active, tq->paused_by, tq->stalled,
-                            vurb ? vurb->state : 0xffffffff);
+                    pr_debug("bce-vhci: suspend tq post: dev=%u ep=%02x active=%u paused_by=%x stalled=%u has_urb=1 first_state=%x\n",
+                             tq->dev_addr, tq->endp_addr, tq->active, tq->paused_by, tq->stalled,
+                             vurb ? vurb->state : 0xffffffff);
                 } else {
-                    pr_info("bce-vhci: suspend tq post: dev=%u ep=%02x active=%u paused_by=%x stalled=%u has_urb=0\n",
-                            tq->dev_addr, tq->endp_addr, tq->active, tq->paused_by, tq->stalled);
+                    pr_debug("bce-vhci: suspend tq post: dev=%u ep=%02x active=%u paused_by=%x stalled=%u has_urb=0\n",
+                             tq->dev_addr, tq->endp_addr, tq->active, tq->paused_by, tq->stalled);
                 }
                 spin_unlock_irqrestore(&tq->urb_lock, flags);
             }
@@ -573,11 +580,10 @@ static int bce_vhci_bus_suspend(struct usb_hcd *hcd)
     cancel_delayed_work_sync(&vhci->w_port_status_change);
     vhci->port_change_waiting = 0;
     vhci->port_change_pending = 0;
-    vhci->port_resume_requested = 0;
-    vhci->port_resume_pass1_done = 0;
+    vhci->port_ep0_ready = 0;
+    memset(vhci->port_ep0_hold_start, 0, sizeof(vhci->port_ep0_hold_start));
     memset(vhci->port_resume_tries, 0, sizeof(vhci->port_resume_tries));
     vhci->system_suspending = true;
-    vhci->stateful_resume_gating = false;
     status = bce_vhci_suspend_prepare(hcd);
     if (status)
         vhci->system_suspending = false;
@@ -632,10 +638,9 @@ static int bce_vhci_resume_stateful(struct usb_hcd *hcd)
      * no-state rebuild path below. */
     vhci->port_change_pending = 0;
     vhci->port_change_waiting = 0;
-    vhci->port_resume_requested = 0;
-    vhci->port_resume_pass1_done = 0;
+    vhci->port_ep0_ready = 0;
+    memset(vhci->port_ep0_hold_start, 0, sizeof(vhci->port_ep0_hold_start));
     memset(vhci->port_resume_tries, 0, sizeof(vhci->port_resume_tries));
-    vhci->stateful_resume_gating = true;
 
     bce_vhci_event_queue_resume(&vhci->ev_system);
     bce_vhci_event_queue_resume(&vhci->ev_isochronous);
@@ -657,8 +662,8 @@ static int bce_vhci_bus_resume(struct usb_hcd *hcd)
     cancel_delayed_work_sync(&vhci->w_port_status_change);
     vhci->port_change_waiting = 0;
     vhci->port_change_pending = 0;
-    vhci->port_resume_requested = 0;
-    vhci->port_resume_pass1_done = 0;
+    vhci->port_ep0_ready = 0;
+    memset(vhci->port_ep0_hold_start, 0, sizeof(vhci->port_ep0_hold_start));
     memset(vhci->port_resume_tries, 0, sizeof(vhci->port_resume_tries));
     vhci->system_suspending = false;
     pr_info("bce_vhci: resume started\n");
@@ -943,18 +948,15 @@ static const char *bce_vhci_port_state_change_label(u64 p2)
     return (p2 & 0x4) ? "connected" : "disconnected";
 }
 
-static bool bce_vhci_port_ready_for_hub(u32 port_status)
+bool bce_vhci_port_status_ready_for_traffic(u32 port_status)
 {
-    u8 status_byte = (u8) port_status;
-
     /*
      * For Linux-side gating we only need the port to be usable enough that
-     * usbcore can talk to the device behind it. Some ports come back with
-     * extra legacy bits set alongside ENABLED (for example 0x75), and
-     * treating those as "not ready" deadlocks the global gate forever.
+     * usbcore can talk to the device behind it. raw 0x215, 0x275 and 0x2f5 all
+     * have CONNECTED|ENABLED set; suspend/legacy/high-speed bits do not make
+     * them unready for EP0 traffic.
      */
-    return (status_byte & BCE_VHCI_PORT_STATUS_CONNECTED) &&
-           (status_byte & BCE_VHCI_PORT_STATUS_ENABLED);
+    return (port_status & BCE_VHCI_PORT_STATUS_READY) == BCE_VHCI_PORT_STATUS_READY;
 }
 
 static bool bce_vhci_port_needs_resume(u32 port_status)
@@ -991,17 +993,35 @@ static int bce_vhci_resume_port_queues(struct bce_vhci *vhci, int portnum)
     return 0;
 }
 
+static void bce_vhci_kick_port_queues(struct bce_vhci *vhci, int portnum)
+{
+    int devid;
+    int endp;
+
+    devid = vhci->port_to_device[portnum];
+    if (!devid || !vhci->devices[devid])
+        return;
+
+    for (endp = 0; endp < 32; endp++) {
+        if (vhci->devices[devid]->tq_mask & BIT(endp))
+            bce_vhci_transfer_queue_kick(&vhci->devices[devid]->tq[endp]);
+    }
+}
+
 static void bce_vhci_port_status_change_w(struct work_struct *ws)
 {
     struct bce_vhci *vhci = container_of(to_delayed_work(ws), struct bce_vhci,
                                          w_port_status_change);
     unsigned long waiting;
     bool retry = false;
-    unsigned long retry_delay = msecs_to_jiffies(20);
+    unsigned long retry_delay = msecs_to_jiffies(100);
     int port;
     u32 port_status;
 
     if (!vhci->hcd_registered || !vhci->hcd)
+        return;
+
+    if (vhci->dev->is_being_removed)
         return;
 
     if (vhci->system_suspending)
@@ -1014,10 +1034,7 @@ static void bce_vhci_port_status_change_w(struct work_struct *ws)
             continue;
         }
 
-        /*
-         * If the restored port is present but not enabled yet, drive the T2
-         * port-resume step here before any endpoint queues are resumed.
-         */
+        /* Port is connected but not enabled: drive T2 port-resume. */
         if (bce_vhci_port_needs_resume(port_status)) {
             if (vhci->port_resume_tries[port + 1] < 3) {
                 vhci->port_resume_tries[port + 1]++;
@@ -1029,51 +1046,73 @@ static void bce_vhci_port_status_change_w(struct work_struct *ws)
                 continue;
             }
 
-            /* Stop local retrying; only real firmware change bits should wake usbcore. */
+            /* Exhausted resume tries: hand to usbcore. */
+            clear_bit(port, &vhci->port_ep0_ready);
+            vhci->port_ep0_hold_start[port + 1] = 0;
+            set_bit(port, &vhci->port_change_pending);
             clear_bit(port, &vhci->port_change_waiting);
             continue;
         }
 
-        if (bce_vhci_port_ready_for_hub(port_status)) {
+        if (bce_vhci_port_status_ready_for_traffic(port_status)) {
             /*
-             * Only send a port-level resume when a prior EP0 status=3 armed it
-             * for this port. Keep pass 1 and pass 2 separate so the worker
-             * does not forget that a resume was already sent before queues are
-             * brought back.
+             * Firmware says the port is visible. Clear any stale C_CONNECTION,
+             * then release one EP0 attempt. A stale endpoint reports itself as
+             * CONTROL_TRANSFER_STATUS status=3; transfer.c consumes that and
+             * re-arms this worker instead of failing the URB to usbcore.
              */
-            if (test_bit(port, &vhci->port_resume_requested)) {
-                if (!test_bit(port, &vhci->port_resume_pass1_done)) {
-                    if (bce_vhci_cmd_port_resume(&vhci->cq, (u8) (port + 1))) {
-                        retry = true;
-                        continue;
-                    }
-                    set_bit(port, &vhci->port_resume_pass1_done);
-                    retry = true;
-                    retry_delay = msecs_to_jiffies(25);
-                    continue;
-                }
+            if (port_status & BCE_VHCI_PORT_STATUS_C_CONNECTION)
+                bce_vhci_cmd_port_status(&vhci->cq, (u8) (port + 1),
+                                         0x40000, &port_status);
 
-                clear_bit(port, &vhci->port_resume_requested);
-                clear_bit(port, &vhci->port_resume_pass1_done);
-            }
             if (bce_vhci_resume_port_queues(vhci, port + 1)) {
                 retry = true;
                 continue;
             }
+
+            if (vhci->port_ep0_hold_start[port + 1] &&
+                time_after(jiffies, vhci->port_ep0_hold_start[port + 1] +
+                           msecs_to_jiffies(BCE_VHCI_EP0_HOLD_TIMEOUT_MS))) {
+                pr_warn("bce-vhci: EP0 hold timeout port=%d raw=%x, resetting device\n",
+                        port + 1, port_status);
+                clear_bit(port, &vhci->port_ep0_ready);
+                vhci->port_ep0_hold_start[port + 1] = 0;
+                clear_bit(port, &vhci->port_change_waiting);
+                bce_vhci_reset_device(vhci, port + 1, USB_PORT_FEAT_RESET);
+                continue;
+            }
+
+            set_bit(port, &vhci->port_ep0_ready);
+
+            bce_vhci_kick_port_queues(vhci, port + 1);
             msleep(20);
+            set_bit(port, &vhci->port_change_pending);
             clear_bit(port, &vhci->port_change_waiting);
-            clear_bit(port, &vhci->port_change_pending);
-            clear_bit(port, &vhci->port_resume_requested);
-            clear_bit(port, &vhci->port_resume_pass1_done);
-            pr_info("bce-vhci: port worker ready port=%d waiting=%lx\n",
-                    port + 1, READ_ONCE(vhci->port_change_waiting));
+            pr_debug("bce-vhci: port worker ready port=%d raw=%x waiting=%lx\n",
+                     port + 1, port_status, READ_ONCE(vhci->port_change_waiting));
+        } else if (!(port_status & BCE_VHCI_PORT_STATUS_CONNECTED)) {
+            /* Port disconnected: let usbcore see the change. */
+            clear_bit(port, &vhci->port_ep0_ready);
+            vhci->port_ep0_hold_start[port + 1] = 0;
+            set_bit(port, &vhci->port_change_pending);
+            clear_bit(port, &vhci->port_change_waiting);
+        } else if (vhci->port_ep0_hold_start[port + 1] &&
+                   time_after(jiffies, vhci->port_ep0_hold_start[port + 1] +
+                              msecs_to_jiffies(BCE_VHCI_EP0_HOLD_TIMEOUT_MS))) {
+            /*
+             * EP0 URB has been held too long. Do not release it into a stale
+             * endpoint; reset the device so usbcore can rebuild it cleanly.
+             */
+            pr_warn("bce-vhci: EP0 hold timeout port=%d raw=%x, resetting device\n",
+                    port + 1, port_status);
+            clear_bit(port, &vhci->port_ep0_ready);
+            vhci->port_ep0_hold_start[port + 1] = 0;
+            clear_bit(port, &vhci->port_change_waiting);
+            bce_vhci_reset_device(vhci, port + 1, USB_PORT_FEAT_RESET);
         } else {
             retry = true;
         }
     }
-
-    if (!READ_ONCE(vhci->port_change_waiting))
-        vhci->stateful_resume_gating = false;
 
     if (retry)
         queue_delayed_work(vhci->tq_state_wq, &vhci->w_port_status_change,
@@ -1088,13 +1127,15 @@ static void bce_vhci_handle_system_event(struct bce_vhci_event_queue *q, struct 
                msg->param1 > 0 &&
                msg->param1 < ARRAY_SIZE(q->vhci->port_to_device)) {
         /*
-         * Firmware signals a per-port state transition; wait until the port
-         * is actually connected+enabled before handing the change to usbcore.
-         * Probe-time controller bring-up can deliver 0x18 before port_count is
-         * populated, so gate this against the fixed port array rather than the
-         * later hub size.
+         * Firmware signals a per-port state transition; wait until the port is
+         * connected+enabled and EP0 has left the stale endpoint window before
+         * handing the change to usbcore. Probe-time controller bring-up can
+         * deliver 0x18 before port_count is populated, so gate this against the
+         * fixed port array rather than the later hub size.
          */
-        set_bit(msg->param1 - 1, &q->vhci->port_change_pending);
+        clear_bit(msg->param1 - 1, &q->vhci->port_ep0_ready);
+        if (!q->vhci->port_ep0_hold_start[msg->param1])
+            q->vhci->port_ep0_hold_start[msg->param1] = jiffies;
         set_bit(msg->param1 - 1, &q->vhci->port_change_waiting);
         queue_delayed_work(q->vhci->tq_state_wq, &q->vhci->w_port_status_change, 0);
         pr_info("bce-vhci: port state change event: port=%u state=%s status=%x p2=%llx\n",

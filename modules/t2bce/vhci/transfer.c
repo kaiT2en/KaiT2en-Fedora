@@ -11,6 +11,7 @@ static void bce_vhci_transfer_queue_remove_pending(struct bce_vhci_transfer_queu
 static int bce_vhci_urb_init(struct bce_vhci_urb *vurb);
 static int bce_vhci_urb_update(struct bce_vhci_urb *urb, struct bce_vhci_message *msg);
 static int bce_vhci_urb_transfer_completion(struct bce_vhci_urb *urb, struct bce_sq_completion_data *c);
+static void bce_vhci_urb_complete(struct bce_vhci_urb *urb, int status);
 
 static void bce_vhci_transfer_queue_reset_w(struct work_struct *work);
 
@@ -31,6 +32,7 @@ void bce_vhci_create_transfer_queue(struct bce_vhci *vhci, struct bce_vhci_trans
     q->state = BCE_VHCI_ENDPOINT_ACTIVE;
     q->active = true;
     q->stalled = false;
+    q->paused_by = 0;
     q->max_active_requests = 1;
     if (usb_endpoint_type(&endp->desc) == USB_ENDPOINT_XFER_BULK)
         q->max_active_requests = BCE_VHCI_BULK_MAX_ACTIVE_URBS;
@@ -93,6 +95,48 @@ static void bce_vhci_transfer_queue_giveback(struct bce_vhci_transfer_queue *q)
 }
 
 static void bce_vhci_transfer_queue_init_pending_urbs(struct bce_vhci_transfer_queue *q);
+
+static int bce_vhci_transfer_queue_portnum(struct bce_vhci_transfer_queue *q)
+{
+    int port;
+
+    for (port = 1; port < ARRAY_SIZE(q->vhci->port_to_device); port++) {
+        if (q->vhci->port_to_device[port] == q->dev_addr)
+            return port;
+    }
+
+    return 0;
+}
+
+static bool bce_vhci_transfer_queue_ep0_port_ready(struct bce_vhci_transfer_queue *q,
+                                                   int *port)
+{
+    if (q->endp_addr != 0x00)
+        return true;
+
+    *port = bce_vhci_transfer_queue_portnum(q);
+    if (!*port)
+        return true;
+
+    /*
+     * Use the worker-controlled EP0 gate. urb_enqueue runs in usbcore's
+     * atomic path so it cannot poll firmware synchronously.
+     */
+    return test_bit(*port - 1, &q->vhci->port_ep0_ready);
+}
+
+static void bce_vhci_transfer_queue_hold_ep0(struct bce_vhci_transfer_queue *q,
+                                             int port)
+{
+    /* Record hold start for timeout tracking (only on first hold). */
+    if (!q->vhci->port_ep0_hold_start[port])
+        q->vhci->port_ep0_hold_start[port] = jiffies;
+
+    set_bit(port - 1, &q->vhci->port_change_waiting);
+    queue_delayed_work(q->vhci->tq_state_wq, &q->vhci->w_port_status_change, 0);
+    pr_debug("bce-vhci: [00] holding EP0 URB for port=%d\n",
+             port);
+}
 
 static void bce_vhci_transfer_queue_deliver_pending(struct bce_vhci_transfer_queue *q)
 {
@@ -230,6 +274,25 @@ int bce_vhci_transfer_queue_do_pause(struct bce_vhci_transfer_queue *q)
 
 static void bce_vhci_urb_resume(struct bce_vhci_urb *urb);
 
+static void bce_vhci_transfer_queue_shutdown(struct bce_vhci_transfer_queue *q)
+{
+    unsigned long flags;
+    struct urb *urb;
+    struct bce_vhci_urb *vurb;
+
+    spin_lock_irqsave(&q->urb_lock, flags);
+    q->active = false;
+    while (!list_empty(&q->endp->urb_list)) {
+        urb = list_first_entry(&q->endp->urb_list, struct urb, urb_list);
+        vurb = urb->hcpriv;
+        bce_vhci_urb_complete(vurb, -ESHUTDOWN);
+    }
+    spin_unlock_irqrestore(&q->urb_lock, flags);
+
+    bce_vhci_transfer_queue_remove_pending(q);
+    bce_vhci_transfer_queue_giveback(q);
+}
+
 int bce_vhci_transfer_queue_do_resume(struct bce_vhci_transfer_queue *q)
 {
     unsigned long flags;
@@ -264,8 +327,11 @@ int bce_vhci_transfer_queue_pause(struct bce_vhci_transfer_queue *q, enum bce_vh
     int ret = 0;
     mutex_lock(&q->pause_lock);
     if ((q->paused_by & src) != src) {
-        if (!q->paused_by)
+        if (src == BCE_VHCI_PAUSE_SHUTDOWN) {
+            bce_vhci_transfer_queue_shutdown(q);
+        } else if (!q->paused_by) {
             ret = bce_vhci_transfer_queue_do_pause(q);
+        }
         if (!ret)
             q->paused_by |= src;
     }
@@ -289,6 +355,20 @@ int bce_vhci_transfer_queue_resume(struct bce_vhci_transfer_queue *q, enum bce_v
     }
     mutex_unlock(&q->pause_lock);
     return ret;
+}
+
+void bce_vhci_transfer_queue_kick(struct bce_vhci_transfer_queue *q)
+{
+    unsigned long flags;
+
+    spin_lock_irqsave(&q->urb_lock, flags);
+    if (q->active) {
+        bce_vhci_transfer_queue_init_pending_urbs(q);
+        bce_vhci_transfer_queue_deliver_pending(q);
+    }
+    spin_unlock_irqrestore(&q->urb_lock, flags);
+
+    bce_vhci_transfer_queue_giveback(q);
 }
 
 int bce_vhci_transfer_queue_suspend_pause(struct bce_vhci_transfer_queue *q)
@@ -376,6 +456,11 @@ static void bce_vhci_transfer_queue_init_pending_urbs(struct bce_vhci_transfer_q
 {
     struct urb *urb, *urbt;
     struct bce_vhci_urb *vurb;
+    int port = 0;
+
+    if (!bce_vhci_transfer_queue_ep0_port_ready(q, &port))
+        return;
+
     list_for_each_entry_safe(urb, urbt, &q->endp->urb_list, urb_list) {
         vurb = urb->hcpriv;
         if (!bce_vhci_transfer_queue_can_init_urb(q))
@@ -393,6 +478,8 @@ int bce_vhci_urb_create(struct bce_vhci_transfer_queue *q, struct urb *urb)
 {
     unsigned long flags;
     int status = 0;
+    int port = 0;
+    bool ep0_port_ready;
     struct bce_vhci_urb *vurb;
     vurb = kzalloc(sizeof(struct bce_vhci_urb), GFP_KERNEL);
     urb->hcpriv = vurb;
@@ -401,6 +488,7 @@ int bce_vhci_urb_create(struct bce_vhci_transfer_queue *q, struct urb *urb)
     vurb->urb = urb;
     vurb->dir = usb_urb_dir_in(urb) ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
     vurb->is_control = (usb_endpoint_num(&urb->ep->desc) == 0);
+    ep0_port_ready = bce_vhci_transfer_queue_ep0_port_ready(q, &port);
 
     spin_lock_irqsave(&q->urb_lock, flags);
     status = usb_hcd_link_urb_to_ep(q->vhci->hcd, urb);
@@ -412,10 +500,14 @@ int bce_vhci_urb_create(struct bce_vhci_transfer_queue *q, struct urb *urb)
     }
 
     if (q->active) {
-        if (bce_vhci_transfer_queue_can_init_urb(vurb->q))
-            status = bce_vhci_urb_init(vurb);
-        else
+        if (!ep0_port_ready) {
             vurb->state = BCE_VHCI_URB_INIT_PENDING;
+            bce_vhci_transfer_queue_hold_ep0(q, port);
+        } else if (bce_vhci_transfer_queue_can_init_urb(vurb->q)) {
+            status = bce_vhci_urb_init(vurb);
+        } else {
+            vurb->state = BCE_VHCI_URB_INIT_PENDING;
+        }
     } else {
         if (q->stalled)
             bce_vhci_transfer_queue_request_reset(q);
@@ -647,15 +739,23 @@ static int bce_vhci_urb_control_check_status(struct bce_vhci_urb *urb)
         urb->state = BCE_VHCI_URB_CONTROL_COMPLETE;
         if (urb->received_status != BCE_VHCI_SUCCESS) {
             if (urb->received_status == 3 && q->endp_addr == 0x00) {
-                for (port = 1; port <= q->vhci->port_count; port++) {
-                    if (q->vhci->port_to_device[port] != q->dev_addr)
-                        continue;
-                    set_bit(port - 1, &q->vhci->port_resume_requested);
+                port = bce_vhci_transfer_queue_portnum(q);
+                if (port) {
+                    clear_bit(port - 1, &q->vhci->port_ep0_ready);
                     set_bit(port - 1, &q->vhci->port_change_waiting);
-                    q->vhci->stateful_resume_gating = true;
+                    if (!q->vhci->port_ep0_hold_start[port])
+                        q->vhci->port_ep0_hold_start[port] = jiffies;
                     queue_delayed_work(q->vhci->tq_state_wq,
-                                       &q->vhci->w_port_status_change, 0);
-                    break;
+                                       &q->vhci->w_port_status_change,
+                                       msecs_to_jiffies(100));
+                    urb->received_status = 0;
+                    urb->send_offset = 0;
+                    urb->receive_offset = 0;
+                    urb->state = BCE_VHCI_URB_INIT_PENDING;
+                    ++q->remaining_active_requests;
+                    pr_info("bce-vhci: [%02x] EP0 status=3, holding URB for port=%d\n",
+                            q->endp_addr, port);
+                    return 0;
                 }
             }
             if (urb->received_status == 3)
@@ -670,6 +770,11 @@ static int bce_vhci_urb_control_check_status(struct bce_vhci_urb *urb)
             if (!list_empty(&q->endp->urb_list))
                 bce_vhci_transfer_queue_request_reset(q);
             return -ENOENT;
+        }
+        if (q->endp_addr == 0x00) {
+            port = bce_vhci_transfer_queue_portnum(q);
+            if (port)
+                q->vhci->port_ep0_hold_start[port] = 0;
         }
         bce_vhci_urb_complete(urb, 0);
         return -ENOENT;

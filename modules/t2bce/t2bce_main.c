@@ -141,10 +141,15 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
     global_bce = bce;
 
-    bce_vhci_create(bce, &bce->vhci);
+    if ((status = bce_vhci_create(bce, &bce->vhci))) {
+        pr_info("t2bce: Creating VHCI failed\n");
+        goto fail_vhci;
+    }
 
     return 0;
 
+fail_vhci:
+    bce_free_command_queues(bce);
 fail_ts:
     bce_free_state_buffer(bce);
     bce_xhci_pm_stop(&bce->xhci_pm);

@@ -4,6 +4,8 @@
 #include "queue.h"
 #include "transfer.h"
 
+#define BCE_VHCI_EP0_HOLD_TIMEOUT_MS 5000
+
 struct usb_hcd;
 struct bce_queue_cq;
 
@@ -41,16 +43,17 @@ struct bce_vhci {
     struct delayed_work w_port_status_change;
     unsigned long port_change_pending;
     unsigned long port_change_waiting;
-    /* Port-local resume request armed by a failed first EP0 transfer. */
-    unsigned long port_resume_requested;
-    /* Pass-1 port resume was sent; pass 2 may resume queues after settle time. */
-    unsigned long port_resume_pass1_done;
+    /* Worker-controlled EP0 gate; cleared again when EP0 reports status=3. */
+    unsigned long port_ep0_ready;
+    /* jiffies when the first EP0 URB was held, per port; 0 = no URB held */
+    unsigned long port_ep0_hold_start[17];
     u8 port_resume_tries[17];
     bool no_state_resume;
     bool hcd_registered;
     bool system_suspending;
-    bool stateful_resume_gating;
 };
+
+bool bce_vhci_port_status_ready_for_traffic(u32 port_status);
 
 int __init bce_vhci_module_init(void);
 void __exit bce_vhci_module_exit(void);
