@@ -4,7 +4,6 @@ MODDEST ?= /lib/modules/$(KVER)/updates
 PWD := $(shell pwd)
 
 obj-m += t2hid.o
-obj-m += t2touchbar_cfg.o
 obj-m += t2touchbar_bl.o
 obj-m += t2touchbar_kbd.o
 
@@ -16,7 +15,6 @@ all:
 install: all
 	install -d -o root -g root -m 0755 $(MODDEST)
 	install -o root -g root -m 0644 t2hid.ko $(MODDEST)/
-	install -o root -g root -m 0644 t2touchbar_cfg.ko $(MODDEST)/
 	install -o root -g root -m 0644 t2touchbar_bl.ko $(MODDEST)/
 	install -o root -g root -m 0644 t2touchbar_kbd.ko $(MODDEST)/
 	depmod -a $(KVER)

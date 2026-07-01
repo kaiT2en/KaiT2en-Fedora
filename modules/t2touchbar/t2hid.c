@@ -20,7 +20,6 @@
 #include <linux/device.h>
 #include <linux/hid.h>
 #include <linux/jiffies.h>
-#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/timer.h>
@@ -54,16 +53,6 @@
 #define HID_USAGE_MAGIC_BL			0xff00000f
 #define APPLE_MAGIC_REPORT_ID_POWER		3
 #define APPLE_MAGIC_REPORT_ID_BRIGHTNESS	1
-
-#ifndef HID_SPI_DEVICE
-#define HID_SPI_DEVICE(ven, prod) HID_DEVICE(BUS_SPI, HID_GROUP_ANY, ven, prod)
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)
-#define apple_is_spi_keyboard(hdev) ((hdev)->type == HID_TYPE_SPI_KEYBOARD)
-#else
-#define apple_is_spi_keyboard(hdev) true
-#endif
 
 static unsigned int fnmode = 3;
 module_param(fnmode, uint, 0644);
@@ -100,8 +89,6 @@ struct apple_non_apple_keyboard {
 struct apple_sc_backlight {
 	struct led_classdev cdev;
 	struct hid_device *hdev;
-	u16 current_brightness;
-	u16 saved_brightness;
 };
 
 struct apple_backlight_config_report {
@@ -121,18 +108,7 @@ struct apple_magic_backlight {
 	struct led_classdev cdev;
 	struct hid_report *brightness;
 	struct hid_report *power;
-	u16 current_brightness;
-	u16 saved_brightness;
 };
-
-static u16 apple_saved_kbd_backlight_brightness;
-
-static u16 apple_initial_kbd_backlight_brightness(u16 max_brightness)
-{
-	if (apple_saved_kbd_backlight_brightness)
-		return apple_saved_kbd_backlight_brightness;
-	return max_t(u16, max_brightness / 2, 1);
-}
 
 struct apple_sc {
 	struct hid_device *hdev;
@@ -142,8 +118,6 @@ struct apple_sc {
 	DECLARE_BITMAP(pressed_numlock, KEY_CNT);
 	struct timer_list battery_timer;
 	struct apple_sc_backlight *backlight;
-	struct apple_magic_backlight *magic_backlight;
-	bool suspend_preparing_remove;
 };
 
 struct apple_key_translation {
@@ -391,6 +365,9 @@ static const struct apple_non_apple_keyboard non_apple_keyboards[] = {
 	{ "A3R" },
 	{ "hfd.cn" },
 	{ "WKB603" },
+	{ "TH87" },			/* EPOMAKER TH87 BT mode */
+	{ "HFD Epomaker TH87" },	/* EPOMAKER TH87 USB mode */
+	{ "2.4G Wireless Receiver" },	/* EPOMAKER TH87 dongle */
 };
 
 static bool apple_is_non_apple_keyboard(struct hid_device *hdev)
@@ -545,16 +522,6 @@ static int hidinput_apple_event(struct hid_device *hid, struct input_dev *input,
 				table = macbookair_fn_keys;
 			else if (hid->product < 0x21d || hid->product >= 0x300)
 				table = powerbook_fn_keys;
-			else if (hid->bus == BUS_HOST || hid->bus == BUS_SPI)
-				switch (hid->product) {
-				case SPI_DEVICE_ID_APPLE_MACBOOK_PRO13_2020:
-				case HOST_DEVICE_ID_APPLE_MACBOOK_PRO13_2022:
-					table = macbookpro_dedicated_esc_fn_keys;
-					break;
-				default:
-					table = magic_keyboard_2021_and_2024_fn_keys;
-					break;
-				}
 			else
 				table = apple_fn_keys;
 		}
@@ -722,9 +689,7 @@ static const __u8 *apple_report_fixup(struct hid_device *hdev, __u8 *rdesc,
 		hid_info(hdev,
 			 "fixing up Magic Keyboard battery report descriptor\n");
 		*rsize = *rsize - 1;
-		rdesc = kmemdup(rdesc + 1, *rsize, GFP_KERNEL);
-		if (!rdesc)
-			return NULL;
+		rdesc = rdesc + 1;
 
 		rdesc[0] = 0x05;
 		rdesc[1] = 0x01;
@@ -830,7 +795,7 @@ static int apple_backlight_set(struct hid_device *hdev, u16 value, u16 rate)
 	int ret = 0;
 	struct apple_backlight_set_report *rep;
 
-	rep = kmalloc(sizeof(*rep), GFP_KERNEL);
+	rep = kmalloc_obj(*rep);
 	if (rep == NULL)
 		return -ENOMEM;
 
@@ -851,14 +816,8 @@ static int apple_backlight_led_set(struct led_classdev *led_cdev,
 {
 	struct apple_sc_backlight *backlight = container_of(led_cdev,
 							    struct apple_sc_backlight, cdev);
-	int ret;
 
-	ret = apple_backlight_set(backlight->hdev, brightness, 0);
-	if (!ret) {
-		backlight->current_brightness = brightness;
-		apple_saved_kbd_backlight_brightness = brightness;
-	}
-	return ret;
+	return apple_backlight_set(backlight->hdev, brightness, 0);
 }
 
 static int apple_backlight_init(struct hid_device *hdev)
@@ -899,21 +858,13 @@ static int apple_backlight_init(struct hid_device *hdev)
 	asc->backlight->cdev.name = "apple::kbd_backlight";
 	asc->backlight->cdev.max_brightness = rep->backlight_on_max;
 	asc->backlight->cdev.brightness_set_blocking = apple_backlight_led_set;
-	asc->backlight->current_brightness = 0;
-	asc->backlight->saved_brightness = 0;
-	asc->backlight->cdev.brightness = 0;
+	asc->backlight->cdev.flags = LED_CORE_SUSPENDRESUME;
 
-	asc->backlight->cdev.brightness =
-		apple_initial_kbd_backlight_brightness(rep->backlight_on_max);
-
-	ret = apple_backlight_set(hdev, asc->backlight->cdev.brightness, 0);
+	ret = apple_backlight_set(hdev, 0, 0);
 	if (ret < 0) {
 		hid_err(hdev, "backlight set request failed: %d\n", ret);
 		goto cleanup_and_exit;
 	}
-	asc->backlight->current_brightness = asc->backlight->cdev.brightness;
-	asc->backlight->saved_brightness = asc->backlight->current_brightness;
-	apple_saved_kbd_backlight_brightness = asc->backlight->current_brightness;
 
 	ret = devm_led_classdev_register(&hdev->dev, &asc->backlight->cdev);
 
@@ -946,14 +897,11 @@ static int apple_magic_backlight_led_set(struct led_classdev *led_cdev,
 			struct apple_magic_backlight, cdev);
 
 	apple_magic_backlight_set(backlight, brightness, 1);
-	backlight->current_brightness = brightness;
-	apple_saved_kbd_backlight_brightness = brightness;
 	return 0;
 }
 
 static int apple_magic_backlight_init(struct hid_device *hdev)
 {
-	struct apple_sc *asc = hid_get_drvdata(hdev);
 	struct apple_magic_backlight *backlight;
 	struct hid_report_enum *report_enum;
 
@@ -979,18 +927,9 @@ static int apple_magic_backlight_init(struct hid_device *hdev)
 	backlight->cdev.name = ":white:" LED_FUNCTION_KBD_BACKLIGHT;
 	backlight->cdev.max_brightness = backlight->brightness->field[0]->logical_maximum;
 	backlight->cdev.brightness_set_blocking = apple_magic_backlight_led_set;
-	backlight->current_brightness = 0;
-	backlight->saved_brightness = 0;
-	backlight->cdev.brightness = 0;
-	asc->magic_backlight = backlight;
+	backlight->cdev.flags = LED_CORE_SUSPENDRESUME;
 
-	backlight->cdev.brightness =
-		apple_initial_kbd_backlight_brightness(backlight->cdev.max_brightness);
-	backlight->current_brightness = backlight->cdev.brightness;
-	backlight->saved_brightness = backlight->current_brightness;
-	apple_saved_kbd_backlight_brightness = backlight->current_brightness;
-
-	apple_magic_backlight_set(backlight, backlight->current_brightness, 0);
+	apple_magic_backlight_set(backlight, 0, 0);
 
 	return devm_led_classdev_register(&hdev->dev, &backlight->cdev);
 
@@ -1002,10 +941,6 @@ static int apple_probe(struct hid_device *hdev,
 	unsigned long quirks = id->driver_data;
 	struct apple_sc *asc;
 	int ret;
-
-	if ((id->bus == BUS_SPI || id->bus == BUS_HOST) && id->vendor == SPI_VENDOR_ID_APPLE &&
-	    !apple_is_spi_keyboard(hdev))
-		return -ENODEV;
 
 	if (quirks & APPLE_IGNORE_MOUSE && hdev->type == HID_TYPE_USBMOUSE)
 		return -ENODEV;
@@ -1066,66 +1001,8 @@ static void apple_remove(struct hid_device *hdev)
 	if (asc->quirks & APPLE_RDESC_BATTERY)
 		timer_delete_sync(&asc->battery_timer);
 
-	/* Only tear down LEDs on suspend-driven remove. */
-	if (asc->suspend_preparing_remove && asc->backlight) {
-		devm_led_classdev_unregister(&hdev->dev, &asc->backlight->cdev);
-		asc->backlight = NULL;
-	}
-
-	if (asc->suspend_preparing_remove && asc->magic_backlight) {
-		devm_led_classdev_unregister(&hdev->dev, &asc->magic_backlight->cdev);
-		asc->magic_backlight = NULL;
-	}
-
 	hid_hw_stop(hdev);
 }
-
-#ifdef CONFIG_PM
-static int apple_suspend(struct hid_device *hdev, pm_message_t msg)
-{
-	struct apple_sc *asc = hid_get_drvdata(hdev);
-
-	asc->suspend_preparing_remove = true;
-
-	if (asc->backlight) {
-		asc->backlight->saved_brightness = asc->backlight->current_brightness;
-		apple_saved_kbd_backlight_brightness = asc->backlight->current_brightness;
-		apple_backlight_set(hdev, 0, 0);
-		asc->backlight->current_brightness = 0;
-	}
-
-	if (asc->magic_backlight) {
-		asc->magic_backlight->saved_brightness = asc->magic_backlight->current_brightness;
-		apple_saved_kbd_backlight_brightness = asc->magic_backlight->current_brightness;
-		apple_magic_backlight_set(asc->magic_backlight, 0, 0);
-		asc->magic_backlight->current_brightness = 0;
-	}
-
-	return 0;
-}
-
-static int apple_resume(struct hid_device *hdev)
-{
-	struct apple_sc *asc = hid_get_drvdata(hdev);
-	int ret = 0;
-
-	asc->suspend_preparing_remove = false;
-
-	if (asc->backlight && asc->backlight->saved_brightness) {
-		ret = apple_backlight_set(hdev, asc->backlight->saved_brightness, 0);
-		if (!ret)
-			asc->backlight->current_brightness = asc->backlight->saved_brightness;
-	}
-
-	if (asc->magic_backlight && asc->magic_backlight->saved_brightness) {
-		apple_magic_backlight_set(asc->magic_backlight,
-					 asc->magic_backlight->saved_brightness, 0);
-		asc->magic_backlight->current_brightness = asc->magic_backlight->saved_brightness;
-	}
-
-	return ret;
-}
-#endif
 
 static const struct hid_device_id apple_devices[] = {
 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_MIGHTYMOUSE),
@@ -1350,10 +1227,6 @@ static const struct hid_device_id apple_devices[] = {
 		.driver_data = APPLE_HAS_FN | APPLE_ISO_TILDE_QUIRK | APPLE_RDESC_BATTERY },
 	{ HID_BLUETOOTH_DEVICE(BT_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_MAGIC_KEYBOARD_NUMPAD_2024),
 		.driver_data = APPLE_HAS_FN | APPLE_ISO_TILDE_QUIRK },
-	{ HID_SPI_DEVICE(SPI_VENDOR_ID_APPLE, HID_ANY_ID),
-		.driver_data = APPLE_HAS_FN | APPLE_ISO_TILDE_QUIRK },
-	{ HID_DEVICE(BUS_HOST, HID_GROUP_ANY, HOST_VENDOR_ID_APPLE, HID_ANY_ID),
-		.driver_data = APPLE_HAS_FN | APPLE_ISO_TILDE_QUIRK },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_TOUCHBAR_BACKLIGHT),
 		.driver_data = APPLE_MAGIC_BACKLIGHT },
 
@@ -1371,11 +1244,6 @@ static struct hid_driver apple_driver = {
 	.input_mapping = apple_input_mapping,
 	.input_mapped = apple_input_mapped,
 	.input_configured = apple_input_configured,
-#ifdef CONFIG_PM
-	.suspend = apple_suspend,
-	.resume = apple_resume,
-	.reset_resume = apple_resume,
-#endif
 };
 module_hid_driver(apple_driver);
 
