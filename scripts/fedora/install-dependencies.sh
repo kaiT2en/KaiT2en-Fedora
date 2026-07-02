@@ -22,6 +22,7 @@ dnf install -y \
 	elfutils-libelf-devel \
 	dracut \
 	grubby \
+	polkit \
 	cargo \
 	rust \
 	gtk4-devel \

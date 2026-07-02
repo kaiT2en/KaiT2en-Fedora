@@ -1,0 +1,11 @@
+[Unit]
+Description=Restore T2 SMC battery charge limit
+After=systemd-modules-load.service
+ConditionPathExists=/etc/t2-smc-control/config.txt
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/t2-smc-control --apply-saved-charge-limit
+
+[Install]
+WantedBy=multi-user.target

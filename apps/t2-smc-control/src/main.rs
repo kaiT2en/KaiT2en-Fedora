@@ -1,10 +1,12 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::env;
 use std::fs;
-use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::rc::Rc;
+use std::thread;
+use std::time::Duration;
 
 #[allow(unused_imports)]
 use adw::prelude::*;
@@ -14,6 +16,10 @@ use gtk4::{gio, glib};
 const APP_ID: &str = "org.t2smccontrol.gtk";
 const HWMON_NAMES: &[&str] = &["t2smc", "macsmc"];
 const RTC_NAME_PREFIX: &str = "t2smc ";
+const CONFIG_PATH: &str = "/etc/t2-smc-control/config.txt";
+const INSTALLED_BIN_PATH: &str = "/usr/local/bin/t2-smc-control";
+const APPLY_RETRY_ATTEMPTS: usize = 40;
+const APPLY_RETRY_DELAY: Duration = Duration::from_millis(250);
 
 fn physical_cpu_core_count() -> Option<usize> {
     let entries = fs::read_dir("/sys/devices/system/cpu").ok()?;
@@ -145,19 +151,119 @@ fn read_u32(path: &Path) -> Option<u32> {
     fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
+fn parse_charge_percent(value: &str) -> Result<u8, String> {
+    let value = value.trim();
+    let percent: u8 = value
+        .parse()
+        .map_err(|_| format!("Invalid charge limit '{value}'"))?;
+    if percent > 100 {
+        return Err(format!("Invalid charge limit '{percent}': expected 0-100"));
+    }
+    Ok(percent)
+}
+
+fn parse_charge_limit_config(raw: &str) -> Result<Option<u8>, String> {
+    let mut charge_limit = None;
+
+    for (index, line) in raw.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let Some((key, value)) = line.split_once('=') else {
+            return Err(format!("Invalid config line {}", index + 1));
+        };
+
+        if key.trim() == "charge_limit" {
+            charge_limit = Some(parse_charge_percent(value)?);
+        }
+    }
+
+    Ok(charge_limit)
+}
+
+fn read_saved_charge_limit_from(path: &Path) -> Result<Option<u8>, String> {
+    match fs::read_to_string(path) {
+        Ok(raw) => parse_charge_limit_config(&raw),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(format!("Cannot read {}: {err}", path.display())),
+    }
+}
+
+fn read_saved_charge_limit() -> Result<Option<u8>, String> {
+    read_saved_charge_limit_from(Path::new(CONFIG_PATH))
+}
+
+fn write_charge_limit_config(path: &Path, percent: u8) -> Result<(), String> {
+    if percent > 100 {
+        return Err(format!("Invalid charge limit '{percent}': expected 0-100"));
+    }
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|err| format!("Cannot create {}: {err}", parent.display()))?;
+    }
+
+    fs::write(path, format!("charge_limit={percent}\n"))
+        .map_err(|err| format!("Cannot write {}: {err}", path.display()))
+}
+
+fn save_charge_limit(percent: u8) -> Result<(), String> {
+    write_charge_limit_config(Path::new(CONFIG_PATH), percent)
+}
+
 fn write_string(path: &Path, value: &str) -> Result<(), String> {
     fs::write(path, value).map_err(|err| format!("Cannot write {}: {err}", path.display()))
 }
 
-fn find_hwmon() -> Option<PathBuf> {
-    for entry in glob::glob("/sys/class/hwmon/hwmon*/name").ok()? {
-        let path = entry.ok()?;
-        let name = fs::read_to_string(&path).ok()?;
+fn find_hwmon_in(base: &Path) -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    for entry in fs::read_dir(base).ok()?.flatten() {
+        let file_name = entry.file_name();
+        if file_name.to_string_lossy().starts_with("hwmon") {
+            candidates.push(entry.path());
+        }
+    }
+    candidates.sort();
+
+    for path in candidates {
+        let Ok(name) = fs::read_to_string(path.join("name")) else {
+            continue;
+        };
         if HWMON_NAMES.contains(&name.trim()) {
-            return path.parent().map(Path::to_path_buf);
+            return Some(path);
         }
     }
     None
+}
+
+fn find_hwmon() -> Option<PathBuf> {
+    find_hwmon_in(Path::new("/sys/class/hwmon"))
+}
+
+fn find_hwmon_with_retry(attempts: usize, delay: Duration) -> Option<PathBuf> {
+    for attempt in 0..attempts {
+        if let Some(hwmon) = find_hwmon() {
+            return Some(hwmon);
+        }
+        if attempt + 1 < attempts {
+            thread::sleep(delay);
+        }
+    }
+    None
+}
+
+fn running_as_root() -> bool {
+    let Ok(status) = fs::read_to_string("/proc/self/status") else {
+        return false;
+    };
+
+    status
+        .lines()
+        .find_map(|line| line.strip_prefix("Uid:"))
+        .and_then(|uids| uids.split_whitespace().nth(1))
+        .is_some_and(|uid| uid == "0")
 }
 
 fn find_t2smc_rtc() -> Option<PathBuf> {
@@ -216,29 +322,110 @@ fn write_charge_limit(hwmon: &Path, percent: u8) -> Result<(), String> {
     write_string(&hwmon.join("battery_charge_limit"), &percent.to_string())
 }
 
-fn prepare_charge_limit_access(hwmon: &Path) -> Result<(), String> {
-    let path = hwmon.join("battery_charge_limit");
+fn write_and_verify_charge_limit(hwmon: &Path, percent: u8) -> Result<(), String> {
+    if percent > 100 {
+        return Err(format!("Invalid charge limit '{percent}': expected 0-100"));
+    }
 
-    if OpenOptions::new().write(true).open(&path).is_ok() {
+    write_charge_limit(hwmon, percent)?;
+
+    match read_charge_limit(hwmon) {
+        Some(actual) if actual == percent => Ok(()),
+        Some(actual) => Err(format!(
+            "Write mismatch: requested {percent}%, device reports {actual}%"
+        )),
+        None => Err(format!(
+            "Cannot read {} after writing charge limit",
+            hwmon.join("battery_charge_limit").display()
+        )),
+    }
+}
+
+fn set_charge_limit_via_pkexec(percent: u8) -> Result<(), String> {
+    let output = Command::new("pkexec")
+        .arg(INSTALLED_BIN_PATH)
+        .arg("--set-charge-limit")
+        .arg(percent.to_string())
+        .output()
+        .map_err(|err| format!("Cannot start pkexec: {err}"))?;
+
+    if output.status.success() {
         return Ok(());
     }
 
-    let status = Command::new("pkexec")
-        .arg("chmod")
-        .arg("a+w")
-        .arg(&path)
-        .status()
-        .map_err(|err| format!("Cannot start pkexec: {err}"))?;
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    if !stderr.is_empty() {
+        Err(stderr)
+    } else if !stdout.is_empty() {
+        Err(stdout)
+    } else {
+        Err("Setting battery charge limit was not authorized".into())
+    }
+}
 
-    if !status.success() {
-        return Err("Write access to battery_charge_limit was not granted".into());
+fn run_set_charge_limit(value: &str) -> Result<(), String> {
+    if !running_as_root() {
+        return Err("--set-charge-limit must be run as root".into());
     }
 
-    OpenOptions::new()
-        .write(true)
-        .open(&path)
-        .map(|_| ())
-        .map_err(|err| format!("battery_charge_limit is still not writable: {err}"))
+    let percent = parse_charge_percent(value)?;
+    let hwmon = find_hwmon().ok_or_else(|| "t2smc/macsmc hwmon device not found".to_string())?;
+    write_and_verify_charge_limit(&hwmon, percent)?;
+    save_charge_limit(percent)?;
+    println!("Charge limit set to {percent}% and saved");
+    Ok(())
+}
+
+fn run_apply_saved_charge_limit() -> Result<(), String> {
+    if !running_as_root() {
+        return Err("--apply-saved-charge-limit must be run as root".into());
+    }
+
+    let Some(percent) = read_saved_charge_limit()? else {
+        println!("No saved charge limit configured");
+        return Ok(());
+    };
+
+    let hwmon = find_hwmon_with_retry(APPLY_RETRY_ATTEMPTS, APPLY_RETRY_DELAY)
+        .ok_or_else(|| "t2smc/macsmc hwmon device not found".to_string())?;
+    write_and_verify_charge_limit(&hwmon, percent)?;
+    println!("Applied saved charge limit {percent}%");
+    Ok(())
+}
+
+fn print_usage() {
+    println!(
+        "Usage:\n  t2-smc-control\n  t2-smc-control --set-charge-limit <0-100>\n  t2-smc-control --apply-saved-charge-limit"
+    );
+}
+
+fn handle_cli_args() -> Option<Result<(), String>> {
+    let mut args = env::args().skip(1);
+    let first = args.next()?;
+
+    match first.as_str() {
+        "--set-charge-limit" => {
+            let Some(value) = args.next() else {
+                return Some(Err("Missing value for --set-charge-limit".into()));
+            };
+            if args.next().is_some() {
+                return Some(Err("Too many arguments for --set-charge-limit".into()));
+            }
+            Some(run_set_charge_limit(&value))
+        }
+        "--apply-saved-charge-limit" => {
+            if args.next().is_some() {
+                return Some(Err("Too many arguments for --apply-saved-charge-limit".into()));
+            }
+            Some(run_apply_saved_charge_limit())
+        }
+        "-h" | "--help" => {
+            print_usage();
+            Some(Ok(()))
+        }
+        _ => None,
+    }
 }
 
 fn set_status(label: &gtk4::Label, text: &str, error: bool) {
@@ -272,16 +459,8 @@ fn initialize_charge_limit(
     charge_value.set_text(&format!("{limit}%"));
     *last_committed.borrow_mut() = Some(limit);
 
-    match prepare_charge_limit_access(hwmon) {
-        Ok(()) => {
-            slider.set_sensitive(true);
-            set_status(status, "Ready", false);
-        }
-        Err(err) => {
-            slider.set_sensitive(false);
-            set_status(status, &err, true);
-        }
-    }
+    slider.set_sensitive(true);
+    set_status(status, "Ready", false);
 }
 
 fn clear_listbox(list: &gtk4::ListBox) {
@@ -398,6 +577,14 @@ fn rebuild_sensor_rows(
 }
 
 fn main() {
+    if let Some(result) = handle_cli_args() {
+        if let Err(err) = result {
+            eprintln!("{err}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
     register_embedded_resources();
     let app = adw::Application::builder()
         .application_id(APP_ID)
@@ -574,13 +761,13 @@ fn main() {
                     return;
                 };
 
-                match write_charge_limit(h, percent) {
+                match set_charge_limit_via_pkexec(percent) {
                     Ok(()) => match read_charge_limit(h) {
                         Some(actual) if actual == percent => {
                             *last_committed_for_release.borrow_mut() = Some(actual);
                             set_status(
                                 &status_for_release,
-                                &format!("Charge limit set to {actual}%"),
+                                &format!("Charge limit set to {actual}% and saved"),
                                 false,
                             );
                         }
@@ -595,7 +782,7 @@ fn main() {
                             *last_committed_for_release.borrow_mut() = Some(percent);
                             set_status(
                                 &status_for_release,
-                                &format!("Charge limit write sent: {percent}%"),
+                                &format!("Charge limit set to {percent}% and saved"),
                                 false,
                             );
                         }
@@ -672,4 +859,68 @@ fn main() {
 fn register_embedded_resources() {
     gio::resources_register_include!("t2-smc-control.gresource")
         .expect("failed to register embedded GTK resources");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_path(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        env::temp_dir().join(format!(
+            "t2-smc-control-test-{name}-{}-{nonce}",
+            std::process::id()
+        ))
+    }
+
+    #[test]
+    fn parses_charge_limit_config() {
+        let raw = "\n# saved by t2-smc-control\ncharge_limit=80\nignored=true\n";
+
+        assert_eq!(parse_charge_limit_config(raw).unwrap(), Some(80));
+    }
+
+    #[test]
+    fn rejects_invalid_charge_limit_config() {
+        assert!(parse_charge_limit_config("charge_limit=101\n").is_err());
+        assert!(parse_charge_limit_config("charge_limit=abc\n").is_err());
+        assert!(parse_charge_limit_config("broken\n").is_err());
+    }
+
+    #[test]
+    fn round_trips_charge_limit_config_file() {
+        let dir = temp_path("config");
+        let path = dir.join("config.txt");
+
+        write_charge_limit_config(&path, 77).unwrap();
+        assert_eq!(read_saved_charge_limit_from(&path).unwrap(), Some(77));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn missing_charge_limit_config_is_empty() {
+        let path = temp_path("missing").join("config.txt");
+
+        assert_eq!(read_saved_charge_limit_from(&path).unwrap(), None);
+    }
+
+    #[test]
+    fn finds_supported_hwmon_device() {
+        let base = temp_path("hwmon");
+        let unsupported = base.join("hwmon0");
+        let supported = base.join("hwmon4");
+        fs::create_dir_all(&unsupported).unwrap();
+        fs::create_dir_all(&supported).unwrap();
+        fs::write(unsupported.join("name"), "other\n").unwrap();
+        fs::write(supported.join("name"), "t2smc\n").unwrap();
+
+        assert_eq!(find_hwmon_in(&base), Some(supported));
+
+        let _ = fs::remove_dir_all(base);
+    }
 }

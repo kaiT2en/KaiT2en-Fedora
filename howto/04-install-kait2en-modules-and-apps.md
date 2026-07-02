@@ -50,6 +50,14 @@ after installation is finished.
 - Binary: `/usr/local/bin/t2-smc-control`
 - Desktop file: `/usr/local/share/applications/org.t2smccontrol.gtk.desktop`
 - Icon: `/usr/local/share/icons/hicolor/scalable/apps/org.t2smccontrol.gtk.svg`
+- systemd service: `/usr/local/lib/systemd/system/kait2en-t2-smc-charge-limit.service`
+- Config file, after the first saved limit: `/etc/t2-smc-control/config.txt`
+- The service is enabled with `systemctl enable kait2en-t2-smc-charge-limit.service`
+
+When the GUI successfully sets the battery charge limit, it saves the selected
+value in `/etc/t2-smc-control/config.txt`. On later boots,
+`kait2en-t2-smc-charge-limit.service` restores that value through the `t2smc` hwmon
+`battery_charge_limit` attribute.
 
 `react-drm` installs:
 
