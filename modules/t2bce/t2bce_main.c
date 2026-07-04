@@ -584,6 +584,16 @@ out_unlock:
     return status;
 }
 
+static int t2bce_prepare(struct device *dev)
+{
+    /*
+     * Force PCI PM to run our real suspend/resume callbacks instead of
+     * short-cutting an "already runtime suspended" device through complete().
+     * The T2 mailbox save/restore handshake lives in those callbacks.
+     */
+    return 0;
+}
+
 static void t2bce_complete(struct device *dev)
 {
     struct t2bce_device *bce = pci_get_drvdata(to_pci_dev(dev));
@@ -609,6 +619,7 @@ static struct pci_device_id t2bce_ids[  ] = {
 MODULE_DEVICE_TABLE(pci, t2bce_ids);
 
 struct dev_pm_ops t2bce_pci_driver_pm = {
+        .prepare = t2bce_prepare,
         .suspend = t2bce_suspend,
         .resume = t2bce_resume,
         .complete = t2bce_complete

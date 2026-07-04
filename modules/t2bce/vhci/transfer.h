@@ -37,7 +37,6 @@ struct bce_vhci_transfer_queue {
     atomic_t sq_out_pending;
 
     struct work_struct w_reset;
-    struct delayed_work w_ep0_retry;
 };
 enum bce_vhci_urb_state {
     BCE_VHCI_URB_INIT_PENDING,
@@ -46,7 +45,6 @@ enum bce_vhci_urb_state {
     BCE_VHCI_URB_DATA_TRANSFER_COMPLETE,
     BCE_VHCI_URB_CONTROL_WAITING_FOR_SETUP_REQUEST,
     BCE_VHCI_URB_CONTROL_WAITING_FOR_SETUP_COMPLETION,
-    BCE_VHCI_URB_CONTROL_STATUS3_RETRY_WAIT,
     BCE_VHCI_URB_CONTROL_COMPLETE,
     BCE_VHCI_URB_CANCELLED
 };
@@ -57,8 +55,6 @@ struct bce_vhci_urb {
     bool is_control;
     enum bce_vhci_urb_state state;
     int received_status;
-    unsigned long status3_deadline;
-    bool status3_retrying;
     u32 send_offset;
     u32 receive_offset;
 };
