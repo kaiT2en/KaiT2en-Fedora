@@ -1,19 +1,9 @@
-From e71eb265b02b7832c705dab7032271bf6be82e7e Mon Sep 17 00:00:00 2001
+From 5c7ec436dd7fe2900e38ff4c07ab7599f06898d2 Mon Sep 17 00:00:00 2001
 From: Andre Eikmeyer <andre.eikmeyer@gmail.com>
-Date: Sun, 28 Jun 2026 13:32:02 +0200
+Date: Sat, 4 Jul 2026 14:53:52 +0200
 Subject: [PATCH 2/2] drm/i915: temporarily switch gmux display during probe
  and resume
 
-On Retina MacBook Pros with indexed or MMIO gmux, the internal panel may be
-routed to the discrete GPU when i915 probes. In that state i915 can fail to
-retrieve eDP link information and disables the panel.
-
-Temporarily switch the gmux display path to IGD while i915 probes or
-resumes, then restore the previous display owner if it still matches the
-temporary IGD owner. The gmux helper is a no-op on machines where this is
-not supported, so i915 does not need model-specific logic.
-
-Signed-off-by: Andre Eikmeyer <andre.eikmeyer@gmail.com>
 ---
  drivers/gpu/drm/i915/i915_driver.c | 15 +++++++++++++--
  drivers/gpu/drm/i915/i915_pci.c    |  8 ++++++++
@@ -102,3 +92,4 @@ index d966a00..f4bd5fc 100644
  
 -- 
 2.54.0
+
