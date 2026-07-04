@@ -863,8 +863,14 @@ static int bce_vhci_handle_firmware_event(struct bce_vhci *vhci, struct bce_vhci
         if (msg->param2 == BCE_VHCI_ENDPOINT_STALLED) {
             tq->state = msg->param2;
             spin_lock_irqsave(&tq->urb_lock, flags);
+            tq->active = false;
             tq->stalled = true;
             spin_unlock_irqrestore(&tq->urb_lock, flags);
+            pr_warn("bce-vhci: firmware endpoint stalled dev=%u ep=%02x paused_by=%x; %s\n",
+                    devid, tq->endp_addr, tq->paused_by,
+                    tq->endp_addr == 0x00 ? "scheduling EP0 reset" : "leaving stalled");
+            if (tq->endp_addr == 0x00)
+                bce_vhci_transfer_queue_request_reset(tq);
             return BCE_VHCI_SUCCESS;
         }
         return BCE_VHCI_BAD_ARGUMENT;

@@ -37,6 +37,7 @@ struct bce_vhci_transfer_queue {
     atomic_t sq_out_pending;
 
     struct work_struct w_reset;
+    struct work_struct w_resume;
 };
 enum bce_vhci_urb_state {
     BCE_VHCI_URB_INIT_PENDING,
