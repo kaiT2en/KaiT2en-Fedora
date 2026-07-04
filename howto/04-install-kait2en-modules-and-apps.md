@@ -134,3 +134,48 @@ product ID plus the `cdc_ncm` driver, renames it to `t2_ncm`, marks it
 unmanaged for NetworkManager and asks systemd to start the helper service for
 that device. The helper then forces `t2_ncm` back down for a short retry window
 so late boot activity does not leave the debug interface up.
+
+## Kernel debug logs
+
+KaiT2en modules use `pr_debug()` for verbose driver messages. These messages
+are hidden by default, even when you watch `dmesg` or `journalctl -k`.
+
+If you want to see the verbose logging, you can either search and replace all
+occurrencies of `pr_debug` in this repository with `pr_info` or use dynamic debug.
+
+Fedora kernels support dynamic debug, so you can enable these messages at
+runtime. Mount `debugfs` if it is not already mounted:
+
+```bash
+sudo mount -t debugfs none /sys/kernel/debug
+```
+
+Enable all debug messages from the `t2bce` module:
+
+```bash
+echo 'module t2bce +p' | sudo tee /sys/kernel/debug/dynamic_debug/control
+```
+
+Watch the kernel log:
+
+```bash
+sudo dmesg -w
+```
+
+or:
+
+```bash
+journalctl -k -f
+```
+
+For audio-only debug messages, enable just the audio source file:
+
+```bash
+echo 'file audio/audio.c +p' | sudo tee /sys/kernel/debug/dynamic_debug/control
+```
+
+Turn the messages off again:
+
+```bash
+echo 'module t2bce -p' | sudo tee /sys/kernel/debug/dynamic_debug/control
+```

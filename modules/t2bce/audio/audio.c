@@ -77,7 +77,7 @@ static int aaudio_probe(struct pci_dev *dev, const struct pci_device_id *id)
     if (pci_write_config_dword(dev, 4, cfg | 6u))
         dev_warn(&dev->dev, "aaudio: pci_write_config_dword fail\n");
 
-    dev_info(aaudio->dev, "aaudio: bs len = %llx\n", pci_resource_len(dev, 0));
+    pr_debug("aaudio: bs len = %llx\n", pci_resource_len(dev, 0));
     aaudio->reg_mem_bs_dma = pci_resource_start(dev, 0);
     aaudio->reg_mem_bs = pci_iomap(dev, 0, 0);
     aaudio->reg_mem_cfg = pci_iomap(dev, 4, 0);
@@ -275,7 +275,7 @@ static int aaudio_resume(struct device *dev)
     aaudio->resume_deferred = false;
     aaudio_reset_streams(aaudio);
 
-    dev_info(aaudio->dev, "resume exit status=0 path=%s\n", path);
+    pr_debug("aaudio: resume exit status=0 path=%s\n", path);
     return 0;
 }
 
@@ -293,7 +293,7 @@ static void aaudio_resume_work(struct work_struct *ws)
     }
 
     aaudio->resume_deferred = false;
-    dev_info(aaudio->dev, "resume deferred path complete\n");
+    pr_debug("aaudio: resume deferred path complete\n");
 }
 
 void aaudio_resume_post_vhci(struct aaudio_device *aaudio)
@@ -343,7 +343,7 @@ static int aaudio_init_cmd(struct aaudio_device *a)
         dev_err(a->dev, "Timed out waiting for remote\n");
         return -ETIMEDOUT;
     }
-    dev_info(a->dev, "Continuing init\n");
+    pr_debug("aaudio: Continuing init\n");
 
     buf = aaudio_reply_alloc();
     if ((status = aaudio_cmd_get_device_list(a, &buf, &dev_l, &dev_cnt))) {
@@ -376,7 +376,7 @@ static void aaudio_init_dev(struct aaudio_device *a, aaudio_device_id_t dev_id)
         dev_err(a->dev, "Failed to get device uid for device %llx\n", dev_id);
         goto fail;
     }
-    dev_info(a->dev, "Remote device %llx %.*s\n", dev_id, (int) uid_len, uid);
+    pr_debug("aaudio: Remote device %llx %.*s\n", dev_id, (int) uid_len, uid);
 
     sdev->a = a;
     INIT_LIST_HEAD(&sdev->list);
@@ -526,11 +526,11 @@ static int aaudio_init_bs(struct aaudio_device *a)
         dev_err(a->dev, "aaudio: Bad BufferStruct sig (%x)", a->bs->signature);
         return -EINVAL;
     }
-    dev_info(a->dev, "aaudio: BufferStruct ver = %i\n", a->bs->version);
-    dev_info(a->dev, "aaudio: Num devices = %i\n", a->bs->num_devices);
+    pr_debug("aaudio: BufferStruct ver = %i\n", a->bs->version);
+    pr_debug("aaudio: Num devices = %i\n", a->bs->num_devices);
     for (i = 0; i < a->bs->num_devices; i++) {
         dev = &a->bs->devices[i];
-        dev_info(a->dev, "aaudio: Device %i %s\n", i, dev->name);
+        pr_debug("aaudio: Device %i %s\n", i, dev->name);
 
         sdev = aaudio_find_dev_by_uid(a, dev->name);
         if (!sdev) {
@@ -540,7 +540,7 @@ static int aaudio_init_bs(struct aaudio_device *a)
         sdev->buf_id = (u8) i;
         dev->num_input_streams = 0;
         for (j = 0; j < dev->num_output_streams; j++) {
-            dev_info(a->dev, "aaudio: Device %i Stream %i: Output; Buffer Count = %i\n", i, j,
+            pr_debug("aaudio: Device %i Stream %i: Output; Buffer Count = %i\n", i, j,
                      dev->output_streams[j].num_buffers);
             if (j < sdev->out_stream_cnt)
                 aaudio_init_bs_stream(a, &sdev->out_streams[j], &dev->output_streams[j]);
@@ -551,7 +551,7 @@ static int aaudio_init_bs(struct aaudio_device *a)
         if (sdev->buf_id != AAUDIO_BUFFER_ID_NONE)
             continue;
         sdev->buf_id = i;
-        dev_info(a->dev, "aaudio: Created device %i %s\n", i, sdev->uid);
+        pr_debug("aaudio: Created device %i %s\n", i, sdev->uid);
         strcpy(a->bs->devices[i].name, sdev->uid);
         a->bs->devices[i].num_input_streams = 0;
         a->bs->devices[i].num_output_streams = 0;
@@ -559,7 +559,7 @@ static int aaudio_init_bs(struct aaudio_device *a)
     }
     list_for_each_entry(sdev, &a->subdevice_list, list) {
         if (sdev->in_stream_cnt == 1) {
-            dev_info(a->dev, "aaudio: Device %i Host Stream; Input\n", sdev->buf_id);
+            pr_debug("aaudio: Device %i Host Stream; Input\n", sdev->buf_id);
             aaudio_init_bs_stream_host(a, &sdev->in_streams[0], &a->bs->devices[sdev->buf_id].input_streams[0]);
             a->bs->devices[sdev->buf_id].num_input_streams = 1;
             wmb();
@@ -650,7 +650,7 @@ void aaudio_handle_notification(struct aaudio_device *a, struct aaudio_msg *msg)
         return;
     switch (base.msg) {
         case AAUDIO_MSG_NOTIFICATION_BOOT:
-            dev_info(a->dev, "Received boot notification from remote\n");
+            pr_debug("aaudio: Received boot notification from remote\n");
 
             /* Resend the alive notify */
             if (aaudio_send(a, &sctx, 500,
@@ -659,14 +659,14 @@ void aaudio_handle_notification(struct aaudio_device *a, struct aaudio_msg *msg)
             }
             break;
         case AAUDIO_MSG_NOTIFICATION_ALIVE:
-            dev_info(a->dev, "Received alive notification from remote\n");
+            pr_debug("aaudio: Received alive notification from remote\n");
             complete_all(&a->remote_alive);
             break;
         case AAUDIO_MSG_PROPERTY_CHANGED:
             aaudio_handle_prop_change(a, msg);
             break;
         default:
-            dev_info(a->dev, "Unhandled notification %i", base.msg);
+            pr_debug("aaudio: Unhandled notification %i\n", base.msg);
             break;
     }
 }
@@ -757,7 +757,7 @@ void aaudio_handle_command(struct aaudio_device *a, struct aaudio_msg *msg)
             aaudio_handle_cmd_timestamp(a, msg);
             break;
         default:
-            dev_info(a->dev, "Unhandled device command %i", base.msg);
+            pr_debug("aaudio: Unhandled device command %i\n", base.msg);
             break;
     }
 }
