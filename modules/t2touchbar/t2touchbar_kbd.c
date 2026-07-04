@@ -17,6 +17,7 @@
 #include <linux/module.h>
 #include <linux/string.h>
 #include <linux/backlight.h>
+#include <linux/mutex.h>
 #include <linux/workqueue.h>
 #include <linux/input/sparse-keymap.h>
 
@@ -64,10 +65,13 @@ struct appletb_kbd {
 	struct backlight_device *backlight_dev;
 	struct delayed_work inactivity_work;
 	struct work_struct restore_brightness_work;
+	struct work_struct mode_work;
+	struct mutex mode_lock;
 	bool has_dimmed;
 	bool has_turned_off;
 	u8 saved_mode;
 	u8 current_mode;
+	u8 pending_mode;
 };
 
 static const struct key_entry appletb_kbd_keymap[] = {
@@ -108,11 +112,43 @@ static int appletb_kbd_set_mode(struct appletb_kbd *kbd, u8 mode)
 	hid_hw_request(hdev, report, HID_REQ_SET_REPORT);
 
 	kbd->current_mode = mode;
+	hid_info(hdev, "touchbar mode request sent: mode=%u\n", mode);
 
 power_normal:
 	hid_hw_power(hdev, PM_HINT_NORMAL);
 
 	return ret;
+}
+
+static void appletb_kbd_mode_work(struct work_struct *work)
+{
+	struct appletb_kbd *kbd = container_of(work, struct appletb_kbd,
+					       mode_work);
+	struct hid_device *hdev = kbd->mode_field->report->device;
+	u8 mode;
+	int ret;
+
+	mutex_lock(&kbd->mode_lock);
+	mode = kbd->pending_mode;
+	mutex_unlock(&kbd->mode_lock);
+
+	ret = appletb_kbd_set_mode(kbd, mode);
+	if (ret)
+		hid_err(hdev, "Failed to apply deferred touchbar mode %u (%pe)\n",
+			mode, ERR_PTR(ret));
+}
+
+static void appletb_kbd_queue_mode(struct appletb_kbd *kbd, u8 mode)
+{
+	struct hid_device *hdev = kbd->mode_field->report->device;
+
+	mutex_lock(&kbd->mode_lock);
+	kbd->pending_mode = mode;
+	kbd->current_mode = mode;
+	mutex_unlock(&kbd->mode_lock);
+
+	hid_info(hdev, "touchbar mode queued from input path: mode=%u\n", mode);
+	schedule_work(&kbd->mode_work);
 }
 
 static ssize_t mode_show(struct device *dev,
@@ -138,6 +174,7 @@ static ssize_t mode_store(struct device *dev,
 	if (mode > APPLETB_KBD_MODE_MAX)
 		return -EINVAL;
 
+	cancel_work_sync(&kbd->mode_work);
 	ret = appletb_kbd_set_mode(kbd, mode);
 
 	return ret < 0 ? ret : size;
@@ -255,11 +292,11 @@ static void appletb_kbd_inp_event(struct input_handle *handle, unsigned int type
 		 kbd->current_mode == APPLETB_KBD_MODE_FN)) {
 		if (value == 1) {
 			kbd->saved_mode = kbd->current_mode;
-			appletb_kbd_set_mode(kbd, kbd->current_mode == APPLETB_KBD_MODE_SPCL
-						? APPLETB_KBD_MODE_FN : APPLETB_KBD_MODE_SPCL);
+			appletb_kbd_queue_mode(kbd, kbd->current_mode == APPLETB_KBD_MODE_SPCL
+					       ? APPLETB_KBD_MODE_FN : APPLETB_KBD_MODE_SPCL);
 		} else if (value == 0) {
 			if (kbd->saved_mode != kbd->current_mode)
-				appletb_kbd_set_mode(kbd, kbd->saved_mode);
+				appletb_kbd_queue_mode(kbd, kbd->saved_mode);
 		}
 	}
 }
@@ -404,6 +441,8 @@ static int appletb_kbd_probe(struct hid_device *hdev, const struct hid_device_id
 		return -ENOMEM;
 
 	kbd->mode_field = mode_field;
+	mutex_init(&kbd->mode_lock);
+	INIT_WORK(&kbd->mode_work, appletb_kbd_mode_work);
 
 	ret = hid_hw_start(hdev, HID_CONNECT_HIDINPUT);
 	if (ret)
@@ -453,6 +492,7 @@ static int appletb_kbd_probe(struct hid_device *hdev, const struct hid_device_id
 
 unregister_handler:
 	input_unregister_handler(&kbd->inp_handler);
+	cancel_work_sync(&kbd->mode_work);
 close_hw:
 	hid_hw_close(hdev);
 stop_hw:
@@ -469,6 +509,7 @@ static void appletb_kbd_remove(struct hid_device *hdev)
 {
 	struct appletb_kbd *kbd = hid_get_drvdata(hdev);
 
+	cancel_work_sync(&kbd->mode_work);
 	appletb_kbd_set_mode(kbd, APPLETB_KBD_MODE_OFF);
 
 	input_unregister_handler(&kbd->inp_handler);
@@ -486,6 +527,7 @@ static int appletb_kbd_suspend(struct hid_device *hdev, pm_message_t msg)
 {
 	struct appletb_kbd *kbd = hid_get_drvdata(hdev);
 
+	cancel_work_sync(&kbd->mode_work);
 	kbd->saved_mode = kbd->current_mode;
 	appletb_kbd_set_mode(kbd, APPLETB_KBD_MODE_OFF);
 
