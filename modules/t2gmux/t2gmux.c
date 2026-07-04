@@ -582,15 +582,11 @@ EXPORT_SYMBOL(apple_gmux_reset_display_link);
 
 static int gmux_switch_ddc(enum vga_switcheroo_client_id id)
 {
-	enum vga_switcheroo_client_id old_ddc_owner;
+	enum vga_switcheroo_client_id old_ddc_owner =
+		apple_gmux_data->switch_state_ddc;
 
-	mutex_lock(&apple_gmux_data->switch_lock);
-	old_ddc_owner = apple_gmux_data->switch_state_ddc;
-
-	if (id == old_ddc_owner) {
-		mutex_unlock(&apple_gmux_data->switch_lock);
+	if (id == old_ddc_owner)
 		return id;
-	}
 
 	pr_debug("Switching DDC from %d to %d\n", old_ddc_owner, id);
 	apple_gmux_data->switch_state_ddc = id;
@@ -599,8 +595,6 @@ static int gmux_switch_ddc(enum vga_switcheroo_client_id id)
 		gmux_write8(apple_gmux_data, GMUX_PORT_SWITCH_DDC, 1);
 	else
 		gmux_write8(apple_gmux_data, GMUX_PORT_SWITCH_DDC, 2);
-
-	mutex_unlock(&apple_gmux_data->switch_lock);
 
 	return old_ddc_owner;
 }
