@@ -28,3 +28,9 @@ build/
 
 # Local generated files
 compile_commands.json
+
+# Local dev workflow files (untracked by request)
+/CLAUDE.md
+/deploy-test.sh
+/T2BCE-LEARNINGS.md
+/LEARNINGS.md
