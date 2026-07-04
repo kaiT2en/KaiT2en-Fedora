@@ -125,6 +125,22 @@ void bce_vhci_remove_hcd(struct bce_vhci *vhci)
     vhci->hcd_registered = false;
 }
 
+void bce_vhci_shutdown(struct bce_vhci *vhci)
+{
+    cancel_work_sync(&vhci->w_add_hcd);
+    if (vhci->hcd_registered) {
+        bce_vhci_remove_hcd(vhci);
+        return;
+    }
+
+    /*
+     * Shutdown is not remove: the USB core may already have detached the HCD,
+     * but the T2-side controller can still be left enabled. Send the controller
+     * disable directly as a final lights-out command while queues still exist.
+     */
+    bce_vhci_cmd_controller_disable(&vhci->cq);
+}
+
 static void bce_vhci_add_hcd_w(struct work_struct *ws)
 {
     struct bce_vhci *vhci = container_of(ws, struct bce_vhci, w_add_hcd);

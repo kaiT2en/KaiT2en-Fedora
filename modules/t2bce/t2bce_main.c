@@ -382,6 +382,37 @@ static void t2bce_remove(struct pci_dev *dev)
     kfree(bce);
 }
 
+static void t2bce_shutdown(struct pci_dev *dev)
+{
+    struct t2bce_device *bce = pci_get_drvdata(dev);
+    int status;
+
+    if (!bce)
+        return;
+
+    mutex_lock(&bce->pm_lock);
+    bce->is_being_removed = true;
+    bce->stateful_suspend_valid = false;
+    bce->no_state_fallback = false;
+    bce->vhci.no_state_resume = false;
+
+    /*
+     * Do not tear down allocations here;
+     * just leave the T2 side quiet while command queues and mailbox access are
+     * still valid: USB HCD off, XHCI PM sentinel written, mailbox drained.
+     */
+    bce_vhci_shutdown(&bce->vhci);
+    bce_xhci_pm_stop(&bce->xhci_pm);
+
+    if (bce->mailbox_channel_active) {
+        status = bce_pm_channel_pause(bce);
+        if (status)
+            pr_warn("t2bce: shutdown mailbox quiesce failed: %d\n", status);
+    }
+
+    mutex_unlock(&bce->pm_lock);
+}
+
 static int bce_pm_suspend_fallback_no_state(struct t2bce_device *bce)
 {
     pr_debug("t2bce: suspend: forcing SLEEP_NO_STATE (no reply expected)\n");
@@ -587,6 +618,7 @@ struct pci_driver t2bce_pci_driver = {
         .id_table = t2bce_ids,
         .probe = t2bce_probe,
         .remove = t2bce_remove,
+        .shutdown = t2bce_shutdown,
         .driver = {
                 .pm = &t2bce_pci_driver_pm
         }
