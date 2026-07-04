@@ -557,7 +557,6 @@ EXPORT_SYMBOL(apple_gmux_restore_display);
 void apple_gmux_reset_display_link(void)
 {
 	struct apple_gmux_data *gmux_data = apple_gmux_data;
-	enum vga_switcheroo_client_id prev_display;
 
 	if (!gmux_data || gmux_data->type == APPLE_GMUX_TYPE_PIO)
 		return;
