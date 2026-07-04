@@ -691,13 +691,9 @@ static int bce_vhci_urb_control_check_status(struct bce_vhci_urb *urb)
         urb->state = BCE_VHCI_URB_CONTROL_COMPLETE;
         if (urb->received_status != BCE_VHCI_SUCCESS) {
             if (urb->received_status == 3 && urb->q->endp_addr == 0x00) {
-                pr_debug("bce-vhci: [00] EP0 status=3 dev=%u, completing -EPIPE and resetting endpoint\n",
+                pr_debug("bce-vhci: [00] EP0 status=3 dev=%u, completing control URB with -EPIPE\n",
                         q->dev_addr);
-                q->active = false;
-                q->stalled = true;
-                q->state = BCE_VHCI_ENDPOINT_STALLED;
                 bce_vhci_urb_complete(urb, -EPIPE);
-                bce_vhci_transfer_queue_request_reset(q);
                 return -ENOENT;
             }
 
@@ -765,7 +761,7 @@ static int bce_vhci_urb_control_transfer_completion(struct bce_vhci_urb *urb, st
             bce_vhci_urb_complete(urb, status);
             return -ENOENT;
         }
-        return 0;
+        return bce_vhci_urb_control_check_status(urb);
     } else if (urb->state == BCE_VHCI_URB_WAITING_FOR_TRANSFER_REQUEST ||
                urb->state == BCE_VHCI_URB_WAITING_FOR_COMPLETION) {
         if ((status = bce_vhci_urb_data_transfer_completion(urb, c)))
