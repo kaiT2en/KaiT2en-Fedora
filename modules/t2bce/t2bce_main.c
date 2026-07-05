@@ -83,7 +83,7 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
     bce->devt = bce_chrdev;
     bce->dev = device_create(bce_class, &dev->dev, bce->devt, NULL, "t2bce");
     if (IS_ERR_OR_NULL(bce->dev)) {
-        status = PTR_ERR(bce_class);
+        status = PTR_ERR(bce->dev);
         goto fail;
     }
 
@@ -363,6 +363,7 @@ static void t2bce_remove(struct pci_dev *dev)
 {
     struct t2bce_device *bce = pci_get_drvdata(dev);
     bce->is_being_removed = true;
+    global_bce = NULL;
 
     bce_vhci_destroy(&bce->vhci);
 

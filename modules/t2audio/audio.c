@@ -2,6 +2,7 @@
 #include <linux/spinlock.h>
 #include <linux/module.h>
 #include <linux/random.h>
+#include <linux/err.h>
 #include <sound/core.h>
 #include <sound/initval.h>
 #include <sound/pcm.h>
@@ -49,9 +50,11 @@ static int aaudio_probe(struct pci_dev *dev, const struct pci_device_id *id)
     }
 
     aaudio->bce = t2bce_client_get(&dev->dev);
-    if (!aaudio->bce) {
-        dev_warn(&dev->dev, "aaudio: No BCE available\n");
-        status = -EINVAL;
+    if (IS_ERR(aaudio->bce)) {
+        status = PTR_ERR(aaudio->bce);
+        aaudio->bce = NULL;
+        if (status != -EPROBE_DEFER)
+            dev_warn(&dev->dev, "aaudio: Failed to get BCE client: %d\n", status);
         goto fail;
     }
 
@@ -62,7 +65,7 @@ static int aaudio_probe(struct pci_dev *dev, const struct pci_device_id *id)
     aaudio->devt = aaudio_chrdev;
     aaudio->dev = device_create(aaudio_class, &dev->dev, aaudio->devt, NULL, "aaudio");
     if (IS_ERR_OR_NULL(aaudio->dev)) {
-        status = PTR_ERR(aaudio_class);
+        status = PTR_ERR(aaudio->dev);
         goto fail;
     }
     init_completion(&aaudio->remote_alive);

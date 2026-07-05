@@ -1,6 +1,7 @@
 #include "t2bce_transport.h"
 #include "t2bce.h"
 
+#include <linux/err.h>
 #include <linux/export.h>
 #include <linux/slab.h>
 
@@ -47,23 +48,31 @@ static void t2bce_sq_completion_adapter(struct bce_queue_sq *sq)
 
 struct t2bce_client *t2bce_client_get(struct device *dev)
 {
+    struct t2bce_device *bce = global_bce;
     struct t2bce_client *client;
 
-    if (!global_bce)
-        return NULL;
+    if (!bce)
+        return ERR_PTR(-EPROBE_DEFER);
+
+    if (bce->is_being_removed)
+        return ERR_PTR(-ENODEV);
 
     client = kzalloc(sizeof(*client), GFP_KERNEL);
     if (!client)
-        return NULL;
+        return ERR_PTR(-ENOMEM);
 
-    client->bce = global_bce;
+    client->bce = bce;
     client->dev = dev;
-    client->link = device_link_add(dev, &global_bce->pci->dev,
+    client->link = device_link_add(dev, &bce->pci->dev,
             DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER);
+    if (!client->link) {
+        kfree(client);
+        return ERR_PTR(-ENODEV);
+    }
 
-    mutex_lock(&global_bce->clients_lock);
-    list_add_tail(&client->list, &global_bce->clients);
-    mutex_unlock(&global_bce->clients_lock);
+    mutex_lock(&bce->clients_lock);
+    list_add_tail(&client->list, &bce->clients);
+    mutex_unlock(&bce->clients_lock);
 
     return client;
 }
