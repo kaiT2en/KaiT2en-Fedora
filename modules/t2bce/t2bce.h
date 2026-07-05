@@ -5,6 +5,7 @@
 #include <linux/spinlock.h>
 #include <linux/mutex.h>
 #include <linux/list.h>
+#include <linux/srcu.h>
 #include "mailbox.h"
 #include "queue.h"
 #include "vhci/vhci.h"
@@ -41,6 +42,8 @@ struct t2bce_device {
     struct mutex pm_lock;
     struct mutex clients_lock;
     struct list_head clients;
+    struct srcu_struct clients_srcu;
+    bool clients_srcu_ready;
 
     struct bce_vhci vhci;
 };

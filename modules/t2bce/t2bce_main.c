@@ -103,6 +103,10 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
     mutex_init(&bce->pm_lock);
     mutex_init(&bce->clients_lock);
     INIT_LIST_HEAD(&bce->clients);
+    status = init_srcu_struct(&bce->clients_srcu);
+    if (status)
+        goto fail;
+    bce->clients_srcu_ready = true;
     bce->mailbox_channel_active = true;
 
     if ((status = pci_request_irq(dev, 0, bce_handle_mb_irq, NULL, dev, "bce_mbox")))
@@ -167,6 +171,9 @@ fail:
             pci_iounmap(dev, bce->reg_mem_mb);
         if (!IS_ERR_OR_NULL(bce->reg_mem_dma))
             pci_iounmap(dev, bce->reg_mem_dma);
+
+        if (bce->clients_srcu_ready)
+            cleanup_srcu_struct(&bce->clients_srcu);
 
         kfree(bce);
     }
@@ -382,6 +389,7 @@ static void t2bce_remove(struct pci_dev *dev)
     pci_free_irq_vectors(dev);
     pci_release_regions(dev);
     pci_disable_device(dev);
+    cleanup_srcu_struct(&bce->clients_srcu);
     kfree(bce);
 }
 

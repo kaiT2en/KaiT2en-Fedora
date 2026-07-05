@@ -71,7 +71,7 @@ struct t2bce_client *t2bce_client_get(struct device *dev)
     }
 
     mutex_lock(&bce->clients_lock);
-    list_add_tail(&client->list, &bce->clients);
+    list_add_tail_rcu(&client->list, &bce->clients);
     mutex_unlock(&bce->clients_lock);
 
     return client;
@@ -84,8 +84,10 @@ void t2bce_client_put(struct t2bce_client *client)
         return;
 
     mutex_lock(&client->bce->clients_lock);
-    list_del(&client->list);
+    list_del_rcu(&client->list);
     mutex_unlock(&client->bce->clients_lock);
+
+    synchronize_srcu(&client->bce->clients_srcu);
 
     if (client->link)
         device_link_del(client->link);
@@ -108,21 +110,31 @@ EXPORT_SYMBOL_GPL(t2bce_client_no_state_resume);
 void t2bce_client_set_post_vhci_resume(struct t2bce_client *client,
         t2bce_resume_callback callback, void *userdata)
 {
-    client->post_vhci_resume = callback;
-    client->post_vhci_resume_userdata = userdata;
+    if (!callback) {
+        smp_store_release(&client->post_vhci_resume, NULL);
+        WRITE_ONCE(client->post_vhci_resume_userdata, NULL);
+        return;
+    }
+
+    WRITE_ONCE(client->post_vhci_resume_userdata, userdata);
+    smp_store_release(&client->post_vhci_resume, callback);
 }
 EXPORT_SYMBOL_GPL(t2bce_client_set_post_vhci_resume);
 
 void t2bce_notify_post_vhci_resume(struct t2bce_device *bce)
 {
     struct t2bce_client *client;
+    int srcu_idx;
 
-    mutex_lock(&bce->clients_lock);
-    list_for_each_entry(client, &bce->clients, list) {
-        if (client->post_vhci_resume)
-            client->post_vhci_resume(client->post_vhci_resume_userdata);
+    srcu_idx = srcu_read_lock(&bce->clients_srcu);
+    list_for_each_entry_srcu(client, &bce->clients, list,
+            srcu_read_lock_held(&bce->clients_srcu)) {
+        t2bce_resume_callback callback = smp_load_acquire(&client->post_vhci_resume);
+
+        if (callback)
+            callback(READ_ONCE(client->post_vhci_resume_userdata));
     }
-    mutex_unlock(&bce->clients_lock);
+    srcu_read_unlock(&bce->clients_srcu, srcu_idx);
 }
 
 struct t2bce_queue_cq *t2bce_create_cq(struct t2bce_client *client, u32 el_count)
