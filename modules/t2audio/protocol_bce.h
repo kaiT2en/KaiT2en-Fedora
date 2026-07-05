@@ -2,7 +2,7 @@
 #define AAUDIO_PROTOCOL_BCE_H
 
 #include "protocol.h"
-#include "../queue.h"
+#include "t2bce_transport.h"
 
 #define AAUDIO_BCE_QUEUE_ELEMENT_SIZE 0x1000
 #define AAUDIO_BCE_QUEUE_ELEMENT_COUNT 20

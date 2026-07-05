@@ -55,6 +55,22 @@ copy_module_source() {
 		--exclude='Module.symvers' \
 		--exclude='modules.order' \
 		-cf - . | tar -C "$dst" -xf -
+
+	if [[ "$name" == "t2bce" ]]; then
+		info "copying t2audio source into $dst/t2audio for transitional t2bce build"
+		install -d -o root -g root -m 0755 "$dst/t2audio"
+		tar -C "$REPO_ROOT/modules/t2audio" \
+			--exclude='.git' \
+			--exclude='*.ko' \
+			--exclude='*.o' \
+			--exclude='*.mod' \
+			--exclude='*.mod.c' \
+			--exclude='.*.cmd' \
+			--exclude='Module.symvers' \
+			--exclude='modules.order' \
+			-cf - . | tar -C "$dst/t2audio" -xf -
+	fi
+
 	chown -R root:root "$dst"
 
 	MODULE_VERSION="$version"

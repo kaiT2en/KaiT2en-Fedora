@@ -2,7 +2,7 @@
 #include <linux/module.h>
 #include <linux/crc32.h>
 #include <linux/delay.h>
-#include "audio/audio.h"
+#include "audio.h"
 #include <linux/version.h>
 
 static dev_t bce_chrdev;

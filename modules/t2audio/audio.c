@@ -47,7 +47,7 @@ static int aaudio_probe(struct pci_dev *dev, const struct pci_device_id *id)
         goto fail;
     }
 
-    aaudio->bce = global_bce;
+    aaudio->bce = t2bce_client_get(&dev->dev);
     if (!aaudio->bce) {
         dev_warn(&dev->dev, "aaudio: No BCE available\n");
         status = -EINVAL;
@@ -56,7 +56,7 @@ static int aaudio_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
     aaudio->pci = dev;
     pci_set_drvdata(dev, aaudio);
-    aaudio->bce->aaudio = aaudio;
+    t2bce_client_set_audio(aaudio->bce, aaudio);
 
     aaudio->devt = aaudio_chrdev;
     aaudio->dev = device_create(aaudio_class, &dev->dev, aaudio->devt, NULL, "aaudio");
@@ -64,9 +64,6 @@ static int aaudio_probe(struct pci_dev *dev, const struct pci_device_id *id)
         status = PTR_ERR(aaudio_class);
         goto fail;
     }
-    device_link_add(&dev->dev, &aaudio->bce->pci->dev,
-            DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER);
-
     init_completion(&aaudio->remote_alive);
     INIT_WORK(&aaudio->resume_work, aaudio_resume_work);
     INIT_LIST_HEAD(&aaudio->subdevice_list);
@@ -140,14 +137,17 @@ static int aaudio_probe(struct pci_dev *dev, const struct pci_device_id *id)
 fail_snd:
     snd_card_free(aaudio->card);
 fail:
-    if (aaudio && aaudio->dev)
-        device_destroy(aaudio_class, aaudio->devt);
-    kfree(aaudio);
-
-    if (!IS_ERR_OR_NULL(aaudio->reg_mem_bs))
-        pci_iounmap(dev, aaudio->reg_mem_bs);
-    if (!IS_ERR_OR_NULL(aaudio->reg_mem_cfg))
-        pci_iounmap(dev, aaudio->reg_mem_cfg);
+    if (aaudio) {
+        if (aaudio->dev)
+            device_destroy(aaudio_class, aaudio->devt);
+        if (!IS_ERR_OR_NULL(aaudio->reg_mem_bs))
+            pci_iounmap(dev, aaudio->reg_mem_bs);
+        if (!IS_ERR_OR_NULL(aaudio->reg_mem_cfg))
+            pci_iounmap(dev, aaudio->reg_mem_cfg);
+        t2bce_client_clear_audio(aaudio->bce, aaudio);
+        t2bce_client_put(aaudio->bce);
+        kfree(aaudio);
+    }
 
     pci_release_regions(dev);
     pci_disable_device(dev);
@@ -165,8 +165,7 @@ static void aaudio_remove(struct pci_dev *dev)
     struct aaudio_device *aaudio = pci_get_drvdata(dev);
 
     cancel_work_sync(&aaudio->resume_work);
-    if (aaudio->bce && aaudio->bce->aaudio == aaudio)
-        aaudio->bce->aaudio = NULL;
+    t2bce_client_clear_audio(aaudio->bce, aaudio);
     snd_card_free(aaudio->card);
     while (!list_empty(&aaudio->subdevice_list)) {
         sdev = list_first_entry(&aaudio->subdevice_list, struct aaudio_subdevice, list);
@@ -179,6 +178,7 @@ static void aaudio_remove(struct pci_dev *dev)
     pci_free_irq_vectors(dev);
     pci_release_regions(dev);
     pci_disable_device(dev);
+    t2bce_client_put(aaudio->bce);
     kfree(aaudio);
 }
 
@@ -255,14 +255,15 @@ static int aaudio_resume(struct device *dev)
 {
     int status;
     struct aaudio_device *aaudio = pci_get_drvdata(to_pci_dev(dev));
-    const char *path = aaudio->bce->vhci.no_state_resume ? "no-state" : "stateful";
+    bool no_state_resume = t2bce_client_no_state_resume(aaudio->bce);
+    const char *path = no_state_resume ? "no-state" : "stateful";
 
     if ((status = pci_enable_device(aaudio->pci)))
         return status;
     pci_set_master(aaudio->pci);
     
     /* we are deferring aaudio resume here until vhci is finished*/
-    if (!aaudio->bce->vhci.no_state_resume) {
+    if (!no_state_resume) {
         aaudio->resume_deferred = true;
         return 0;
     }

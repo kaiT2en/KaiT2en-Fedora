@@ -13,7 +13,7 @@ int aaudio_bce_init(struct aaudio_device *dev)
 {
     int status;
     struct aaudio_bce *bce = &dev->bcem;
-    bce->cq = bce_create_cq(dev->bce, 0x80);
+    bce->cq = t2bce_create_cq(dev->bce, 0x80);
     spin_lock_init(&bce->spinlock);
     if (!bce->cq)
         return -EINVAL;
@@ -36,13 +36,13 @@ int aaudio_bce_queue_init(struct aaudio_device *dev, struct aaudio_bce_queue *q,
     q->el_size = AAUDIO_BCE_QUEUE_ELEMENT_SIZE;
     q->el_count = AAUDIO_BCE_QUEUE_ELEMENT_COUNT;
     /* NOTE: The Apple impl uses 0x80 as the queue size, however we use 21 (in fact 20) to simplify the impl */
-    q->sq = bce_create_sq(dev->bce, q->cq, name, (u32) (q->el_count + 1), direction, cfn, dev);
+    q->sq = t2bce_create_sq(dev->bce, q->cq, name, (u32) (q->el_count + 1), direction, cfn, dev);
     if (!q->sq)
         return -EINVAL;
 
-    q->data = dma_alloc_coherent(&dev->bce->pci->dev, q->el_size * q->el_count, &q->dma_addr, GFP_KERNEL);
+    q->data = dma_alloc_coherent(t2bce_client_dma_dev(dev->bce), q->el_size * q->el_count, &q->dma_addr, GFP_KERNEL);
     if (!q->data) {
-        bce_destroy_sq(dev->bce, q->sq);
+        t2bce_destroy_sq(dev->bce, q->sq);
         return -EINVAL;
     }
     return 0;

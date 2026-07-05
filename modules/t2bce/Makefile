@@ -1,11 +1,13 @@
 modname := t2bce
 obj-m += $(modname).o
 
-t2bce-objs := t2bce_main.o mailbox.o queue.o queue_dma.o vhci/vhci.o vhci/queue.o vhci/transfer.o audio/audio.o audio/protocol.o audio/protocol_bce.o audio/pcm.o
+AUDIO_SRC ?= ../t2audio
+t2bce-objs := t2bce_main.o mailbox.o queue.o queue_dma.o transport.o vhci/vhci.o vhci/queue.o vhci/transfer.o $(AUDIO_SRC)/audio.o $(AUDIO_SRC)/protocol.o $(AUDIO_SRC)/protocol_bce.o $(AUDIO_SRC)/pcm.o
 
 MY_CFLAGS += -DWITHOUT_NVME_PATCH
 #MY_CFLAGS += -g -DDEBUG
 ccflags-y += ${MY_CFLAGS}
+ccflags-y += -I$(src)/include -I$(src)/$(AUDIO_SRC)
 CC += ${MY_CFLAGS}
 
 KVERSION := $(KERNELRELEASE)
@@ -16,6 +18,7 @@ endif
 KDIR := /lib/modules/$(KVERSION)/build
 MODDEST ?= /lib/modules/$(KVERSION)/updates
 PWD := $(shell pwd)
+AUDIO_DIR := $(abspath $(PWD)/$(AUDIO_SRC))
 
 .PHONY: all clean install
 
@@ -24,7 +27,7 @@ all:
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
-	find $(PWD) -type f \( -name '*.o' -o -name '*.ko' -o -name '*.mod' -o -name '*.mod.c' -o -name '.*.cmd' -o -name 'Module.symvers' -o -name 'modules.order' \) -delete
+	find $(PWD) $(AUDIO_DIR) -type f \( -name '*.o' -o -name '*.ko' -o -name '*.mod' -o -name '*.mod.c' -o -name '.*.cmd' -o -name 'Module.symvers' -o -name 'modules.order' \) -delete
 
 install:
 	@test -f t2bce.ko || { echo "t2bce.ko not found; run make first"; exit 1; }

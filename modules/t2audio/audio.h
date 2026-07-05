@@ -4,7 +4,7 @@
 #include <linux/types.h>
 #include <linux/workqueue.h>
 #include <sound/pcm.h>
-#include "../t2bce.h"
+#include "t2bce_transport.h"
 #include "protocol_bce.h"
 #include "description.h"
 
@@ -109,7 +109,7 @@ struct aaudio_device {
 
     struct aaudio_buffer_struct *bs;
 
-    struct t2bce_device *bce;
+    struct t2bce_client *bce;
     struct aaudio_bce bcem;
 
     struct snd_card *card;
