@@ -11,6 +11,7 @@ STEPS=(
 	install-dependencies.sh
 	install-kernel-args.sh
 	install-dkms-modules.sh
+	install-alsa-ucm.sh
 	install-networkmanager-rules.sh
 	install-t2-ncm-debug-service.sh
 	rebuild-initramfs.sh

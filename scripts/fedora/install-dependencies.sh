@@ -11,6 +11,7 @@ KVER="$(kernel_release)"
 
 info "installing Fedora build and runtime dependencies for $KVER"
 dnf install -y \
+	alsa-ucm \
 	dkms \
 	gcc \
 	gcc-c++ \
