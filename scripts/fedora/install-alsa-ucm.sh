@@ -7,7 +7,7 @@ require_repo_root
 require_fedora
 require_command basename cp cut getent install readlink sed
 
-UCM_SRC="$REPO_ROOT/files/alsa/ucm2"
+UCM_SRC="$REPO_ROOT/modules/t2audio-alsa-ucm-conf/ucm2"
 UCM_DST="/usr/share/alsa/ucm2"
 
 target_user_home() {
