@@ -56,10 +56,16 @@ struct t2audio_deferred_msg {
     struct t2audio_msg msg;
 };
 
+enum t2audio_dma_buf_type {
+    T2AUDIO_DMA_BUF_IOMEM,
+    T2AUDIO_DMA_BUF_COHERENT,
+};
+
 struct t2audio_dma_buf {
     dma_addr_t dma_addr;
     void *ptr;
     size_t size;
+    enum t2audio_dma_buf_type type;
 };
 struct t2audio_stream {
     t2audio_object_id_t id;

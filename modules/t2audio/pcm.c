@@ -1,5 +1,6 @@
 #include "pcm.h"
 #include "audio.h"
+#include <linux/dma-mapping.h>
 #include <linux/io.h>
 
 static u64 t2audio_get_alsa_fmtbit(struct t2audio_apple_description *desc)
@@ -74,6 +75,7 @@ int t2audio_create_hw_info(struct t2audio_apple_description *desc, struct snd_pc
     alsa_hw->info = (SNDRV_PCM_INFO_MMAP |
                      SNDRV_PCM_INFO_BLOCK_TRANSFER |
                      SNDRV_PCM_INFO_MMAP_VALID |
+                     SNDRV_PCM_INFO_NO_PERIOD_WAKEUP |
                      SNDRV_PCM_INFO_DOUBLE);
     if (desc->format_flags & T2AUDIO_FORMAT_FLAG_NON_MIXABLE)
         pr_warn("t2audio: unsupported hw flag: NON_MIXABLE\n");
@@ -236,6 +238,26 @@ static snd_pcm_uframes_t t2audio_pcm_pointer(struct snd_pcm_substream *substream
     return (snd_pcm_uframes_t) frames;
 }
 
+static int t2audio_pcm_mmap(struct snd_pcm_substream *substream, struct vm_area_struct *area)
+{
+    struct t2audio_subdevice *sdev = snd_pcm_substream_chip(substream);
+    struct t2audio_stream *stream = t2audio_pcm_stream(substream);
+    struct t2audio_dma_buf *buf;
+
+    if (!stream->buffer_cnt || !stream->buffers)
+        return -EINVAL;
+
+    buf = &stream->buffers[0];
+    switch (buf->type) {
+        case T2AUDIO_DMA_BUF_IOMEM:
+            return snd_pcm_lib_mmap_iomem(substream, area);
+        case T2AUDIO_DMA_BUF_COHERENT:
+            return dma_mmap_coherent(sdev->a->dev, area, buf->ptr, buf->dma_addr, buf->size);
+        default:
+            return -EINVAL;
+    }
+}
+
 static struct snd_pcm_ops t2audio_pcm_ops = {
         .open =        t2audio_pcm_open,
         .close =       t2audio_pcm_close,
@@ -245,7 +267,7 @@ static struct snd_pcm_ops t2audio_pcm_ops = {
         .prepare =     t2audio_pcm_prepare,
         .trigger =     t2audio_pcm_trigger,
         .pointer =     t2audio_pcm_pointer,
-        .mmap    =     snd_pcm_lib_mmap_iomem
+        .mmap    =     t2audio_pcm_mmap
 };
 
 int t2audio_create_pcm(struct t2audio_subdevice *sdev)
@@ -293,7 +315,8 @@ static void t2audio_handle_stream_timestamp(struct snd_pcm_substream *substream,
         return;
     }
     snd_pcm_stream_unlock_irqrestore(substream, flags);
-    snd_pcm_period_elapsed(substream);
+    if (!substream->runtime->no_period_wakeup)
+        snd_pcm_period_elapsed(substream);
 }
 
 void t2audio_handle_timestamp(struct t2audio_subdevice *sdev, ktime_t os_timestamp, u64 dev_timestamp)

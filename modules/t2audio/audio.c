@@ -599,6 +599,7 @@ static void t2audio_init_bs_stream(struct t2audio_device *a, struct t2audio_stre
         strm->buffers[i].dma_addr = a->reg_mem_bs_dma + (dma_addr_t) bs_strm->buffers[i].address;
         strm->buffers[i].ptr = a->reg_mem_bs + bs_strm->buffers[i].address;
         strm->buffers[i].size = bs_strm->buffers[i].size;
+        strm->buffers[i].type = T2AUDIO_DMA_BUF_IOMEM;
     }
 
     if (strm->buffer_cnt == 1) {
@@ -637,6 +638,7 @@ static void t2audio_init_bs_stream_host(struct t2audio_device *a, struct t2audio
     strm->buffers[0].dma_addr = dma_addr;
     strm->buffers[0].ptr = dma_ptr;
     strm->buffers[0].size = size;
+    strm->buffers[0].type = T2AUDIO_DMA_BUF_COHERENT;
 
     strm->alsa_hw_desc = kmalloc(sizeof(struct snd_pcm_hardware), GFP_KERNEL);
     if (t2audio_create_hw_info(&strm->desc, strm->alsa_hw_desc, strm->buffers[0].size)) {
