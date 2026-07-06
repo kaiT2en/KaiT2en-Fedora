@@ -25,6 +25,13 @@ static void t2audio_reset_stream(struct t2audio_stream *stream);
 static void t2audio_reset_streams(struct t2audio_device *a);
 static void t2audio_resume_work(struct work_struct *ws);
 static void t2audio_resume_complete(void *userdata);
+static void t2audio_pm_prepare_client(void *userdata);
+static void t2audio_pm_shutdown_client(void *userdata);
+
+static const struct t2bce_client_pm_ops t2audio_pm_ops = {
+        .shutdown = t2audio_pm_shutdown_client,
+        .pm_prepare = t2audio_pm_prepare_client,
+};
 
 static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
@@ -61,6 +68,7 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
     t2audio->pci = dev;
     pci_set_drvdata(dev, t2audio);
     t2bce_client_set_resume_complete_callback(t2audio->bce, t2audio_resume_complete, t2audio);
+    t2bce_client_set_pm_ops(t2audio->bce, &t2audio_pm_ops, t2audio);
 
     t2audio->devt = t2audio_chrdev;
     t2audio->dev = device_create(t2audio_class, &dev->dev, t2audio->devt, NULL, "t2audio");
@@ -118,7 +126,7 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
     if ((status = t2audio_cmd_set_remote_access(t2audio, T2AUDIO_REMOTE_ACCESS_ON))) {
         dev_err(&dev->dev, "Failed to set remote access\n");
-        return status;
+        goto fail_snd;
     }
 
     if (snd_card_register(t2audio->card)) {
@@ -148,6 +156,8 @@ fail:
             pci_iounmap(dev, t2audio->reg_mem_bs);
         if (!IS_ERR_OR_NULL(t2audio->reg_mem_cfg))
             pci_iounmap(dev, t2audio->reg_mem_cfg);
+        if (t2audio->bce)
+            t2bce_client_set_pm_ops(t2audio->bce, NULL, NULL);
         t2bce_client_put(t2audio->bce);
         kfree(t2audio);
     }
@@ -180,6 +190,7 @@ static void t2audio_remove(struct pci_dev *dev)
     pci_free_irq_vectors(dev);
     pci_release_regions(dev);
     pci_disable_device(dev);
+    t2bce_client_set_pm_ops(t2audio->bce, NULL, NULL);
     t2bce_client_put(t2audio->bce);
     kfree(t2audio);
 }
@@ -189,6 +200,9 @@ static int t2audio_quiesce(struct t2audio_device *t2audio, bool suspend_pcm)
     struct t2audio_subdevice *sdev;
     size_t i;
     int status;
+
+    if (t2audio->pm_quiesced)
+        return 0;
 
     cancel_work_sync(&t2audio->resume_work);
     t2audio->resume_deferred = false;
@@ -221,6 +235,8 @@ static int t2audio_quiesce(struct t2audio_device *t2audio, bool suspend_pcm)
     status = t2audio_cmd_set_remote_access(t2audio, T2AUDIO_REMOTE_ACCESS_OFF);
     if (status)
         dev_warn(t2audio->dev, "Failed to reset remote access\n");
+    else
+        t2audio->pm_quiesced = true;
 
     return status;
 }
@@ -235,6 +251,16 @@ static int t2audio_suspend(struct device *dev)
     pci_disable_device(t2audio->pci);
     dev_dbg(t2audio->dev, "suspend exit status=%d\n", status);
     return 0;
+}
+
+static void t2audio_pm_prepare_client(void *userdata)
+{
+    t2audio_quiesce(userdata, true);
+}
+
+static void t2audio_pm_shutdown_client(void *userdata)
+{
+    t2audio_quiesce(userdata, false);
 }
 
 static void t2audio_shutdown(struct pci_dev *dev)
@@ -276,6 +302,7 @@ static int t2audio_resume(struct device *dev)
     }
 
     t2audio->resume_deferred = false;
+    t2audio->pm_quiesced = false;
     t2audio_reset_streams(t2audio);
 
     pr_debug("t2audio: resume exit status=0 path=%s\n", path);
@@ -296,6 +323,7 @@ static void t2audio_resume_work(struct work_struct *ws)
     }
 
     t2audio->resume_deferred = false;
+    t2audio->pm_quiesced = false;
     pr_debug("t2audio: resume deferred path complete\n");
 }
 

@@ -512,6 +512,7 @@ static int t2bce_suspend(struct device *dev)
     bce->no_state_fallback = false;
     bce->no_state_resume = false;
     t2bce_clients_pm_reset(bce);
+    t2bce_clients_pm_prepare(bce);
 
     status = bce_pm_suspend_prepare(bce);
     if (status)

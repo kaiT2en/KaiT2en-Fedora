@@ -126,6 +126,7 @@ struct t2audio_device {
     struct completion remote_alive;
     struct work_struct resume_work;
     bool resume_deferred;
+    bool pm_quiesced;
 };
 
 void t2audio_handle_notification(struct t2audio_device *a, struct t2audio_msg *msg);

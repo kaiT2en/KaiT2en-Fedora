@@ -187,6 +187,20 @@ void t2bce_clients_pm_reset(struct t2bce_device *bce)
     srcu_read_unlock(&bce->clients_srcu, srcu_idx);
 }
 
+void t2bce_clients_pm_prepare(struct t2bce_device *bce)
+{
+    struct t2bce_client *client;
+    int srcu_idx;
+
+    srcu_idx = srcu_read_lock(&bce->clients_srcu);
+    list_for_each_entry_srcu(client, &bce->clients, list,
+            srcu_read_lock_held(&bce->clients_srcu)) {
+        if (client->pm_ops.pm_prepare)
+            client->pm_ops.pm_prepare(READ_ONCE(client->pm_userdata));
+    }
+    srcu_read_unlock(&bce->clients_srcu, srcu_idx);
+}
+
 void t2bce_clients_pm_prepare_no_state(struct t2bce_device *bce)
 {
     struct t2bce_client *client;

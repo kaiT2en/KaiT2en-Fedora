@@ -37,6 +37,7 @@ static void bce_vhci_forget_devices(struct bce_vhci *vhci);
 static int __bce_vhci_add_hcd(struct bce_vhci *vhci);
 static void bce_vhci_shutdown_client(void *userdata);
 static void bce_vhci_pm_reset_client(void *userdata);
+static void bce_vhci_pm_prepare_client(void *userdata);
 static void bce_vhci_pm_prepare_no_state_client(void *userdata);
 static void bce_vhci_pm_mark_no_state_resume_client(void *userdata);
 static bool bce_vhci_pm_is_no_state_resume_client(void *userdata);
@@ -45,6 +46,7 @@ static void bce_vhci_pm_complete_client(void *userdata);
 static const struct t2bce_client_pm_ops bce_vhci_pm_ops = {
         .shutdown = bce_vhci_shutdown_client,
         .pm_reset = bce_vhci_pm_reset_client,
+        .pm_prepare = bce_vhci_pm_prepare_client,
         .pm_prepare_no_state = bce_vhci_pm_prepare_no_state_client,
         .pm_mark_no_state_resume = bce_vhci_pm_mark_no_state_resume_client,
         .pm_is_no_state_resume = bce_vhci_pm_is_no_state_resume_client,
@@ -175,6 +177,12 @@ void bce_vhci_pm_reset(struct bce_vhci *vhci)
     vhci->no_state_resume = false;
 }
 
+void bce_vhci_pm_prepare(struct bce_vhci *vhci)
+{
+    cancel_work_sync(&vhci->w_add_hcd);
+    vhci->port_change_pending = 0;
+}
+
 void bce_vhci_pm_prepare_no_state(struct bce_vhci *vhci)
 {
     bce_vhci_remove_hcd(vhci);
@@ -203,6 +211,11 @@ void bce_vhci_pm_complete(struct bce_vhci *vhci)
 static void bce_vhci_pm_reset_client(void *userdata)
 {
     bce_vhci_pm_reset(userdata);
+}
+
+static void bce_vhci_pm_prepare_client(void *userdata)
+{
+    bce_vhci_pm_prepare(userdata);
 }
 
 static void bce_vhci_shutdown_client(void *userdata)
