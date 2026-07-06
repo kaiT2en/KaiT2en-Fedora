@@ -1,16 +1,14 @@
 #include "transfer.h"
-#include "../queue.h"
 #include "vhci.h"
-#include "../t2bce.h"
 #include <linux/usb/hcd.h>
 
-static void bce_vhci_transfer_queue_completion(struct bce_queue_sq *sq);
+static void bce_vhci_transfer_queue_completion(struct t2bce_queue_sq *sq);
 static void bce_vhci_transfer_queue_giveback(struct bce_vhci_transfer_queue *q);
 static void bce_vhci_transfer_queue_remove_pending(struct bce_vhci_transfer_queue *q);
 
 static int bce_vhci_urb_init(struct bce_vhci_urb *vurb);
 static int bce_vhci_urb_update(struct bce_vhci_urb *urb, struct bce_vhci_message *msg);
-static int bce_vhci_urb_transfer_completion(struct bce_vhci_urb *urb, struct bce_sq_completion_data *c);
+static int bce_vhci_urb_transfer_completion(struct bce_vhci_urb *urb, struct t2bce_sq_completion_data *c);
 static void bce_vhci_urb_complete(struct bce_vhci_urb *urb, int status);
 
 static void bce_vhci_transfer_queue_reset_w(struct work_struct *work);
@@ -38,19 +36,19 @@ void bce_vhci_create_transfer_queue(struct bce_vhci *vhci, struct bce_vhci_trans
     if (usb_endpoint_type(&endp->desc) == USB_ENDPOINT_XFER_BULK)
         q->max_active_requests = BCE_VHCI_BULK_MAX_ACTIVE_URBS;
     q->remaining_active_requests = q->max_active_requests;
-    q->cq = bce_create_cq(vhci->dev, 0x100);
+    q->cq = t2bce_create_cq(vhci->client, 0x100);
     INIT_WORK(&q->w_reset, bce_vhci_transfer_queue_reset_w);
     INIT_WORK(&q->w_resume, bce_vhci_transfer_queue_resume_w);
     q->sq_in = NULL;
     if (dir == DMA_FROM_DEVICE || dir == DMA_BIDIRECTIONAL) {
         snprintf(name, sizeof(name), "VHC1-%i-%02x", dev_addr, 0x80 | usb_endpoint_num(&endp->desc));
-        q->sq_in = bce_create_sq(vhci->dev, q->cq, name, 0x100, DMA_FROM_DEVICE,
+        q->sq_in = t2bce_create_sq(vhci->client, q->cq, name, 0x100, DMA_FROM_DEVICE,
                                  bce_vhci_transfer_queue_completion, q);
     }
     q->sq_out = NULL;
     if (dir == DMA_TO_DEVICE || dir == DMA_BIDIRECTIONAL) {
         snprintf(name, sizeof(name), "VHC1-%i-%02x", dev_addr, usb_endpoint_num(&endp->desc));
-        q->sq_out = bce_create_sq(vhci->dev, q->cq, name, 0x100, DMA_TO_DEVICE,
+        q->sq_out = t2bce_create_sq(vhci->client, q->cq, name, 0x100, DMA_TO_DEVICE,
                                   bce_vhci_transfer_queue_completion, q);
     }
 }
@@ -62,10 +60,10 @@ void bce_vhci_destroy_transfer_queue(struct bce_vhci *vhci, struct bce_vhci_tran
     bce_vhci_transfer_queue_giveback(q);
     bce_vhci_transfer_queue_remove_pending(q);
     if (q->sq_in)
-        bce_destroy_sq(vhci->dev, q->sq_in);
+        t2bce_destroy_sq(vhci->client, q->sq_in);
     if (q->sq_out)
-        bce_destroy_sq(vhci->dev, q->sq_out);
-    bce_destroy_cq(vhci->dev, q->cq);
+        t2bce_destroy_sq(vhci->client, q->sq_out);
+    t2bce_destroy_cq(vhci->client, q->cq);
 }
 
 static inline bool bce_vhci_transfer_queue_can_init_urb(struct bce_vhci_transfer_queue *q)
@@ -151,7 +149,7 @@ static void bce_vhci_transfer_queue_log_event(struct bce_vhci_transfer_queue *q,
 }
 
 static void bce_vhci_transfer_queue_log_completion(struct bce_vhci_transfer_queue *q,
-        struct bce_queue_sq *sq, struct bce_sq_completion_data *c, const char *stage)
+        struct t2bce_queue_sq *sq, struct t2bce_sq_completion_data *c, const char *stage)
 {
     const char *sq_name = "unknown";
 
@@ -300,21 +298,21 @@ complete:
     bce_vhci_transfer_queue_giveback(q);
 }
 
-static void bce_vhci_transfer_queue_completion(struct bce_queue_sq *sq)
+static void bce_vhci_transfer_queue_completion(struct t2bce_queue_sq *sq)
 {
     unsigned long flags;
-    struct bce_sq_completion_data *c;
+    struct t2bce_sq_completion_data *c;
     struct urb *urb;
-    struct bce_vhci_transfer_queue *q = sq->userdata;
+    struct bce_vhci_transfer_queue *q = t2bce_queue_sq_userdata(sq);
     bool is_sq_out = (sq == q->sq_out);
     spin_lock_irqsave(&q->urb_lock, flags);
-    while ((c = bce_next_completion(sq))) {
-        if (c->status == BCE_COMPLETION_ABORTED) { /* We flushed the queue */
+    while ((c = t2bce_next_completion(sq))) {
+        if (c->status == T2BCE_COMPLETION_ABORTED) { /* We flushed the queue */
             bce_vhci_transfer_queue_log_completion(q, sq, c, "aborted");
             pr_debug("bce-vhci: [%02x] Got an abort completion\n", q->endp_addr);
             if (is_sq_out && atomic_dec_if_positive(&q->sq_out_pending) == 0)
                 wake_up(&q->sq_out_wait_queue);
-            bce_notify_submission_complete(sq);
+            t2bce_notify_submission_complete(sq);
             continue;
         }
         if (list_empty(&q->endp->urb_list)) {
@@ -330,7 +328,7 @@ static void bce_vhci_transfer_queue_completion(struct bce_queue_sq *sq)
         bce_vhci_urb_transfer_completion(urb->hcpriv, c);
         if (is_sq_out && atomic_dec_if_positive(&q->sq_out_pending) == 0)
             wake_up(&q->sq_out_wait_queue);
-        bce_notify_submission_complete(sq);
+        t2bce_notify_submission_complete(sq);
     }
     bce_vhci_transfer_queue_deliver_pending(q);
     spin_unlock_irqrestore(&q->urb_lock, flags);
@@ -366,9 +364,9 @@ int bce_vhci_transfer_queue_do_pause(struct bce_vhci_transfer_queue *q)
     if (q->state != BCE_VHCI_ENDPOINT_PAUSED)
         return -EINVAL;
     if (q->sq_in)
-        bce_cmd_flush_memory_queue(q->vhci->dev->cmd_cmdq, (u16) q->sq_in->qid);
+        t2bce_flush_queue(q->vhci->client, q->sq_in);
     if (q->sq_out)
-        bce_cmd_flush_memory_queue(q->vhci->dev->cmd_cmdq, (u16) q->sq_out->qid);
+        t2bce_flush_queue(q->vhci->client, q->sq_out);
     return 0;
 }
 
@@ -576,9 +574,9 @@ static void bce_vhci_transfer_queue_reset_w(struct work_struct *work)
     q->paused_by |= BCE_VHCI_PAUSE_INTERNAL_WQ;
     bce_vhci_transfer_queue_remove_pending(q);
     if (q->sq_in)
-        bce_cmd_flush_memory_queue(q->vhci->dev->cmd_cmdq, (u16) q->sq_in->qid);
+        t2bce_flush_queue(q->vhci->client, q->sq_in);
     if (q->sq_out)
-        bce_cmd_flush_memory_queue(q->vhci->dev->cmd_cmdq, (u16) q->sq_out->qid);
+        t2bce_flush_queue(q->vhci->client, q->sq_out);
     pr_debug("bce-vhci: tq reset command dev=%u port=%d ep=%02x\n",
             q->dev_addr, bce_vhci_transfer_queue_port(q), q->endp_addr);
     bce_vhci_cmd_endpoint_reset(&q->vhci->cq, q->dev_addr, (u8) (q->endp->desc.bEndpointAddress & 0x8F));
@@ -791,7 +789,6 @@ int bce_vhci_urb_request_cancel(struct bce_vhci_transfer_queue *q, struct urb *u
 static int bce_vhci_urb_data_transfer_in(struct bce_vhci_urb *urb, unsigned long *timeout)
 {
     struct bce_vhci_message msg;
-    struct bce_qe_submission *s;
     u32 tr_len;
     int reservation1, reservation2 = -EFAULT;
 
@@ -799,13 +796,13 @@ static int bce_vhci_urb_data_transfer_in(struct bce_vhci_urb *urb, unsigned long
              (u64) urb->urb->transfer_dma, urb->urb->transfer_buffer_length);
 
     /* Reserve both a message and a submission, so we don't run into issues later. */
-    reservation1 = bce_reserve_submission(urb->q->vhci->msg_asynchronous.sq, timeout);
+    reservation1 = t2bce_reserve_submission(urb->q->vhci->msg_asynchronous.sq, timeout);
     if (!reservation1)
-        reservation2 = bce_reserve_submission(urb->q->sq_in, timeout);
+        reservation2 = t2bce_reserve_submission(urb->q->sq_in, timeout);
     if (reservation1 || reservation2) {
         pr_err("bce-vhci: Failed to reserve a submission for URB data transfer\n");
         if (!reservation1)
-            bce_cancel_submission_reservation(urb->q->vhci->msg_asynchronous.sq);
+            t2bce_cancel_submission_reservation(urb->q->vhci->msg_asynchronous.sq);
         return -ENOMEM;
     }
 
@@ -821,9 +818,8 @@ static int bce_vhci_urb_data_transfer_in(struct bce_vhci_urb *urb, unsigned long
     bce_vhci_message_queue_write(&urb->q->vhci->msg_asynchronous, &msg);
     spin_unlock(&urb->q->vhci->msg_asynchronous_lock);
 
-    s = bce_next_submission(urb->q->sq_in);
-    bce_set_submission_single(s, urb->urb->transfer_dma + urb->send_offset, tr_len);
-    bce_submit_to_device(urb->q->sq_in);
+    t2bce_set_next_submission_single(urb->q->sq_in, urb->urb->transfer_dma + urb->send_offset, tr_len);
+    t2bce_submit_to_device(urb->q->sq_in);
 
     urb->state = BCE_VHCI_URB_WAITING_FOR_COMPLETION;
     return 0;
@@ -846,19 +842,17 @@ static int bce_vhci_urb_data_start(struct bce_vhci_urb *urb, unsigned long *time
 
 static int bce_vhci_urb_send_out_data(struct bce_vhci_urb *urb, dma_addr_t addr, size_t size)
 {
-    struct bce_qe_submission *s;
     unsigned long timeout = 0;
-    if (bce_reserve_submission(urb->q->sq_out, &timeout)) {
+    if (t2bce_reserve_submission(urb->q->sq_out, &timeout)) {
         pr_err("bce-vhci: Failed to reserve a submission for URB data transfer\n");
         return -EPIPE;
     }
 
     pr_debug("bce-vhci: [%02x] DMA to device %llx %lx\n", urb->q->endp_addr, (u64) addr, size);
 
-    s = bce_next_submission(urb->q->sq_out);
-    bce_set_submission_single(s, addr, size);
+    t2bce_set_next_submission_single(urb->q->sq_out, addr, size);
     atomic_inc(&urb->q->sq_out_pending);
-    bce_submit_to_device(urb->q->sq_out);
+    t2bce_submit_to_device(urb->q->sq_out);
     return 0;
 }
 
@@ -888,7 +882,7 @@ static int bce_vhci_urb_data_update(struct bce_vhci_urb *urb, struct bce_vhci_me
     return -EAGAIN;
 }
 
-static int bce_vhci_urb_data_transfer_completion(struct bce_vhci_urb *urb, struct bce_sq_completion_data *c)
+static int bce_vhci_urb_data_transfer_completion(struct bce_vhci_urb *urb, struct t2bce_sq_completion_data *c)
 {
     if (urb->state == BCE_VHCI_URB_WAITING_FOR_COMPLETION) {
         urb->receive_offset += c->data_size;
@@ -981,7 +975,7 @@ static int bce_vhci_urb_control_update(struct bce_vhci_urb *urb, struct bce_vhci
     return -EAGAIN;
 }
 
-static int bce_vhci_urb_control_transfer_completion(struct bce_vhci_urb *urb, struct bce_sq_completion_data *c)
+static int bce_vhci_urb_control_transfer_completion(struct bce_vhci_urb *urb, struct t2bce_sq_completion_data *c)
 {
     int status;
     unsigned long timeout;
@@ -1020,7 +1014,7 @@ static int bce_vhci_urb_update(struct bce_vhci_urb *urb, struct bce_vhci_message
         return bce_vhci_urb_data_update(urb, msg);
 }
 
-static int bce_vhci_urb_transfer_completion(struct bce_vhci_urb *urb, struct bce_sq_completion_data *c)
+static int bce_vhci_urb_transfer_completion(struct bce_vhci_urb *urb, struct t2bce_sq_completion_data *c)
 {
     if (urb->is_control)
         return bce_vhci_urb_control_transfer_completion(urb, c);

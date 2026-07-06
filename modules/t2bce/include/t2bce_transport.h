@@ -3,6 +3,7 @@
 
 #include <linux/device.h>
 #include <linux/dma-direction.h>
+#include <linux/types.h>
 
 struct t2bce_client;
 struct t2bce_queue_cq;
@@ -15,6 +16,14 @@ struct t2bce_sq_completion_data {
     u32 status;
     u64 data_size;
     u64 result;
+};
+
+enum t2bce_completion_status {
+    T2BCE_COMPLETION_SUCCESS = 0,
+    T2BCE_COMPLETION_ERROR = 1,
+    T2BCE_COMPLETION_ABORTED = 2,
+    T2BCE_COMPLETION_NO_SPACE = 3,
+    T2BCE_COMPLETION_OVERRUN = 4,
 };
 
 struct t2bce_client *t2bce_client_get(struct device *dev);
@@ -37,10 +46,17 @@ void t2bce_destroy_sq(struct t2bce_client *client, struct t2bce_queue_sq *sq);
 void *t2bce_queue_sq_userdata(struct t2bce_queue_sq *sq);
 
 int t2bce_reserve_submission(struct t2bce_queue_sq *sq, unsigned long *timeout);
+void t2bce_cancel_submission_reservation(struct t2bce_queue_sq *sq);
 void t2bce_set_next_submission_single(struct t2bce_queue_sq *sq, dma_addr_t addr, size_t size);
 void t2bce_submit_to_device(struct t2bce_queue_sq *sq);
 void t2bce_notify_submission_complete(struct t2bce_queue_sq *sq);
 
 struct t2bce_sq_completion_data *t2bce_next_completion(struct t2bce_queue_sq *sq);
+
+u32 t2bce_queue_sq_head(struct t2bce_queue_sq *sq);
+u32 t2bce_queue_sq_tail(struct t2bce_queue_sq *sq);
+u32 t2bce_queue_sq_available(struct t2bce_queue_sq *sq);
+u32 t2bce_queue_sq_capacity(struct t2bce_queue_sq *sq);
+int t2bce_flush_queue(struct t2bce_client *client, struct t2bce_queue_sq *sq);
 
 #endif

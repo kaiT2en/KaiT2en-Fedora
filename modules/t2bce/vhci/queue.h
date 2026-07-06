@@ -2,7 +2,7 @@
 #define BCE_VHCI_QUEUE_H
 
 #include <linux/completion.h>
-#include "../queue.h"
+#include "t2bce_transport.h"
 
 #define VHCI_EVENT_QUEUE_EL_COUNT 256
 #define VHCI_EVENT_PENDING_COUNT 32
@@ -29,15 +29,15 @@ struct bce_vhci_message {
 };
 
 struct bce_vhci_message_queue {
-    struct bce_queue_cq *cq;
-    struct bce_queue_sq *sq;
+    struct t2bce_queue_cq *cq;
+    struct t2bce_queue_sq *sq;
     struct bce_vhci_message *data;
     dma_addr_t dma_addr;
 };
 typedef void (*bce_vhci_event_queue_callback)(struct bce_vhci_event_queue *q, struct bce_vhci_message *msg);
 struct bce_vhci_event_queue {
     struct bce_vhci *vhci;
-    struct bce_queue_sq *sq;
+    struct t2bce_queue_sq *sq;
     struct bce_vhci_message *data;
     dma_addr_t dma_addr;
     bce_vhci_event_queue_callback cb;
@@ -59,7 +59,7 @@ void bce_vhci_message_queue_destroy(struct bce_vhci *vhci, struct bce_vhci_messa
 void bce_vhci_message_queue_write(struct bce_vhci_message_queue *q, struct bce_vhci_message *req);
 
 int __bce_vhci_event_queue_create(struct bce_vhci *vhci, struct bce_vhci_event_queue *ret, const char *name,
-        bce_sq_completion compl);
+        t2bce_sq_completion compl);
 int bce_vhci_event_queue_create(struct bce_vhci *vhci, struct bce_vhci_event_queue *ret, const char *name,
         bce_vhci_event_queue_callback cb);
 void bce_vhci_event_queue_destroy(struct bce_vhci *vhci, struct bce_vhci_event_queue *q);

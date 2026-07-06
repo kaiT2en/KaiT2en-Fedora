@@ -198,6 +198,12 @@ int t2bce_reserve_submission(struct t2bce_queue_sq *sq, unsigned long *timeout)
 }
 EXPORT_SYMBOL_GPL(t2bce_reserve_submission);
 
+void t2bce_cancel_submission_reservation(struct t2bce_queue_sq *sq)
+{
+    bce_cancel_submission_reservation(to_bce_sq(sq));
+}
+EXPORT_SYMBOL_GPL(t2bce_cancel_submission_reservation);
+
 void t2bce_set_next_submission_single(struct t2bce_queue_sq *sq, dma_addr_t addr, size_t size)
 {
     struct bce_qe_submission *submission = bce_next_submission(to_bce_sq(sq));
@@ -223,3 +229,33 @@ struct t2bce_sq_completion_data *t2bce_next_completion(struct t2bce_queue_sq *sq
     return (struct t2bce_sq_completion_data *) bce_next_completion(to_bce_sq(sq));
 }
 EXPORT_SYMBOL_GPL(t2bce_next_completion);
+
+u32 t2bce_queue_sq_head(struct t2bce_queue_sq *sq)
+{
+    return to_bce_sq(sq)->head;
+}
+EXPORT_SYMBOL_GPL(t2bce_queue_sq_head);
+
+u32 t2bce_queue_sq_tail(struct t2bce_queue_sq *sq)
+{
+    return to_bce_sq(sq)->tail;
+}
+EXPORT_SYMBOL_GPL(t2bce_queue_sq_tail);
+
+u32 t2bce_queue_sq_available(struct t2bce_queue_sq *sq)
+{
+    return atomic_read(&to_bce_sq(sq)->available_commands);
+}
+EXPORT_SYMBOL_GPL(t2bce_queue_sq_available);
+
+u32 t2bce_queue_sq_capacity(struct t2bce_queue_sq *sq)
+{
+    return to_bce_sq(sq)->el_count;
+}
+EXPORT_SYMBOL_GPL(t2bce_queue_sq_capacity);
+
+int t2bce_flush_queue(struct t2bce_client *client, struct t2bce_queue_sq *sq)
+{
+    return bce_cmd_flush_memory_queue(client->bce->cmd_cmdq, to_bce_sq(sq)->qid);
+}
+EXPORT_SYMBOL_GPL(t2bce_flush_queue);

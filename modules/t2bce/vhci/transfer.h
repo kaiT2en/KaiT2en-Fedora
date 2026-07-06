@@ -5,7 +5,6 @@
 #include <linux/usb.h>
 #include "queue.h"
 #include "command.h"
-#include "../queue.h"
 
 struct bce_vhci_list_message {
     struct list_head list;
@@ -26,9 +25,9 @@ struct bce_vhci_transfer_queue {
     u32 paused_by;
     bce_vhci_device_t dev_addr;
     u8 endp_addr;
-    struct bce_queue_cq *cq;
-    struct bce_queue_sq *sq_in;
-    struct bce_queue_sq *sq_out;
+    struct t2bce_queue_cq *cq;
+    struct t2bce_queue_sq *sq_in;
+    struct t2bce_queue_sq *sq_out;
     struct list_head evq;
     struct spinlock urb_lock;
     struct mutex pause_lock;
