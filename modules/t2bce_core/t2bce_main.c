@@ -205,8 +205,8 @@ static int bce_create_command_queues(struct t2bce_device *bce)
     struct bce_queue_memcfg *cfg;
     struct t2bce_dma_engine *dma = &bce->dma;
 
-    dma->cmd_cq = bce_alloc_cq(dma, 0, 0x20);
-    dma->cmd_cmdq = bce_alloc_cmdq(dma, 1, 0x20);
+    dma->cmd_cq = t2bce_dma_alloc_cq(dma, 0, 0x20);
+    dma->cmd_cmdq = t2bce_dma_alloc_cmdq(dma, 1, 0x20);
     if (dma->cmd_cq == NULL || dma->cmd_cmdq == NULL) {
         status = -ENOMEM;
         goto err;
@@ -219,10 +219,10 @@ static int bce_create_command_queues(struct t2bce_device *bce)
         status = -ENOMEM;
         goto err;
     }
-    bce_get_cq_memcfg(dma->cmd_cq, cfg);
+    t2bce_dma_get_cq_memcfg(dma->cmd_cq, cfg);
     if ((status = bce_register_command_queue(bce, cfg, false)))
         goto err;
-    bce_get_sq_memcfg(dma->cmd_cmdq->sq, dma->cmd_cq, cfg);
+    t2bce_dma_get_sq_memcfg(dma->cmd_cmdq->sq, dma->cmd_cq, cfg);
     if ((status = bce_register_command_queue(bce, cfg, true)))
         goto err;
     kfree(cfg);
@@ -231,9 +231,9 @@ static int bce_create_command_queues(struct t2bce_device *bce)
 
 err:
     if (dma->cmd_cq)
-        bce_free_cq(dma, dma->cmd_cq);
+        t2bce_dma_free_cq(dma, dma->cmd_cq);
     if (dma->cmd_cmdq)
-        bce_free_cmdq(dma, dma->cmd_cmdq);
+        t2bce_dma_free_cmdq(dma, dma->cmd_cmdq);
     return status;
 }
 
@@ -241,8 +241,8 @@ static void bce_free_command_queues(struct t2bce_device *bce)
 {
     struct t2bce_dma_engine *dma = &bce->dma;
 
-    bce_free_cq(dma, dma->cmd_cq);
-    bce_free_cmdq(dma, dma->cmd_cmdq);
+    t2bce_dma_free_cq(dma, dma->cmd_cq);
+    t2bce_dma_free_cmdq(dma, dma->cmd_cmdq);
     dma->cmd_cq = NULL;
     dma->queues[0] = NULL;
 }
@@ -264,9 +264,9 @@ static irqreturn_t bce_handle_dma_irq(int irq, void *dev)
     spin_lock(&dma->queues_lock);
     for (i = 0; i < BCE_MAX_QUEUE_COUNT; i++)
         if (dma->queues[i] && dma->queues[i]->type == BCE_QUEUE_CQ)
-            bce_handle_cq_completions_locked(dma, (struct bce_queue_cq *) dma->queues[i], &ce);
+            t2bce_dma_handle_cq_completions_locked(dma, (struct bce_queue_cq *) dma->queues[i], &ce);
     spin_unlock(&dma->queues_lock);
-    bce_dispatch_pending_sq_completions(dma, ce);
+    t2bce_dma_dispatch_pending_sq_completions(dma, ce);
     return IRQ_HANDLED;
 }
 
@@ -388,21 +388,21 @@ static int t2bce_dma_register_queue(void *userdata, struct bce_queue_memcfg *cfg
 {
     struct t2bce_device *bce = userdata;
 
-    return bce_cmd_register_queue(bce->dma.cmd_cmdq, cfg, name, isdirout);
+    return t2bce_dma_cmd_register_queue(bce->dma.cmd_cmdq, cfg, name, isdirout);
 }
 
 static int t2bce_dma_unregister_queue(void *userdata, u16 qid)
 {
     struct t2bce_device *bce = userdata;
 
-    return bce_cmd_unregister_memory_queue(bce->dma.cmd_cmdq, qid);
+    return t2bce_dma_cmd_unregister_memory_queue(bce->dma.cmd_cmdq, qid);
 }
 
 static int t2bce_dma_flush_queue(void *userdata, u16 qid)
 {
     struct t2bce_device *bce = userdata;
 
-    return bce_cmd_flush_memory_queue(bce->dma.cmd_cmdq, qid);
+    return t2bce_dma_cmd_flush_memory_queue(bce->dma.cmd_cmdq, qid);
 }
 
 static void t2bce_remove(struct pci_dev *dev)

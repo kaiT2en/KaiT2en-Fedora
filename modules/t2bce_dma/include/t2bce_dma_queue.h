@@ -119,14 +119,14 @@ struct bce_qe_completion {
     u16 flags;  // bce_qe_completion_flags
 };
 
-static __always_inline void *bce_sq_element(struct bce_queue_sq *q, int i) {
+static __always_inline void *t2bce_dma_sq_element(struct bce_queue_sq *q, int i) {
     return (void *) ((u8 *) q->data + q->el_size * i);
 }
-static __always_inline void *bce_cq_element(struct bce_queue_cq *q, int i) {
+static __always_inline void *t2bce_dma_cq_element(struct bce_queue_cq *q, int i) {
     return (void *) ((struct bce_qe_completion *) q->data + i);
 }
 
-static __always_inline struct bce_sq_completion_data *bce_next_completion(struct bce_queue_sq *sq) {
+static __always_inline struct bce_sq_completion_data *t2bce_dma_next_completion(struct bce_queue_sq *sq) {
     struct bce_sq_completion_data *res;
     rmb();
     if (sq->completion_cidx == sq->completion_tail)
@@ -136,40 +136,40 @@ static __always_inline struct bce_sq_completion_data *bce_next_completion(struct
     return res;
 }
 
-struct bce_queue_cq *bce_alloc_cq(struct t2bce_dma_engine *dma, int qid, u32 el_count);
-void bce_get_cq_memcfg(struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg);
-void bce_free_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq);
-void bce_handle_cq_completions_locked(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, size_t *ce);
-void bce_dispatch_pending_sq_completions(struct t2bce_dma_engine *dma, size_t ce);
+struct bce_queue_cq *t2bce_dma_alloc_cq(struct t2bce_dma_engine *dma, int qid, u32 el_count);
+void t2bce_dma_get_cq_memcfg(struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg);
+void t2bce_dma_free_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq);
+void t2bce_dma_handle_cq_completions_locked(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, size_t *ce);
+void t2bce_dma_dispatch_pending_sq_completions(struct t2bce_dma_engine *dma, size_t ce);
 
-struct bce_queue_sq *bce_alloc_sq(struct t2bce_dma_engine *dma, int qid, u32 el_size, u32 el_count,
+struct bce_queue_sq *t2bce_dma_alloc_sq(struct t2bce_dma_engine *dma, int qid, u32 el_size, u32 el_count,
         bce_sq_completion compl, void *userdata);
-void bce_get_sq_memcfg(struct bce_queue_sq *sq, struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg);
-void bce_free_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq);
-int bce_reserve_submission(struct bce_queue_sq *sq, unsigned long *timeout);
-void bce_cancel_submission_reservation(struct bce_queue_sq *sq);
-void bce_submit_to_device(struct bce_queue_sq *sq);
-void bce_notify_submission_complete(struct bce_queue_sq *sq);
+void t2bce_dma_get_sq_memcfg(struct bce_queue_sq *sq, struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg);
+void t2bce_dma_free_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq);
+int t2bce_dma_reserve_submission(struct bce_queue_sq *sq, unsigned long *timeout);
+void t2bce_dma_cancel_submission_reservation(struct bce_queue_sq *sq);
+void t2bce_dma_submit_to_device(struct bce_queue_sq *sq);
+void t2bce_dma_notify_submission_complete(struct bce_queue_sq *sq);
 
-void bce_set_next_submission_single(struct bce_queue_sq *sq, dma_addr_t addr, size_t size);
+void t2bce_dma_set_next_submission_single(struct bce_queue_sq *sq, dma_addr_t addr, size_t size);
 
-struct bce_queue_cmdq *bce_alloc_cmdq(struct t2bce_dma_engine *dma, int qid, u32 el_count);
-void bce_free_cmdq(struct t2bce_dma_engine *dma, struct bce_queue_cmdq *cmdq);
+struct bce_queue_cmdq *t2bce_dma_alloc_cmdq(struct t2bce_dma_engine *dma, int qid, u32 el_count);
+void t2bce_dma_free_cmdq(struct t2bce_dma_engine *dma, struct bce_queue_cmdq *cmdq);
 
-u32 bce_cmd_register_queue(struct bce_queue_cmdq *cmdq, struct bce_queue_memcfg *cfg, const char *name, bool isdirout);
-u32 bce_cmd_unregister_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid);
-u32 bce_cmd_flush_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid);
+u32 t2bce_dma_cmd_register_queue(struct bce_queue_cmdq *cmdq, struct bce_queue_memcfg *cfg, const char *name, bool isdirout);
+u32 t2bce_dma_cmd_unregister_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid);
+u32 t2bce_dma_cmd_flush_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid);
 
 
 /* User API - Creates and registers the queue */
 
-struct bce_queue_cq *bce_create_cq(struct t2bce_dma_engine *dma, u32 el_count);
-struct bce_queue_sq *bce_create_sq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name, u32 el_count,
+struct bce_queue_cq *t2bce_dma_create_cq(struct t2bce_dma_engine *dma, u32 el_count);
+struct bce_queue_sq *t2bce_dma_create_sq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name, u32 el_count,
         int direction, bce_sq_completion compl, void *userdata);
-struct bce_queue_sq *bce_create_sq_with_flags(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name,
+struct bce_queue_sq *t2bce_dma_create_sq_with_flags(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name,
         u32 el_count, u16 flags, bce_sq_completion compl, void *userdata);
-void bce_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq);
-void bce_destroy_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq);
-int bce_flush_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq);
+void t2bce_dma_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq);
+void t2bce_dma_destroy_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq);
+int t2bce_dma_flush_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq);
 
 #endif

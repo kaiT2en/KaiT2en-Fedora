@@ -60,7 +60,7 @@ struct bce_cmdq_register_memory_queue_cmd {
     u64 length;
 };
 
-struct bce_queue_cq *bce_alloc_cq(struct t2bce_dma_engine *dma, int qid, u32 el_count)
+struct bce_queue_cq *t2bce_dma_alloc_cq(struct t2bce_dma_engine *dma, int qid, u32 el_count)
 {
     struct bce_queue_cq *q;
     q = kzalloc(sizeof(struct bce_queue_cq), GFP_KERNEL);
@@ -78,9 +78,9 @@ struct bce_queue_cq *bce_alloc_cq(struct t2bce_dma_engine *dma, int qid, u32 el_
     }
     return q;
 }
-EXPORT_SYMBOL_GPL(bce_alloc_cq);
+EXPORT_SYMBOL_GPL(t2bce_dma_alloc_cq);
 
-void bce_get_cq_memcfg(struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg)
+void t2bce_dma_get_cq_memcfg(struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg)
 {
     cfg->qid = (u16) cq->qid;
     cfg->el_count = (u16) cq->el_count;
@@ -89,16 +89,16 @@ void bce_get_cq_memcfg(struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg)
     cfg->addr = cq->dma_handle;
     cfg->length = cq->el_count * sizeof(struct bce_qe_completion);
 }
-EXPORT_SYMBOL_GPL(bce_get_cq_memcfg);
+EXPORT_SYMBOL_GPL(t2bce_dma_get_cq_memcfg);
 
-void bce_free_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq)
+void t2bce_dma_free_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq)
 {
     dma_free_coherent(dma->dma_dev, cq->el_count * sizeof(struct bce_qe_completion), cq->data, cq->dma_handle);
     kfree(cq);
 }
-EXPORT_SYMBOL_GPL(bce_free_cq);
+EXPORT_SYMBOL_GPL(t2bce_dma_free_cq);
 
-static void bce_handle_cq_completion(struct t2bce_dma_engine *dma, struct bce_qe_completion *e, size_t *ce)
+static void t2bce_dma_handle_cq_completion(struct t2bce_dma_engine *dma, struct bce_qe_completion *e, size_t *ce)
 {
     struct bce_queue *target;
     struct bce_queue_sq *target_sq;
@@ -129,28 +129,28 @@ static void bce_handle_cq_completion(struct t2bce_dma_engine *dma, struct bce_qe
     target_sq->completion_tail = (target_sq->completion_tail + 1) % target_sq->el_count;
 }
 
-void bce_handle_cq_completions_locked(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, size_t *ce)
+void t2bce_dma_handle_cq_completions_locked(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, size_t *ce)
 {
     struct bce_qe_completion *e;
-    e = bce_cq_element(cq, cq->index);
+    e = t2bce_dma_cq_element(cq, cq->index);
     if (!(e->flags & BCE_COMPLETION_FLAG_PENDING))
         return;
     mb();
     while (true) {
-        e = bce_cq_element(cq, cq->index);
+        e = t2bce_dma_cq_element(cq, cq->index);
         if (!(e->flags & BCE_COMPLETION_FLAG_PENDING))
             break;
         pr_debug("t2bce_dma: compl: %i: %i %llx %llx", e->qid, e->status, e->data_size, e->result);
-        bce_handle_cq_completion(dma, e, ce);
+        t2bce_dma_handle_cq_completion(dma, e, ce);
         e->flags = 0;
         cq->index = (cq->index + 1) % cq->el_count;
     }
     mb();
     iowrite32(cq->index, (u32 *) ((u8 *) dma->reg_mem_dma +  REG_DOORBELL_BASE) + cq->qid);
 }
-EXPORT_SYMBOL_GPL(bce_handle_cq_completions_locked);
+EXPORT_SYMBOL_GPL(t2bce_dma_handle_cq_completions_locked);
 
-void bce_dispatch_pending_sq_completions(struct t2bce_dma_engine *dma, size_t ce)
+void t2bce_dma_dispatch_pending_sq_completions(struct t2bce_dma_engine *dma, size_t ce)
 {
     struct bce_queue_sq *sq;
 
@@ -161,10 +161,10 @@ void bce_dispatch_pending_sq_completions(struct t2bce_dma_engine *dma, size_t ce
         sq->has_pending_completions = false;
     }
 }
-EXPORT_SYMBOL_GPL(bce_dispatch_pending_sq_completions);
+EXPORT_SYMBOL_GPL(t2bce_dma_dispatch_pending_sq_completions);
 
 
-struct bce_queue_sq *bce_alloc_sq(struct t2bce_dma_engine *dma, int qid, u32 el_size, u32 el_count,
+struct bce_queue_sq *t2bce_dma_alloc_sq(struct t2bce_dma_engine *dma, int qid, u32 el_size, u32 el_count,
         bce_sq_completion compl, void *userdata)
 {
     struct bce_queue_sq *q;
@@ -194,9 +194,9 @@ struct bce_queue_sq *bce_alloc_sq(struct t2bce_dma_engine *dma, int qid, u32 el_
     }
     return q;
 }
-EXPORT_SYMBOL_GPL(bce_alloc_sq);
+EXPORT_SYMBOL_GPL(t2bce_dma_alloc_sq);
 
-void bce_get_sq_memcfg(struct bce_queue_sq *sq, struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg)
+void t2bce_dma_get_sq_memcfg(struct bce_queue_sq *sq, struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg)
 {
     cfg->qid = (u16) sq->qid;
     cfg->el_count = (u16) sq->el_count;
@@ -205,17 +205,17 @@ void bce_get_sq_memcfg(struct bce_queue_sq *sq, struct bce_queue_cq *cq, struct 
     cfg->addr = sq->dma_handle;
     cfg->length = sq->el_count * sq->el_size;
 }
-EXPORT_SYMBOL_GPL(bce_get_sq_memcfg);
+EXPORT_SYMBOL_GPL(t2bce_dma_get_sq_memcfg);
 
-void bce_free_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
+void t2bce_dma_free_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
 {
     dma_free_coherent(dma->dma_dev, sq->el_count * sq->el_size, sq->data, sq->dma_handle);
     kfree(sq->completion_data);
     kfree(sq);
 }
-EXPORT_SYMBOL_GPL(bce_free_sq);
+EXPORT_SYMBOL_GPL(t2bce_dma_free_sq);
 
-int bce_reserve_submission(struct bce_queue_sq *sq, unsigned long *timeout)
+int t2bce_dma_reserve_submission(struct bce_queue_sq *sq, unsigned long *timeout)
 {
     while (atomic_dec_if_positive(&sq->available_commands) < 0) {
         if (!timeout || !*timeout)
@@ -229,29 +229,29 @@ int bce_reserve_submission(struct bce_queue_sq *sq, unsigned long *timeout)
     }
     return 0;
 }
-EXPORT_SYMBOL_GPL(bce_reserve_submission);
+EXPORT_SYMBOL_GPL(t2bce_dma_reserve_submission);
 
-void bce_cancel_submission_reservation(struct bce_queue_sq *sq)
+void t2bce_dma_cancel_submission_reservation(struct bce_queue_sq *sq)
 {
     atomic_inc(&sq->available_commands);
 }
-EXPORT_SYMBOL_GPL(bce_cancel_submission_reservation);
+EXPORT_SYMBOL_GPL(t2bce_dma_cancel_submission_reservation);
 
-static void *bce_next_submission(struct bce_queue_sq *sq)
+static void *t2bce_dma_next_submission(struct bce_queue_sq *sq)
 {
-    void *ret = bce_sq_element(sq, sq->tail);
+    void *ret = t2bce_dma_sq_element(sq, sq->tail);
     sq->tail = (sq->tail + 1) % sq->el_count;
     return ret;
 }
 
-void bce_submit_to_device(struct bce_queue_sq *sq)
+void t2bce_dma_submit_to_device(struct bce_queue_sq *sq)
 {
     mb();
     iowrite32(sq->tail, (u32 *) ((u8 *) sq->reg_mem_dma +  REG_DOORBELL_BASE) + sq->qid);
 }
-EXPORT_SYMBOL_GPL(bce_submit_to_device);
+EXPORT_SYMBOL_GPL(t2bce_dma_submit_to_device);
 
-void bce_notify_submission_complete(struct bce_queue_sq *sq)
+void t2bce_dma_notify_submission_complete(struct bce_queue_sq *sq)
 {
     sq->head = (sq->head + 1) % sq->el_count;
     atomic_inc(&sq->available_commands);
@@ -259,9 +259,9 @@ void bce_notify_submission_complete(struct bce_queue_sq *sq)
         complete(&sq->available_command_completion);
     }
 }
-EXPORT_SYMBOL_GPL(bce_notify_submission_complete);
+EXPORT_SYMBOL_GPL(t2bce_dma_notify_submission_complete);
 
-static void bce_write_submission(struct bce_qe_submission *element, const struct bce_submission *submission)
+static void t2bce_dma_write_submission(struct bce_qe_submission *element, const struct bce_submission *submission)
 {
     switch (submission->type) {
     case BCE_SUBMISSION_SINGLE:
@@ -279,7 +279,7 @@ static void bce_write_submission(struct bce_qe_submission *element, const struct
     }
 }
 
-void bce_set_next_submission_single(struct bce_queue_sq *sq, dma_addr_t addr, size_t size)
+void t2bce_dma_set_next_submission_single(struct bce_queue_sq *sq, dma_addr_t addr, size_t size)
 {
     struct bce_submission submission = {
         .type = BCE_SUBMISSION_SINGLE,
@@ -289,19 +289,19 @@ void bce_set_next_submission_single(struct bce_queue_sq *sq, dma_addr_t addr, si
         },
     };
 
-    bce_write_submission(bce_next_submission(sq), &submission);
+    t2bce_dma_write_submission(t2bce_dma_next_submission(sq), &submission);
 }
-EXPORT_SYMBOL_GPL(bce_set_next_submission_single);
+EXPORT_SYMBOL_GPL(t2bce_dma_set_next_submission_single);
 
-static void bce_cmdq_completion(struct bce_queue_sq *q);
+static void t2bce_dma_cmdq_completion(struct bce_queue_sq *q);
 
-struct bce_queue_cmdq *bce_alloc_cmdq(struct t2bce_dma_engine *dma, int qid, u32 el_count)
+struct bce_queue_cmdq *t2bce_dma_alloc_cmdq(struct t2bce_dma_engine *dma, int qid, u32 el_count)
 {
     struct bce_queue_cmdq *q;
     q = kzalloc(sizeof(struct bce_queue_cmdq), GFP_KERNEL);
     if (!q)
         return NULL;
-    q->sq = bce_alloc_sq(dma, qid, BCE_CMD_SIZE, el_count, bce_cmdq_completion, q);
+    q->sq = t2bce_dma_alloc_sq(dma, qid, BCE_CMD_SIZE, el_count, t2bce_dma_cmdq_completion, q);
     if (!q->sq) {
         kfree(q);
         return NULL;
@@ -309,38 +309,38 @@ struct bce_queue_cmdq *bce_alloc_cmdq(struct t2bce_dma_engine *dma, int qid, u32
     spin_lock_init(&q->lck);
     q->tres = kzalloc(sizeof(struct bce_queue_cmdq_result_el*) * el_count, GFP_KERNEL);
     if (!q->tres) {
-        bce_free_sq(dma, q->sq);
+        t2bce_dma_free_sq(dma, q->sq);
         kfree(q);
         return NULL;
     }
     q->slot_gen = kzalloc(sizeof(u32) * el_count, GFP_KERNEL);
     if (!q->slot_gen) {
         kfree(q->tres);
-        bce_free_sq(dma, q->sq);
+        t2bce_dma_free_sq(dma, q->sq);
         kfree(q);
         return NULL;
     }
     return q;
 }
-EXPORT_SYMBOL_GPL(bce_alloc_cmdq);
+EXPORT_SYMBOL_GPL(t2bce_dma_alloc_cmdq);
 
-void bce_free_cmdq(struct t2bce_dma_engine *dma, struct bce_queue_cmdq *cmdq)
+void t2bce_dma_free_cmdq(struct t2bce_dma_engine *dma, struct bce_queue_cmdq *cmdq)
 {
-    bce_free_sq(dma, cmdq->sq);
+    t2bce_dma_free_sq(dma, cmdq->sq);
     kfree(cmdq->slot_gen);
     kfree(cmdq->tres);
     kfree(cmdq);
 }
-EXPORT_SYMBOL_GPL(bce_free_cmdq);
+EXPORT_SYMBOL_GPL(t2bce_dma_free_cmdq);
 
-void bce_cmdq_completion(struct bce_queue_sq *q)
+void t2bce_dma_cmdq_completion(struct bce_queue_sq *q)
 {
     struct bce_queue_cmdq_result_el *el;
     struct bce_queue_cmdq *cmdq = q->userdata;
     struct bce_sq_completion_data *result;
 
     spin_lock(&cmdq->lck);
-    while ((result = bce_next_completion(q))) {
+    while ((result = t2bce_dma_next_completion(q))) {
         el = cmdq->tres[cmdq->sq->head];
         if (el && el->generation == cmdq->slot_gen[cmdq->sq->head]) {
             el->result = result->result;
@@ -349,12 +349,12 @@ void bce_cmdq_completion(struct bce_queue_sq *q)
             complete(&el->cmpl);
         }
         cmdq->tres[cmdq->sq->head] = NULL;
-        bce_notify_submission_complete(q);
+        t2bce_dma_notify_submission_complete(q);
     }
     spin_unlock(&cmdq->lck);
 }
 
-static __always_inline void *bce_cmd_start(struct bce_queue_cmdq *cmdq, struct bce_queue_cmdq_result_el *res)
+static __always_inline void *t2bce_dma_cmd_start(struct bce_queue_cmdq *cmdq, struct bce_queue_cmdq_result_el *res)
 {
     void *ret;
     unsigned long timeout;
@@ -362,20 +362,20 @@ static __always_inline void *bce_cmd_start(struct bce_queue_cmdq *cmdq, struct b
     mb();
 
     timeout = msecs_to_jiffies(1000L * 60 * 5); /* wait for up to ~5 minutes */
-    if (bce_reserve_submission(cmdq->sq, &timeout))
+    if (t2bce_dma_reserve_submission(cmdq->sq, &timeout))
         return NULL;
 
     spin_lock(&cmdq->lck);
     res->slot = cmdq->sq->tail;
     res->generation = cmdq->slot_gen[cmdq->sq->tail];
     cmdq->tres[cmdq->sq->tail] = res;
-    ret = bce_next_submission(cmdq->sq);
+    ret = t2bce_dma_next_submission(cmdq->sq);
     return ret;
 }
 
-static __always_inline int bce_cmd_finish(struct bce_queue_cmdq *cmdq, struct bce_queue_cmdq_result_el *res)
+static __always_inline int t2bce_dma_cmd_finish(struct bce_queue_cmdq *cmdq, struct bce_queue_cmdq_result_el *res)
 {
-    bce_submit_to_device(cmdq->sq);
+    t2bce_dma_submit_to_device(cmdq->sq);
     spin_unlock(&cmdq->lck);
 
     if (!wait_for_completion_timeout(&res->cmpl, msecs_to_jiffies(5000))) {
@@ -384,17 +384,17 @@ static __always_inline int bce_cmd_finish(struct bce_queue_cmdq *cmdq, struct bc
         cmdq->tres[res->slot] = NULL;
         cmdq->slot_gen[res->slot]++;
         spin_unlock(&cmdq->lck);
-        bce_notify_submission_complete(cmdq->sq);
+        t2bce_dma_notify_submission_complete(cmdq->sq);
         return -ETIMEDOUT;
     }
     mb();
     return 0;
 }
 
-u32 bce_cmd_register_queue(struct bce_queue_cmdq *cmdq, struct bce_queue_memcfg *cfg, const char *name, bool isdirout)
+u32 t2bce_dma_cmd_register_queue(struct bce_queue_cmdq *cmdq, struct bce_queue_memcfg *cfg, const char *name, bool isdirout)
 {
     struct bce_queue_cmdq_result_el res;
-    struct bce_cmdq_register_memory_queue_cmd *cmd = bce_cmd_start(cmdq, &res);
+    struct bce_cmdq_register_memory_queue_cmd *cmd = t2bce_dma_cmd_start(cmdq, &res);
     if (!cmd)
         return (u32) -1;
     cmd->cmd = BCE_CMD_REGISTER_MEMORY_QUEUE;
@@ -412,43 +412,43 @@ u32 bce_cmd_register_queue(struct bce_queue_cmdq *cmdq, struct bce_queue_memcfg 
     cmd->addr = cfg->addr;
     cmd->length = cfg->length;
 
-    if (bce_cmd_finish(cmdq, &res))
+    if (t2bce_dma_cmd_finish(cmdq, &res))
         return (u32)-1;
     return res.status;
 }
-EXPORT_SYMBOL_GPL(bce_cmd_register_queue);
+EXPORT_SYMBOL_GPL(t2bce_dma_cmd_register_queue);
 
-u32 bce_cmd_unregister_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid)
+u32 t2bce_dma_cmd_unregister_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid)
 {
     struct bce_queue_cmdq_result_el res;
-    struct bce_cmdq_simple_memory_queue_cmd *cmd = bce_cmd_start(cmdq, &res);
+    struct bce_cmdq_simple_memory_queue_cmd *cmd = t2bce_dma_cmd_start(cmdq, &res);
     if (!cmd)
         return (u32) -1;
     cmd->cmd = BCE_CMD_UNREGISTER_MEMORY_QUEUE;
     cmd->flags = 0;
     cmd->qid = qid;
-    if (bce_cmd_finish(cmdq, &res))
+    if (t2bce_dma_cmd_finish(cmdq, &res))
         return (u32)-1;
     return res.status;
 }
-EXPORT_SYMBOL_GPL(bce_cmd_unregister_memory_queue);
+EXPORT_SYMBOL_GPL(t2bce_dma_cmd_unregister_memory_queue);
 
-u32 bce_cmd_flush_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid)
+u32 t2bce_dma_cmd_flush_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid)
 {
     struct bce_queue_cmdq_result_el res;
-    struct bce_cmdq_simple_memory_queue_cmd *cmd = bce_cmd_start(cmdq, &res);
+    struct bce_cmdq_simple_memory_queue_cmd *cmd = t2bce_dma_cmd_start(cmdq, &res);
     if (!cmd)
         return (u32) -1;
     cmd->cmd = BCE_CMD_FLUSH_MEMORY_QUEUE;
     cmd->flags = 0;
     cmd->qid = qid;
-    if (bce_cmd_finish(cmdq, &res))
+    if (t2bce_dma_cmd_finish(cmdq, &res))
         return (u32)-1;
     return res.status;
 }
-EXPORT_SYMBOL_GPL(bce_cmd_flush_memory_queue);
+EXPORT_SYMBOL_GPL(t2bce_dma_cmd_flush_memory_queue);
 
-static int bce_register_queue(struct t2bce_dma_engine *dma, struct bce_queue_memcfg *cfg,
+static int t2bce_dma_register_queue(struct t2bce_dma_engine *dma, struct bce_queue_memcfg *cfg,
         const char *name, bool isdirout)
 {
     if (!dma->ops || !dma->ops->register_queue)
@@ -457,7 +457,7 @@ static int bce_register_queue(struct t2bce_dma_engine *dma, struct bce_queue_mem
     return dma->ops->register_queue(dma->ops_userdata, cfg, name, isdirout);
 }
 
-static int bce_unregister_queue(struct t2bce_dma_engine *dma, u16 qid)
+static int t2bce_dma_unregister_queue(struct t2bce_dma_engine *dma, u16 qid)
 {
     if (!dma->ops || !dma->ops->unregister_queue)
         return -ENODEV;
@@ -465,7 +465,7 @@ static int bce_unregister_queue(struct t2bce_dma_engine *dma, u16 qid)
     return dma->ops->unregister_queue(dma->ops_userdata, qid);
 }
 
-static int bce_flush_queue(struct t2bce_dma_engine *dma, u16 qid)
+static int t2bce_dma_flush_queue(struct t2bce_dma_engine *dma, u16 qid)
 {
     if (!dma->ops || !dma->ops->flush_queue)
         return -ENODEV;
@@ -474,7 +474,7 @@ static int bce_flush_queue(struct t2bce_dma_engine *dma, u16 qid)
 }
 
 
-struct bce_queue_cq *bce_create_cq(struct t2bce_dma_engine *dma, u32 el_count)
+struct bce_queue_cq *t2bce_dma_create_cq(struct t2bce_dma_engine *dma, u32 el_count)
 {
     struct bce_queue_cq *cq;
     struct bce_queue_memcfg cfg;
@@ -485,13 +485,13 @@ struct bce_queue_cq *bce_create_cq(struct t2bce_dma_engine *dma, u32 el_count)
 #endif
     if (qid < 0)
         return NULL;
-    cq = bce_alloc_cq(dma, qid, el_count);
+    cq = t2bce_dma_alloc_cq(dma, qid, el_count);
     if (!cq)
         return NULL;
-    bce_get_cq_memcfg(cq, &cfg);
-    if (bce_register_queue(dma, &cfg, NULL, false) != 0) {
+    t2bce_dma_get_cq_memcfg(cq, &cfg);
+    if (t2bce_dma_register_queue(dma, &cfg, NULL, false) != 0) {
         pr_err("t2bce_dma: CQ registration failed (%i)", qid);
-        bce_free_cq(dma, cq);
+        t2bce_dma_free_cq(dma, cq);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,18,0)
         ida_simple_remove(&dma->queue_ida, (uint) qid);
 #else
@@ -502,9 +502,9 @@ struct bce_queue_cq *bce_create_cq(struct t2bce_dma_engine *dma, u32 el_count)
     dma->queues[qid] = (struct bce_queue *) cq;
     return cq;
 }
-EXPORT_SYMBOL_GPL(bce_create_cq);
+EXPORT_SYMBOL_GPL(t2bce_dma_create_cq);
 
-struct bce_queue_sq *bce_create_sq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name, u32 el_count,
+struct bce_queue_sq *t2bce_dma_create_sq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name, u32 el_count,
         int direction, bce_sq_completion compl, void *userdata)
 {
     struct bce_queue_sq *sq;
@@ -523,13 +523,13 @@ struct bce_queue_sq *bce_create_sq(struct t2bce_dma_engine *dma, struct bce_queu
 #endif
     if (qid < 0)
         return NULL;
-    sq = bce_alloc_sq(dma, qid, sizeof(struct bce_qe_submission), el_count, compl, userdata);
+    sq = t2bce_dma_alloc_sq(dma, qid, sizeof(struct bce_qe_submission), el_count, compl, userdata);
     if (!sq)
         return NULL;
-    bce_get_sq_memcfg(sq, cq, &cfg);
-    if (bce_register_queue(dma, &cfg, name, direction != DMA_FROM_DEVICE) != 0) {
+    t2bce_dma_get_sq_memcfg(sq, cq, &cfg);
+    if (t2bce_dma_register_queue(dma, &cfg, name, direction != DMA_FROM_DEVICE) != 0) {
         pr_err("t2bce_dma: SQ registration failed (%i)", qid);
-        bce_free_sq(dma, sq);
+        t2bce_dma_free_sq(dma, sq);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,18,0)
         ida_simple_remove(&dma->queue_ida, (uint) qid);
 #else
@@ -542,19 +542,19 @@ struct bce_queue_sq *bce_create_sq(struct t2bce_dma_engine *dma, struct bce_queu
     spin_unlock(&dma->queues_lock);
     return sq;
 }
-EXPORT_SYMBOL_GPL(bce_create_sq);
+EXPORT_SYMBOL_GPL(t2bce_dma_create_sq);
 
-struct bce_queue_sq *bce_create_sq_with_flags(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name,
+struct bce_queue_sq *t2bce_dma_create_sq_with_flags(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name,
         u32 el_count, u16 flags, bce_sq_completion compl, void *userdata)
 {
     int direction = (flags & 1) ? DMA_TO_DEVICE : DMA_FROM_DEVICE;
-    return bce_create_sq(dma, cq, name, el_count, direction, compl, userdata);
+    return t2bce_dma_create_sq(dma, cq, name, el_count, direction, compl, userdata);
 }
-EXPORT_SYMBOL_GPL(bce_create_sq_with_flags);
+EXPORT_SYMBOL_GPL(t2bce_dma_create_sq_with_flags);
 
-void bce_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq)
+void t2bce_dma_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq)
 {
-    if (!dma->is_being_removed && bce_unregister_queue(dma, (u16) cq->qid))
+    if (!dma->is_being_removed && t2bce_dma_unregister_queue(dma, (u16) cq->qid))
         pr_err("t2bce_dma: CQ unregister failed");
     spin_lock(&dma->queues_lock);
     dma->queues[cq->qid] = NULL;
@@ -564,13 +564,13 @@ void bce_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq)
 #else
     ida_free(&dma->queue_ida, (uint) cq->qid);
 #endif
-    bce_free_cq(dma, cq);
+    t2bce_dma_free_cq(dma, cq);
 }
-EXPORT_SYMBOL_GPL(bce_destroy_cq);
+EXPORT_SYMBOL_GPL(t2bce_dma_destroy_cq);
 
-void bce_destroy_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
+void t2bce_dma_destroy_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
 {
-    if (!dma->is_being_removed && bce_unregister_queue(dma, (u16) sq->qid))
+    if (!dma->is_being_removed && t2bce_dma_unregister_queue(dma, (u16) sq->qid))
         pr_err("t2bce_dma: SQ unregister failed");
     spin_lock(&dma->queues_lock);
     dma->queues[sq->qid] = NULL;
@@ -580,15 +580,15 @@ void bce_destroy_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
 #else
     ida_free(&dma->queue_ida, (uint) sq->qid);
 #endif
-    bce_free_sq(dma, sq);
+    t2bce_dma_free_sq(dma, sq);
 }
-EXPORT_SYMBOL_GPL(bce_destroy_sq);
+EXPORT_SYMBOL_GPL(t2bce_dma_destroy_sq);
 
-int bce_flush_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
+int t2bce_dma_flush_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
 {
-    return bce_flush_queue(dma, (u16) sq->qid);
+    return t2bce_dma_flush_queue(dma, (u16) sq->qid);
 }
-EXPORT_SYMBOL_GPL(bce_flush_sq);
+EXPORT_SYMBOL_GPL(t2bce_dma_flush_sq);
 
 static int __init t2bce_dma_module_init(void)
 {

@@ -280,13 +280,13 @@ void t2bce_core_notify_resume_complete(struct t2bce_device *bce)
 
 struct t2bce_core_queue_cq *t2bce_core_create_cq(struct t2bce_core_client *client, u32 el_count)
 {
-    return to_t2bce_cq(bce_create_cq(&client->bce->dma, el_count));
+    return to_t2bce_cq(t2bce_dma_create_cq(&client->bce->dma, el_count));
 }
 EXPORT_SYMBOL_GPL(t2bce_core_create_cq);
 
 void t2bce_core_destroy_cq(struct t2bce_core_client *client, struct t2bce_core_queue_cq *cq)
 {
-    bce_destroy_cq(&client->bce->dma, to_bce_cq(cq));
+    t2bce_dma_destroy_cq(&client->bce->dma, to_bce_cq(cq));
 }
 EXPORT_SYMBOL_GPL(t2bce_core_destroy_cq);
 
@@ -304,7 +304,7 @@ struct t2bce_core_queue_sq *t2bce_core_create_sq(struct t2bce_core_client *clien
     ctx->completion = compl;
     ctx->userdata = userdata;
 
-    sq = bce_create_sq(&client->bce->dma, to_bce_cq(cq), name, el_count, direction,
+    sq = t2bce_dma_create_sq(&client->bce->dma, to_bce_cq(cq), name, el_count, direction,
             t2bce_sq_completion_adapter, ctx);
     if (!sq) {
         kfree(ctx);
@@ -320,7 +320,7 @@ void t2bce_core_destroy_sq(struct t2bce_core_client *client, struct t2bce_core_q
     struct bce_queue_sq *bce_sq = to_bce_sq(sq);
     struct t2bce_sq_ctx *ctx = bce_sq->userdata;
 
-    bce_destroy_sq(&client->bce->dma, bce_sq);
+    t2bce_dma_destroy_sq(&client->bce->dma, bce_sq);
     kfree(ctx);
 }
 EXPORT_SYMBOL_GPL(t2bce_core_destroy_sq);
@@ -335,37 +335,37 @@ EXPORT_SYMBOL_GPL(t2bce_core_queue_sq_userdata);
 
 int t2bce_core_reserve_submission(struct t2bce_core_queue_sq *sq, unsigned long *timeout)
 {
-    return bce_reserve_submission(to_bce_sq(sq), timeout);
+    return t2bce_dma_reserve_submission(to_bce_sq(sq), timeout);
 }
 EXPORT_SYMBOL_GPL(t2bce_core_reserve_submission);
 
 void t2bce_core_cancel_submission_reservation(struct t2bce_core_queue_sq *sq)
 {
-    bce_cancel_submission_reservation(to_bce_sq(sq));
+    t2bce_dma_cancel_submission_reservation(to_bce_sq(sq));
 }
 EXPORT_SYMBOL_GPL(t2bce_core_cancel_submission_reservation);
 
 void t2bce_core_set_next_submission_single(struct t2bce_core_queue_sq *sq, dma_addr_t addr, size_t size)
 {
-    bce_set_next_submission_single(to_bce_sq(sq), addr, size);
+    t2bce_dma_set_next_submission_single(to_bce_sq(sq), addr, size);
 }
 EXPORT_SYMBOL_GPL(t2bce_core_set_next_submission_single);
 
 void t2bce_core_submit_to_device(struct t2bce_core_queue_sq *sq)
 {
-    bce_submit_to_device(to_bce_sq(sq));
+    t2bce_dma_submit_to_device(to_bce_sq(sq));
 }
 EXPORT_SYMBOL_GPL(t2bce_core_submit_to_device);
 
 void t2bce_core_notify_submission_complete(struct t2bce_core_queue_sq *sq)
 {
-    bce_notify_submission_complete(to_bce_sq(sq));
+    t2bce_dma_notify_submission_complete(to_bce_sq(sq));
 }
 EXPORT_SYMBOL_GPL(t2bce_core_notify_submission_complete);
 
 struct t2bce_core_sq_completion_data *t2bce_core_next_completion(struct t2bce_core_queue_sq *sq)
 {
-    return (struct t2bce_core_sq_completion_data *) bce_next_completion(to_bce_sq(sq));
+    return (struct t2bce_core_sq_completion_data *) t2bce_dma_next_completion(to_bce_sq(sq));
 }
 EXPORT_SYMBOL_GPL(t2bce_core_next_completion);
 
@@ -395,6 +395,6 @@ EXPORT_SYMBOL_GPL(t2bce_core_queue_sq_capacity);
 
 int t2bce_core_flush_queue(struct t2bce_core_client *client, struct t2bce_core_queue_sq *sq)
 {
-    return bce_flush_sq(&client->bce->dma, to_bce_sq(sq));
+    return t2bce_dma_flush_sq(&client->bce->dma, to_bce_sq(sq));
 }
 EXPORT_SYMBOL_GPL(t2bce_core_flush_queue);
