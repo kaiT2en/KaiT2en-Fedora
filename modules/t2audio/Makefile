@@ -3,10 +3,10 @@ obj-m += $(modname).o
 
 t2audio-objs := audio.o protocol.o protocol_bce.o pcm.o
 
-T2BCE_SRC ?= ../t2bce
+T2BCE_CORE_SRC ?= ../t2bce-core
 MY_CFLAGS += -DWITHOUT_NVME_PATCH
 ccflags-y += ${MY_CFLAGS}
-ccflags-y += -I$(src) -I$(src)/$(T2BCE_SRC)/include
+ccflags-y += -I$(src) -I$(src)/$(T2BCE_CORE_SRC)/include
 CC += ${MY_CFLAGS}
 
 KVERSION := $(KERNELRELEASE)
@@ -17,10 +17,10 @@ endif
 KDIR := /lib/modules/$(KVERSION)/build
 MODDEST ?= /lib/modules/$(KVERSION)/updates
 PWD := $(shell pwd)
-T2BCE_SYMBOLS := $(abspath $(PWD)/$(T2BCE_SRC)/Module.symvers)
+T2BCE_CORE_SYMBOLS := $(abspath $(PWD)/$(T2BCE_CORE_SRC)/Module.symvers)
 
-ifneq ($(wildcard $(T2BCE_SYMBOLS)),)
-KBUILD_EXTRA_SYMBOLS += $(T2BCE_SYMBOLS)
+ifneq ($(wildcard $(T2BCE_CORE_SYMBOLS)),)
+KBUILD_EXTRA_SYMBOLS += $(T2BCE_CORE_SYMBOLS)
 endif
 
 .PHONY: all clean install

@@ -1,5 +1,5 @@
-#ifndef T2DMA_QUEUE_H
-#define T2DMA_QUEUE_H
+#ifndef T2BCE_DMA_QUEUE_H
+#define T2BCE_DMA_QUEUE_H
 
 #include <linux/completion.h>
 #include <linux/pci.h>

@@ -1,7 +1,7 @@
-modname := t2dma
+modname := t2bce-dma
 obj-m += $(modname).o
 
-t2dma-objs := queue.o
+t2bce-dma-objs := queue.o
 
 MY_CFLAGS += -DWITHOUT_NVME_PATCH
 ccflags-y += ${MY_CFLAGS}
@@ -27,7 +27,7 @@ clean:
 	find $(PWD) -ignore_readdir_race -type f \( -name '*.o' -o -name '*.ko' -o -name '*.mod' -o -name '*.mod.c' -o -name '.*.cmd' -o -name 'Module.symvers' -o -name 'modules.order' \) -delete
 
 install:
-	@test -f t2dma.ko || { echo "t2dma.ko not found; run make first"; exit 1; }
+	@test -f t2bce-dma.ko || { echo "t2bce-dma.ko not found; run make first"; exit 1; }
 	install -d -o root -g root -m 0755 $(MODDEST)
-	install -o root -g root -m 0644 t2dma.ko $(MODDEST)/t2dma.ko
+	install -o root -g root -m 0644 t2bce-dma.ko $(MODDEST)/t2bce-dma.ko
 	depmod -a $(KVERSION)

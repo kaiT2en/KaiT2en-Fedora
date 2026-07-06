@@ -1277,6 +1277,6 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("André Eikmeyer <andre.eikmeyer@gmail.com>");
 MODULE_DESCRIPTION("Apple T2 BCE VHCI Driver");
 MODULE_VERSION("0.01");
-MODULE_SOFTDEP("pre: t2bce");
+MODULE_SOFTDEP("pre: t2bce-core");
 module_init(bce_vhci_module_init);
 module_exit(bce_vhci_module_exit);

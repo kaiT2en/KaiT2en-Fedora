@@ -8,8 +8,8 @@ require_fedora
 require_command dkms make install rm chown mktemp depmod sed tar find
 
 MODULES=(
-	t2dma
-	t2bce
+	t2bce-dma
+	t2bce-core
 	t2vhci
 	t2audio
 	t2smc
@@ -19,6 +19,11 @@ MODULES=(
 	t2mfi_fastcharge
 	t2gmux
 	t2thunderbolt
+)
+
+LEGACY_MODULES=(
+	t2dma
+	t2bce
 )
 
 DKMS_POST_TRANSACTION_OVERRIDE="/etc/dkms/framework.conf.d/kait2en-disable-post-transaction.conf"
@@ -35,6 +40,24 @@ disable_dkms_post_transaction() {
 	install -o root -g root -m 0644 "$tmp" "$DKMS_POST_TRANSACTION_OVERRIDE"
 	rm -f "$tmp"
 	trap restore_dkms_post_transaction EXIT
+}
+
+remove_dkms_module_versions() {
+	local name=$1 version
+
+	while IFS= read -r version; do
+		[[ -n "$version" ]] || continue
+		info "removing legacy DKMS module $name/$version"
+		dkms remove --no-depmod -m "$name" -v "$version" --all >/dev/null 2>&1 || true
+	done < <(dkms status -m "$name" 2>/dev/null | sed -n "s|^$name/\\([^,]*\\),.*|\\1|p")
+}
+
+remove_legacy_dkms_modules() {
+	local module
+
+	for module in "${LEGACY_MODULES[@]}"; do
+		remove_dkms_module_versions "$module"
+	done
 }
 
 copy_module_source() {
@@ -59,38 +82,38 @@ copy_module_source() {
 		--exclude='modules.order' \
 		-cf - . | tar -C "$dst" -xf -
 
-	if [[ "$name" == "t2bce" ]]; then
-		local t2dma_version t2dma_symvers
+	if [[ "$name" == "t2bce-core" ]]; then
+		local t2bce_dma_version t2bce_dma_symvers
 
-		t2dma_version="$(sed -n 's/^PACKAGE_VERSION="\([^"]*\)".*/\1/p' "$REPO_ROOT/modules/t2dma/dkms.conf")"
-		[[ -n "$t2dma_version" ]] || fail "missing PACKAGE_VERSION in $REPO_ROOT/modules/t2dma/dkms.conf"
-		t2dma_symvers="$(find "/var/lib/dkms/t2dma/$t2dma_version/$(kernel_release)" -path '*/module/Module.symvers' -print -quit 2>/dev/null || true)"
-		[[ -f "$t2dma_symvers" ]] || fail "missing t2dma Module.symvers; build t2dma before t2bce"
+		t2bce_dma_version="$(sed -n 's/^PACKAGE_VERSION="\([^"]*\)".*/\1/p' "$REPO_ROOT/modules/t2bce-dma/dkms.conf")"
+		[[ -n "$t2bce_dma_version" ]] || fail "missing PACKAGE_VERSION in $REPO_ROOT/modules/t2bce-dma/dkms.conf"
+		t2bce_dma_symvers="$(find "/var/lib/dkms/t2bce-dma/$t2bce_dma_version/$(kernel_release)" -path '*/module/Module.symvers' -print -quit 2>/dev/null || true)"
+		[[ -f "$t2bce_dma_symvers" ]] || fail "missing t2bce-dma Module.symvers; build t2bce-dma before t2bce-core"
 
-		info "copying t2dma interface into $dst/t2dma for t2bce build"
-		install -d -o root -g root -m 0755 "$dst/t2dma"
-		install -d -o root -g root -m 0755 "$dst/t2dma/include"
-		tar -C "$REPO_ROOT/modules/t2dma/include" \
+		info "copying t2bce-dma interface into $dst/t2bce-dma for t2bce-core build"
+		install -d -o root -g root -m 0755 "$dst/t2bce-dma"
+		install -d -o root -g root -m 0755 "$dst/t2bce-dma/include"
+		tar -C "$REPO_ROOT/modules/t2bce-dma/include" \
 			--exclude='.git' \
-			-cf - . | tar -C "$dst/t2dma/include" -xf -
-		install -o root -g root -m 0644 "$t2dma_symvers" "$dst/t2dma/Module.symvers"
+			-cf - . | tar -C "$dst/t2bce-dma/include" -xf -
+		install -o root -g root -m 0644 "$t2bce_dma_symvers" "$dst/t2bce-dma/Module.symvers"
 	fi
 
 	if [[ "$name" == "t2audio" || "$name" == "t2vhci" ]]; then
-		local t2bce_version t2bce_symvers
+		local t2bce_core_version t2bce_core_symvers
 
-		t2bce_version="$(sed -n 's/^PACKAGE_VERSION="\([^"]*\)".*/\1/p' "$REPO_ROOT/modules/t2bce/dkms.conf")"
-		[[ -n "$t2bce_version" ]] || fail "missing PACKAGE_VERSION in $REPO_ROOT/modules/t2bce/dkms.conf"
-		t2bce_symvers="$(find "/var/lib/dkms/t2bce/$t2bce_version/$(kernel_release)" -path '*/module/Module.symvers' -print -quit 2>/dev/null || true)"
-		[[ -f "$t2bce_symvers" ]] || fail "missing t2bce Module.symvers; build t2bce before $name"
+		t2bce_core_version="$(sed -n 's/^PACKAGE_VERSION="\([^"]*\)".*/\1/p' "$REPO_ROOT/modules/t2bce-core/dkms.conf")"
+		[[ -n "$t2bce_core_version" ]] || fail "missing PACKAGE_VERSION in $REPO_ROOT/modules/t2bce-core/dkms.conf"
+		t2bce_core_symvers="$(find "/var/lib/dkms/t2bce-core/$t2bce_core_version/$(kernel_release)" -path '*/module/Module.symvers' -print -quit 2>/dev/null || true)"
+		[[ -f "$t2bce_core_symvers" ]] || fail "missing t2bce-core Module.symvers; build t2bce-core before $name"
 
-		info "copying t2bce interface into $dst/t2bce for $name build"
-		install -d -o root -g root -m 0755 "$dst/t2bce"
-		install -d -o root -g root -m 0755 "$dst/t2bce/include"
-		tar -C "$REPO_ROOT/modules/t2bce/include" \
+		info "copying t2bce-core interface into $dst/t2bce-core for $name build"
+		install -d -o root -g root -m 0755 "$dst/t2bce-core"
+		install -d -o root -g root -m 0755 "$dst/t2bce-core/include"
+		tar -C "$REPO_ROOT/modules/t2bce-core/include" \
 			--exclude='.git' \
-			-cf - . | tar -C "$dst/t2bce/include" -xf -
-		install -o root -g root -m 0644 "$t2bce_symvers" "$dst/t2bce/Module.symvers"
+			-cf - . | tar -C "$dst/t2bce-core/include" -xf -
+		install -o root -g root -m 0644 "$t2bce_core_symvers" "$dst/t2bce-core/Module.symvers"
 	fi
 
 	chown -R root:root "$dst"
@@ -112,6 +135,7 @@ install_module() {
 }
 
 disable_dkms_post_transaction
+remove_legacy_dkms_modules
 
 for module in "${MODULES[@]}"; do
 	install_module "$module"

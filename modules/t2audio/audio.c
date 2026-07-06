@@ -878,7 +878,7 @@ module_param_named(index, t2audio_alsa_index, int, 0444);
 MODULE_PARM_DESC(index, "Index value for Apple Internal Audio soundcard.");
 module_param_named(id, t2audio_alsa_id, charp, 0444);
 MODULE_PARM_DESC(id, "ID string for Apple Internal Audio soundcard.");
-MODULE_SOFTDEP("pre: t2bce");
+MODULE_SOFTDEP("pre: t2bce-core");
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("André Eikmeyer <andre.eikmeyer@gmail.com>");
 MODULE_DESCRIPTION("Apple T2 Audio Driver");
