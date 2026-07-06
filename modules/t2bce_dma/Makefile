@@ -1,14 +1,11 @@
-modname := t2bce-core
+modname := t2bce_dma
 obj-m += $(modname).o
 
-t2bce-core-objs := t2bce_main.o mailbox.o transport.o
+t2bce_dma-objs := queue.o
 
-T2BCE_DMA_SRC ?= ../t2bce-dma
 MY_CFLAGS += -DWITHOUT_NVME_PATCH
-#MY_CFLAGS += -g -DDEBUG
 ccflags-y += ${MY_CFLAGS}
 ccflags-y += -I$(src)/include
-ccflags-y += -I$(src)/$(T2BCE_DMA_SRC)/include
 CC += ${MY_CFLAGS}
 
 KVERSION := $(KERNELRELEASE)
@@ -19,11 +16,6 @@ endif
 KDIR := /lib/modules/$(KVERSION)/build
 MODDEST ?= /lib/modules/$(KVERSION)/updates
 PWD := $(shell pwd)
-T2BCE_DMA_SYMBOLS := $(abspath $(PWD)/$(T2BCE_DMA_SRC)/Module.symvers)
-
-ifneq ($(wildcard $(T2BCE_DMA_SYMBOLS)),)
-KBUILD_EXTRA_SYMBOLS += $(T2BCE_DMA_SYMBOLS)
-endif
 
 .PHONY: all clean install
 
@@ -35,7 +27,7 @@ clean:
 	find $(PWD) -ignore_readdir_race -type f \( -name '*.o' -o -name '*.ko' -o -name '*.mod' -o -name '*.mod.c' -o -name '.*.cmd' -o -name 'Module.symvers' -o -name 'modules.order' \) -delete
 
 install:
-	@test -f t2bce-core.ko || { echo "t2bce-core.ko not found; run make first"; exit 1; }
+	@test -f t2bce_dma.ko || { echo "t2bce_dma.ko not found; run make first"; exit 1; }
 	install -d -o root -g root -m 0755 $(MODDEST)
-	install -o root -g root -m 0644 t2bce-core.ko $(MODDEST)/t2bce-core.ko
+	install -o root -g root -m 0644 t2bce_dma.ko $(MODDEST)/t2bce_dma.ko
 	depmod -a $(KVERSION)

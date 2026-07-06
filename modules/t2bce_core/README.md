@@ -1,10 +1,10 @@
-# t2bce-core
+# t2bce_core
 
 Buffer Copy Engine fork for Intel Macs with a T2 chip with stateful and no-state resume support.
 
-`t2bce-core` owns the T2 BCE PCI device, mailbox, PM coordination, and client
-transport API. The shared DMA queue engine lives next to it in `modules/t2bce-dma`
-and must be built/loaded before `t2bce-core`.
+`t2bce_core` owns the T2 BCE PCI device, mailbox, PM coordination, and client
+transport API. The shared DMA queue engine lives next to it in `modules/t2bce_dma`
+and must be built/loaded before `t2bce_core`.
 
 ## Required kernel parameters
 
@@ -137,26 +137,26 @@ sudo systemctl enable 4377-suspend-fix.service
 
 ## Build and deploy
 
-Download the zip file and go into the extracted t2bce-core folder with terminal. Type
+Download the zip file and go into the extracted t2bce_core folder with terminal. Type
 
 ```bash
 make && sudo make install
 sudo depmod -a
 sudo reboot
 ```
-After reboot type `modinfo t2bce-core`. The output should show a version number > `0.04` and `author: André Eikmeyer <andre.eikmeyer@gmail.com>`
+After reboot type `modinfo t2bce_core`. The output should show a version number > `0.04` and `author: André Eikmeyer <andre.eikmeyer@gmail.com>`
  
 
 ## DKMS
 
-Install the source tree and register the module with DKMS (t2bce-core version 0.06 as example here):
+Install the source tree and register the module with DKMS (t2bce_core version 0.06 as example here):
 
 ```bash
 version=0.06
-sudo install -d "/usr/src/t2bce-core-${version}"
-git archive --format=tar HEAD | sudo tar -x -C "/usr/src/t2bce-core-${version}"
-sudo dkms add -m t2bce-core -v "${version}"
-sudo dkms install -m t2bce-core -v "${version}"
+sudo install -d "/usr/src/t2bce_core-${version}"
+git archive --format=tar HEAD | sudo tar -x -C "/usr/src/t2bce_core-${version}"
+sudo dkms add -m t2bce_core -v "${version}"
+sudo dkms install -m t2bce_core -v "${version}"
 ```
 
 DKMS will automatically rebuild the module for newly installed kernels.
@@ -164,8 +164,8 @@ DKMS will automatically rebuild the module for newly installed kernels.
 To remove the DKMS installation:
 
 ```bash
-sudo dkms remove -m t2bce-core -v 0.06 --all
-sudo rm -rf /usr/src/t2bce-core-0.06
+sudo dkms remove -m t2bce_core -v 0.06 --all
+sudo rm -rf /usr/src/t2bce_core-0.06
 ```
 
 ## Support

@@ -1,9 +1,9 @@
-modname := t2audio
+modname := t2bce_audio
 obj-m += $(modname).o
 
-t2audio-objs := audio.o protocol.o protocol_bce.o pcm.o
+t2bce_audio-objs := audio.o protocol.o protocol_bce.o pcm.o
 
-T2BCE_CORE_SRC ?= ../t2bce-core
+T2BCE_CORE_SRC ?= ../t2bce_core
 MY_CFLAGS += -DWITHOUT_NVME_PATCH
 ccflags-y += ${MY_CFLAGS}
 ccflags-y += -I$(src) -I$(src)/$(T2BCE_CORE_SRC)/include
@@ -32,7 +32,7 @@ clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
 
 install:
-	@test -f t2audio.ko || { echo "t2audio.ko not found; run make first"; exit 1; }
+	@test -f t2bce_audio.ko || { echo "t2bce_audio.ko not found; run make first"; exit 1; }
 	install -d -o root -g root -m 0755 $(MODDEST)
-	install -o root -g root -m 0644 t2audio.ko $(MODDEST)/t2audio.ko
+	install -o root -g root -m 0644 t2bce_audio.ko $(MODDEST)/t2bce_audio.ko
 	depmod -a $(KVERSION)

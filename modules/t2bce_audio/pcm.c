@@ -17,7 +17,7 @@ static u64 t2audio_get_alsa_fmtbit(struct t2audio_apple_description *desc)
             else
                 return SNDRV_PCM_FMTBIT_FLOAT64_LE;
         } else {
-            pr_err("t2audio: unsupported bits per channel for float format: %u\n", desc->bits_per_channel);
+            pr_err("t2bce_audio: unsupported bits per channel for float format: %u\n", desc->bits_per_channel);
             return 0;
         }
     }
@@ -42,7 +42,7 @@ static u64 t2audio_get_alsa_fmtbit(struct t2audio_apple_description *desc)
                 break;
             DEFINE_BPC_OPTION(24, 24_3)
             default:
-                pr_err("t2audio: unsupported bits per channel for packed format: %u\n", desc->bits_per_channel);
+                pr_err("t2bce_audio: unsupported bits per channel for packed format: %u\n", desc->bits_per_channel);
                 return 0;
         }
     }
@@ -50,7 +50,7 @@ static u64 t2audio_get_alsa_fmtbit(struct t2audio_apple_description *desc)
         switch (desc->bits_per_channel) {
             DEFINE_BPC_OPTION(24, 32_)
             default:
-                pr_err("t2audio: unsupported bits per channel for high-aligned format: %u\n", desc->bits_per_channel);
+                pr_err("t2bce_audio: unsupported bits per channel for high-aligned format: %u\n", desc->bits_per_channel);
                 return 0;
         }
     }
@@ -64,7 +64,7 @@ static u64 t2audio_get_alsa_fmtbit(struct t2audio_apple_description *desc)
         DEFINE_BPC_OPTION(24, 24_)
         DEFINE_BPC_OPTION(32, 32_)
         default:
-            pr_err("t2audio: unsupported bits per channel: %u\n", desc->bits_per_channel);
+            pr_err("t2bce_audio: unsupported bits per channel: %u\n", desc->bits_per_channel);
             return 0;
     }
 }
@@ -78,7 +78,7 @@ int t2audio_create_hw_info(struct t2audio_apple_description *desc, struct snd_pc
                      SNDRV_PCM_INFO_NO_PERIOD_WAKEUP |
                      SNDRV_PCM_INFO_DOUBLE);
     if (desc->format_flags & T2AUDIO_FORMAT_FLAG_NON_MIXABLE)
-        pr_warn("t2audio: unsupported hw flag: NON_MIXABLE\n");
+        pr_warn("t2bce_audio: unsupported hw flag: NON_MIXABLE\n");
     if (!(desc->format_flags & T2AUDIO_FORMAT_FLAG_NON_INTERLEAVED))
         alsa_hw->info |= SNDRV_PCM_INFO_INTERLEAVED;
     alsa_hw->formats = t2audio_get_alsa_fmtbit(desc);
@@ -166,7 +166,7 @@ static void t2audio_pcm_start(struct snd_pcm_substream *substream)
         buf = kmalloc(s, GFP_KERNEL);
         memcpy_fromio(buf, substream->runtime->dma_area, s);
         time_end = ktime_get();
-        pr_debug("t2audio: Backed up the buffer in %lluns [%li]\n", ktime_to_ns(time_end - time_start),
+        pr_debug("t2bce_audio: Backed up the buffer in %lluns [%li]\n", ktime_to_ns(time_end - time_start),
                 substream->runtime->control->appl_ptr);
     }
 
@@ -178,7 +178,7 @@ static void t2audio_pcm_start(struct snd_pcm_substream *substream)
         memcpy_toio(substream->runtime->dma_area, buf, s);
 
     time_end = ktime_get();
-    pr_debug("t2audio: Started the audio device in %lluns\n", ktime_to_ns(time_end - time_start));
+    pr_debug("t2bce_audio: Started the audio device in %lluns\n", ktime_to_ns(time_end - time_start));
 }
 
 static int t2audio_pcm_trigger(struct snd_pcm_substream *substream, int cmd)

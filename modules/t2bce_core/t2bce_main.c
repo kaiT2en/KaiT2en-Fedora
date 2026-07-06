@@ -65,11 +65,11 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
     int status = 0;
     int nvec;
 
-    pr_debug("t2bce-core: capturing our device\n");
+    pr_debug("t2bce_core: capturing our device\n");
 
     if (pci_enable_device(dev))
         return -ENODEV;
-    if (pci_request_regions(dev, "t2bce-core")) {
+    if (pci_request_regions(dev, "t2bce_core")) {
         status = -ENODEV;
         goto fail;
     }
@@ -90,7 +90,7 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
     pci_set_drvdata(dev, bce);
 
     bce->devt = bce_chrdev;
-    bce->dev = device_create(bce_class, &dev->dev, bce->devt, NULL, "t2bce-core");
+    bce->dev = device_create(bce_class, &dev->dev, bce->devt, NULL, "t2bce_core");
     if (IS_ERR_OR_NULL(bce->dev)) {
         status = PTR_ERR(bce->dev);
         goto fail;
@@ -100,7 +100,7 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
     bce->reg_mem_dma = pci_iomap(dev, 2, 0);
 
     if (IS_ERR_OR_NULL(bce->reg_mem_mb) || IS_ERR_OR_NULL(bce->reg_mem_dma)) {
-        dev_warn(&dev->dev, "t2bce-core: Failed to pci_iomap required regions\n");
+        dev_warn(&dev->dev, "t2bce_core: Failed to pci_iomap required regions\n");
         goto fail;
     }
 
@@ -140,7 +140,7 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
     bce->pci0 = pci_get_slot(dev->bus, PCI_DEVFN(PCI_SLOT(dev->devfn), 0));
 #ifndef WITHOUT_NVME_PATCH
     if ((status = pci_enable_device_mem(bce->pci0))) {
-        dev_warn(&dev->dev, "t2bce-core: failed to enable function 0\n");
+        dev_warn(&dev->dev, "t2bce_core: failed to enable function 0\n");
         goto fail_dev0;
     }
 #endif
@@ -151,15 +151,15 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
     if ((status = bce_fw_version_handshake(bce)))
         goto fail_ts;
-    pr_debug("t2bce-core: handshake done\n");
+    pr_debug("t2bce_core: handshake done\n");
 
     if ((status = bce_create_command_queues(bce))) {
-        pr_err("t2bce-core: Creating command queues failed\n");
+        pr_err("t2bce_core: Creating command queues failed\n");
         goto fail_ts;
     }
 
     global_bce = bce;
-    pr_info("t2bce-core: initialized\n");
+    pr_info("t2bce_core: initialized\n");
 
     return 0;
 
@@ -282,7 +282,7 @@ static int bce_fw_version_handshake(struct t2bce_device *bce)
     fw_version = (u32) BCE_MB_VALUE(result);
     if (BCE_MB_TYPE(result) != BCE_MB_SET_FW_PROTOCOL_VERSION ||
         fw_version > BC_PROTOCOL_VERSION) {
-        pr_err("t2bce-core: FW version handshake failed %x:%llx\n", BCE_MB_TYPE(result), BCE_MB_VALUE(result));
+        pr_err("t2bce_core: FW version handshake failed %x:%llx\n", BCE_MB_TYPE(result), BCE_MB_VALUE(result));
         return -EINVAL;
     }
     bce->fw_version = fw_version;
@@ -301,7 +301,7 @@ static int bce_pm_wait_mailbox_idle(struct t2bce_device *bce)
 
     while (atomic_read(&bce->mbox.mb_status) != 0) {
         if (!--retries) {
-            pr_err("t2bce-core: timeout waiting for BCE mailbox channel to quiesce\n");
+            pr_err("t2bce_core: timeout waiting for BCE mailbox channel to quiesce\n");
             return -ETIMEDOUT;
         }
         usleep_range(5000, 10000);
@@ -458,7 +458,7 @@ static void t2bce_shutdown(struct pci_dev *dev)
     if (bce->mailbox_channel_active) {
         status = bce_pm_channel_pause(bce);
         if (status)
-            pr_warn("t2bce-core: shutdown mailbox quiesce failed: %d\n", status);
+            pr_warn("t2bce_core: shutdown mailbox quiesce failed: %d\n", status);
     }
 
     mutex_unlock(&bce->pm_lock);
@@ -466,9 +466,9 @@ static void t2bce_shutdown(struct pci_dev *dev)
 
 static int bce_pm_suspend_fallback_no_state(struct t2bce_device *bce)
 {
-    pr_debug("t2bce-core: suspend: forcing SLEEP_NO_STATE (no reply expected)\n");
+    pr_debug("t2bce_core: suspend: forcing SLEEP_NO_STATE (no reply expected)\n");
     if (bce_mailbox_send_no_reply_locked(&bce->mbox, BCE_MB_MSG(BCE_MB_SLEEP_NO_STATE, 0))) {
-        pr_err("t2bce-core: suspend: SLEEP_NO_STATE send failed\n");
+        pr_err("t2bce_core: suspend: SLEEP_NO_STATE send failed\n");
         return -EIO;
     }
     return 0;
@@ -483,7 +483,7 @@ static int bce_pm_suspend_try_state(struct t2bce_device *bce)
     bce->stateful_suspend_valid = false;
 
     if (!bce->saved_data_dma_ptr || !bce->saved_data_dma_addr || !bce->saved_data_dma_size) {
-        pr_err("t2bce-core: suspend failed (persistent state buffer missing)\n");
+        pr_err("t2bce_core: suspend failed (persistent state buffer missing)\n");
         return -ENOMEM;
     }
 
@@ -493,18 +493,18 @@ static int bce_pm_suspend_try_state(struct t2bce_device *bce)
                     (bce->saved_data_dma_addr & ~(4096LLU - 1)) | (bce->saved_data_dma_size / 4096)),
             &resp);
     if (status) {
-        pr_err("t2bce-core: suspend failed (mailbox send)\n");
+        pr_err("t2bce_core: suspend failed (mailbox send)\n");
         return status;
     }
 
     if (BCE_MB_TYPE(resp) == BCE_MB_SAVE_RESTORE_STATE_COMPLETE) {
-        pr_debug("t2bce-core: suspend: remote response: restore state saved\n");
+        pr_debug("t2bce_core: suspend: remote response: restore state saved\n");
         bce->stateful_suspend_valid = true;
         return 0;
     }
 
     if (BCE_MB_TYPE(resp) == BCE_MB_SAVE_STATE_AND_SLEEP_REJECTED) {
-        pr_err("t2bce-core: remote rejected stateful suspend payload\n");
+        pr_err("t2bce_core: remote rejected stateful suspend payload\n");
         return -EAGAIN;
     }
     return -EINVAL;
@@ -516,11 +516,11 @@ static int bce_pm_resume_no_state(struct t2bce_device *bce)
     u64 resp;
 
     if ((status = bce_mailbox_send_locked(&bce->mbox, BCE_MB_MSG(BCE_MB_RESTORE_NO_STATE, 0), &resp))) {
-        pr_err("t2bce-core: resume with no state failed (mailbox send)\n");
+        pr_err("t2bce_core: resume with no state failed (mailbox send)\n");
         return status;
     }
     if (BCE_MB_TYPE(resp) != BCE_MB_RESTORE_NO_STATE) {
-        pr_err("t2bce-core: resume with no state failed (invalid device response)\n");
+        pr_err("t2bce_core: resume with no state failed (invalid device response)\n");
         return -EINVAL;
     }
     return 0;
@@ -533,11 +533,11 @@ static int bce_pm_resume_stateful(struct t2bce_device *bce)
 
     if ((status = bce_mailbox_send_locked(&bce->mbox, BCE_MB_MSG(BCE_MB_RESTORE_STATE_AND_WAKE,
             (bce->saved_data_dma_addr & ~(4096LLU - 1)) | (bce->saved_data_dma_size / 4096)), &resp))) {
-        pr_err("t2bce-core: resume with state failed (mailbox send)\n");
+        pr_err("t2bce_core: resume with state failed (mailbox send)\n");
         return status;
     }
     if (BCE_MB_TYPE(resp) != BCE_MB_SAVE_RESTORE_STATE_COMPLETE) {
-        pr_err("t2bce-core: resume with state failed (invalid device response)\n");
+        pr_err("t2bce_core: resume with state failed (invalid device response)\n");
         return -EINVAL;
     }
 
@@ -549,7 +549,7 @@ static int t2bce_suspend(struct device *dev)
     struct t2bce_device *bce = pci_get_drvdata(to_pci_dev(dev));
     int status;
 
-    pr_debug("t2bce-core: suspend: entry\n");
+    pr_debug("t2bce_core: suspend: entry\n");
     mutex_lock(&bce->pm_lock);
 
     bce->stateful_suspend_valid = false;
@@ -586,7 +586,7 @@ static int t2bce_suspend(struct device *dev)
     }
 
     /* Current Linux path treats the traced 0x19 not-ready reply as stateful reject. */
-    pr_debug("t2bce-core: suspend: stateful path not ready, falling back to no-state\n");
+    pr_debug("t2bce_core: suspend: stateful path not ready, falling back to no-state\n");
     t2bce_clients_pm_prepare_no_state(bce);
     status = bce_pm_suspend_fallback_no_state(bce);
     if (!status) {
@@ -599,7 +599,7 @@ static int t2bce_suspend(struct device *dev)
 
 out_unlock:
     mutex_unlock(&bce->pm_lock);
-    pr_info("t2bce-core: suspend: exit status=%d stateful_valid=%d no_state_resume=%d no_state_fallback=%d\n",
+    pr_info("t2bce_core: suspend: exit status=%d stateful_valid=%d no_state_resume=%d no_state_fallback=%d\n",
             status, bce->stateful_suspend_valid, bce->no_state_resume, bce->no_state_fallback);
     return status;
 }
@@ -610,7 +610,7 @@ static int t2bce_resume(struct device *dev)
     int status;
     bool used_stateful;
 
-    pr_debug("t2bce-core: resume: entry\n");
+    pr_debug("t2bce_core: resume: entry\n");
     mutex_lock(&bce->pm_lock);
 
     pci_set_master(bce->pci);
@@ -618,7 +618,7 @@ static int t2bce_resume(struct device *dev)
 
     /* Windows resumes from the suspend result, not a preselected mode. */
     used_stateful = bce_stateful_supported(bce) && bce->stateful_suspend_valid;
-    pr_debug("t2bce-core: resume path: %s\n", used_stateful ? "stateful" : "no-state");
+    pr_debug("t2bce_core: resume path: %s\n", used_stateful ? "stateful" : "no-state");
     if (used_stateful)
         status = bce_pm_resume_stateful(bce);
     else
@@ -633,7 +633,7 @@ static int t2bce_resume(struct device *dev)
 
 out_unlock:
     mutex_unlock(&bce->pm_lock);
-    pr_info("t2bce-core: resume: exit status=%d path=%s stateful_valid=%d no_state_resume=%d no_state_fallback=%d\n",
+    pr_info("t2bce_core: resume: exit status=%d path=%s stateful_valid=%d no_state_resume=%d no_state_fallback=%d\n",
             status, used_stateful ? "stateful" : "no-state",
             bce->stateful_suspend_valid, bce->no_state_resume, bce->no_state_fallback);
     return status;
@@ -653,7 +653,7 @@ static void t2bce_complete(struct device *dev)
 {
     struct t2bce_device *bce = pci_get_drvdata(to_pci_dev(dev));
 
-    pr_debug("t2bce-core: complete: entry no_state_fallback=%d no_state_resume=%d\n",
+    pr_debug("t2bce_core: complete: entry no_state_fallback=%d no_state_resume=%d\n",
             bce->no_state_fallback, bce->no_state_resume);
     if (bce->no_state_fallback && t2bce_clients_pm_has_no_state_resume(bce)) {
         t2bce_clients_pm_complete(bce);
@@ -662,7 +662,7 @@ static void t2bce_complete(struct device *dev)
 
     t2bce_notify_resume_complete(bce);
     bce->no_state_resume = false;
-    pr_debug("t2bce-core: complete: exit\n");
+    pr_debug("t2bce_core: complete: exit\n");
 }
 
 static struct pci_device_id t2bce_ids[  ] = {
@@ -679,7 +679,7 @@ struct dev_pm_ops t2bce_pci_driver_pm = {
         .complete = t2bce_complete
 };
 struct pci_driver t2bce_pci_driver = {
-        .name = "t2bce-core",
+        .name = "t2bce_core",
         .id_table = t2bce_ids,
         .probe = t2bce_probe,
         .remove = t2bce_remove,
@@ -694,12 +694,12 @@ static int __init t2bce_module_init(void)
 {
     int result;
 
-    if ((result = alloc_chrdev_region(&bce_chrdev, 0, 1, "t2bce-core")))
+    if ((result = alloc_chrdev_region(&bce_chrdev, 0, 1, "t2bce_core")))
         goto fail_chrdev;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,4,0)
-    bce_class = class_create(THIS_MODULE, "t2bce-core");
+    bce_class = class_create(THIS_MODULE, "t2bce_core");
 #else
-    bce_class = class_create("t2bce-core");
+    bce_class = class_create("t2bce_core");
 #endif
     if (IS_ERR(bce_class)) {
         result = PTR_ERR(bce_class);
@@ -709,7 +709,7 @@ static int __init t2bce_module_init(void)
     if (result)
         goto fail_drv;
 
-    pr_info("t2bce-core: module initialized\n");
+    pr_info("t2bce_core: module initialized\n");
     return 0;
 
 fail_drv:
@@ -720,7 +720,7 @@ fail_chrdev:
     unregister_chrdev_region(bce_chrdev, 1);
     if (!result)
         result = -EINVAL;
-    pr_info("t2bce-core: module init failed status=%d\n", result);
+    pr_info("t2bce_core: module init failed status=%d\n", result);
     return result;
 }
 static void __exit t2bce_module_exit(void)
@@ -729,13 +729,13 @@ static void __exit t2bce_module_exit(void)
 
     class_destroy(bce_class);
     unregister_chrdev_region(bce_chrdev, 1);
-    pr_info("t2bce-core: module exited\n");
+    pr_info("t2bce_core: module exited\n");
 }
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("André Eikmeyer <andre.eikmeyer@gmail.com>");
 MODULE_DESCRIPTION("T2 BCE core driver");
 MODULE_VERSION("0.06");
-MODULE_SOFTDEP("post: t2vhci");
+MODULE_SOFTDEP("post: t2bce_vhci");
 module_init(t2bce_module_init);
 module_exit(t2bce_module_exit);

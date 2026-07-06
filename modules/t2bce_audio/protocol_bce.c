@@ -81,8 +81,8 @@ int __t2audio_send_prepare(struct t2audio_bce *b, struct t2audio_send_ctx *ctx, 
 void __t2audio_send(struct t2audio_bce *b, struct t2audio_send_ctx *ctx)
 {
 #ifdef DEBUG
-    pr_debug("t2audio: Sending command data\n");
-    print_hex_dump(KERN_DEBUG, "t2audio:OUT ", DUMP_PREFIX_NONE, 32, 1, ctx->msg.data, ctx->msg.size, true);
+    pr_debug("t2bce_audio: Sending command data\n");
+    print_hex_dump(KERN_DEBUG, "t2bce_audio:OUT ", DUMP_PREFIX_NONE, 32, 1, ctx->msg.data, ctx->msg.size, true);
 #endif
     t2bce_set_next_submission_single(b->qout.sq,
             b->qout.dma_addr + (dma_addr_t) (ctx->msg.data - b->qout.data), ctx->msg.size);
@@ -183,8 +183,8 @@ static void t2audio_bce_in_queue_completion(struct t2bce_queue_sq *sq)
         msg.data = (u8 *) q->data + q->data_head * q->el_size;
         msg.size = c->data_size;
 #ifdef DEBUG
-        pr_debug("t2audio: Received command data %llx\n", c->data_size);
-        print_hex_dump(KERN_DEBUG, "t2audio:IN ", DUMP_PREFIX_NONE, 32, 1, msg.data, min(msg.size, 128UL), true);
+        pr_debug("t2bce_audio: Received command data %llx\n", c->data_size);
+        print_hex_dump(KERN_DEBUG, "t2bce_audio:IN ", DUMP_PREFIX_NONE, 32, 1, msg.data, min(msg.size, 128UL), true);
 #endif
         t2audio_bce_in_queue_handle_msg(dev, &msg);
 
@@ -202,7 +202,7 @@ static void t2audio_bce_in_queue_handle_msg(struct t2audio_device *a, struct t2a
     struct t2audio_deferred_msg *work;
 
     if (msg->size < sizeof(struct t2audio_msg_header)) {
-        pr_err("t2audio: Msg size smaller than header (%lx)", msg->size);
+        pr_err("t2bce_audio: Msg size smaller than header (%lx)", msg->size);
         return;
     }
     if (header->type == T2AUDIO_MSG_TYPE_RESPONSE) {
@@ -212,14 +212,14 @@ static void t2audio_bce_in_queue_handle_msg(struct t2audio_device *a, struct t2a
 
     work = kzalloc(sizeof(*work), GFP_ATOMIC);
     if (!work) {
-        pr_err("t2audio: Failed to allocate deferred message work\n");
+        pr_err("t2bce_audio: Failed to allocate deferred message work\n");
         return;
     }
 
     work->msg.data = kmemdup(msg->data, msg->size, GFP_ATOMIC);
     if (!work->msg.data) {
         kfree(work);
-        pr_err("t2audio: Failed to copy deferred message\n");
+        pr_err("t2bce_audio: Failed to copy deferred message\n");
         return;
     }
 
@@ -233,7 +233,7 @@ void t2audio_bce_in_queue_submit_pending(struct t2audio_bce_queue *q, size_t cou
 {
     while (count--) {
         if (t2bce_reserve_submission(q->sq, NULL)) {
-            pr_err("t2audio: Failed to reserve an event queue submission\n");
+            pr_err("t2bce_audio: Failed to reserve an event queue submission\n");
             break;
         }
         t2bce_set_next_submission_single(q->sq,

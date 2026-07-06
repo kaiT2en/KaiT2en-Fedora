@@ -40,11 +40,11 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
     int status = 0;
     u32 cfg;
 
-    pr_debug("t2audio: capturing our device\n");
+    pr_debug("t2bce_audio: capturing our device\n");
 
     if (pci_enable_device(dev))
         return -ENODEV;
-    if (pci_request_regions(dev, "t2audio")) {
+    if (pci_request_regions(dev, "t2bce_audio")) {
         status = -ENODEV;
         goto fail;
     }
@@ -61,7 +61,7 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
         status = PTR_ERR(t2audio->bce);
         t2audio->bce = NULL;
         if (status != -EPROBE_DEFER)
-            dev_warn(&dev->dev, "t2audio: Failed to get BCE client: %d\n", status);
+            dev_warn(&dev->dev, "t2bce_audio: Failed to get BCE client: %d\n", status);
         goto fail;
     }
 
@@ -71,7 +71,7 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
     t2bce_client_set_pm_ops(t2audio->bce, &t2audio_pm_ops, t2audio);
 
     t2audio->devt = t2audio_chrdev;
-    t2audio->dev = device_create(t2audio_class, &dev->dev, t2audio->devt, NULL, "t2audio");
+    t2audio->dev = device_create(t2audio_class, &dev->dev, t2audio->devt, NULL, "t2bce_audio");
     if (IS_ERR_OR_NULL(t2audio->dev)) {
         status = PTR_ERR(t2audio->dev);
         goto fail;
@@ -82,11 +82,11 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
     /* Init: set an unknown flag in the bitset */
     if (pci_read_config_dword(dev, 4, &cfg))
-        dev_warn(&dev->dev, "t2audio: pci_read_config_dword fail\n");
+        dev_warn(&dev->dev, "t2bce_audio: pci_read_config_dword fail\n");
     if (pci_write_config_dword(dev, 4, cfg | 6u))
-        dev_warn(&dev->dev, "t2audio: pci_write_config_dword fail\n");
+        dev_warn(&dev->dev, "t2bce_audio: pci_write_config_dword fail\n");
 
-    pr_debug("t2audio: bs len = %llx\n", pci_resource_len(dev, 0));
+    pr_debug("t2bce_audio: bs len = %llx\n", pci_resource_len(dev, 0));
     t2audio->reg_mem_bs_dma = pci_resource_start(dev, 0);
     t2audio->reg_mem_bs = pci_iomap(dev, 0, 0);
     t2audio->reg_mem_cfg = pci_iomap(dev, 4, 0);
@@ -94,17 +94,17 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
     t2audio->reg_mem_gpr = (u32 __iomem *) ((u8 __iomem *) t2audio->reg_mem_cfg + 0xC000);
 
     if (IS_ERR_OR_NULL(t2audio->reg_mem_bs) || IS_ERR_OR_NULL(t2audio->reg_mem_cfg)) {
-        dev_warn(&dev->dev, "t2audio: Failed to pci_iomap required regions\n");
+        dev_warn(&dev->dev, "t2bce_audio: Failed to pci_iomap required regions\n");
         goto fail;
     }
 
     if (t2audio_bce_init(t2audio)) {
-        dev_warn(&dev->dev, "t2audio: Failed to init BCE command transport\n");
+        dev_warn(&dev->dev, "t2bce_audio: Failed to init BCE command transport\n");
         goto fail;
     }
 
     if (snd_card_new(t2audio->dev, t2audio_alsa_index, t2audio_alsa_id, THIS_MODULE, 0, &t2audio->card)) {
-        dev_err(&dev->dev, "t2audio: Failed to create ALSA card\n");
+        dev_err(&dev->dev, "t2bce_audio: Failed to create ALSA card\n");
         goto fail;
     }
 
@@ -115,12 +115,12 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
     t2audio->next_alsa_id = 100;
 
     if (t2audio_init_cmd(t2audio)) {
-        dev_err(&dev->dev, "t2audio: Failed to initialize over BCE\n");
+        dev_err(&dev->dev, "t2bce_audio: Failed to initialize over BCE\n");
         goto fail_snd;
     }
 
     if (t2audio_init_bs(t2audio)) {
-        dev_err(&dev->dev, "t2audio: Failed to initialize BufferStruct\n");
+        dev_err(&dev->dev, "t2bce_audio: Failed to initialize BufferStruct\n");
         goto fail_snd;
     }
 
@@ -130,7 +130,7 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
     }
 
     if (snd_card_register(t2audio->card)) {
-        dev_err(&dev->dev, "t2audio: Failed to register ALSA sound device\n");
+        dev_err(&dev->dev, "t2bce_audio: Failed to register ALSA sound device\n");
         goto fail_snd;
     }
 
@@ -144,7 +144,7 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
         }
     }
 
-    pr_info("t2audio: initialized\n");
+    pr_info("t2bce_audio: initialized\n");
     return 0;
 
 fail_snd:
@@ -250,7 +250,7 @@ static int t2audio_suspend(struct device *dev)
     dev_dbg(t2audio->dev, "suspend entry\n");
     status = t2audio_quiesce(t2audio, true);
     pci_disable_device(t2audio->pci);
-    pr_info("t2audio: suspend exit status=%d\n", status);
+    pr_info("t2bce_audio: suspend exit status=%d\n", status);
     return 0;
 }
 
@@ -288,7 +288,7 @@ static int t2audio_resume(struct device *dev)
     const char *path = no_state_resume ? "no-state" : "stateful";
 
     if ((status = pci_enable_device(t2audio->pci))) {
-        pr_info("t2audio: resume exit status=%d path=%s\n", status, path);
+        pr_info("t2bce_audio: resume exit status=%d path=%s\n", status, path);
         return status;
     }
     pci_set_master(t2audio->pci);
@@ -301,7 +301,7 @@ static int t2audio_resume(struct device *dev)
 
     if ((status = t2audio_cmd_set_remote_access(t2audio, T2AUDIO_REMOTE_ACCESS_ON))) {
         dev_err(t2audio->dev, "Failed to set remote access\n");
-        pr_info("t2audio: resume exit status=%d path=%s\n", status, path);
+        pr_info("t2bce_audio: resume exit status=%d path=%s\n", status, path);
         return status;
     }
 
@@ -309,7 +309,7 @@ static int t2audio_resume(struct device *dev)
     t2audio->pm_quiesced = false;
     t2audio_reset_streams(t2audio);
 
-    pr_info("t2audio: resume exit status=0 path=%s\n", path);
+    pr_info("t2bce_audio: resume exit status=0 path=%s\n", path);
     return 0;
 }
 
@@ -323,13 +323,13 @@ static void t2audio_resume_work(struct work_struct *ws)
     if (t2audio_cmd_set_remote_access(t2audio, T2AUDIO_REMOTE_ACCESS_ON)) {
         t2audio->resume_deferred = false;
         dev_err(t2audio->dev, "Deferred remote access enable failed\n");
-        pr_info("t2audio: resume deferred path failed\n");
+        pr_info("t2bce_audio: resume deferred path failed\n");
         return;
     }
 
     t2audio->resume_deferred = false;
     t2audio->pm_quiesced = false;
-    pr_info("t2audio: resume deferred path complete\n");
+    pr_info("t2bce_audio: resume deferred path complete\n");
 }
 
 static void t2audio_resume_complete(void *userdata)
@@ -381,7 +381,7 @@ static int t2audio_init_cmd(struct t2audio_device *a)
         dev_err(a->dev, "Timed out waiting for remote\n");
         return -ETIMEDOUT;
     }
-    pr_debug("t2audio: Continuing init\n");
+    pr_debug("t2bce_audio: Continuing init\n");
 
     buf = t2audio_reply_alloc();
     if ((status = t2audio_cmd_get_device_list(a, &buf, &dev_l, &dev_cnt))) {
@@ -414,7 +414,7 @@ static void t2audio_init_dev(struct t2audio_device *a, t2audio_device_id_t dev_i
         dev_err(a->dev, "Failed to get device uid for device %llx\n", dev_id);
         goto fail;
     }
-    pr_debug("t2audio: Remote device %llx %.*s\n", dev_id, (int) uid_len, uid);
+    pr_debug("t2bce_audio: Remote device %llx %.*s\n", dev_id, (int) uid_len, uid);
 
     sdev->a = a;
     INIT_LIST_HEAD(&sdev->list);
@@ -550,35 +550,35 @@ static int t2audio_init_bs(struct t2audio_device *a)
 
     ver = ioread32(&a->reg_mem_gpr[0]);
     if (ver < 3) {
-        dev_err(a->dev, "t2audio: Bad GPR version (%u)", ver);
+        dev_err(a->dev, "t2bce_audio: Bad GPR version (%u)", ver);
         return -EINVAL;
     }
     sig = ioread32(&a->reg_mem_gpr[1]);
     if (sig != T2AUDIO_SIG) {
-        dev_err(a->dev, "t2audio: Bad GPR sig (%x)", sig);
+        dev_err(a->dev, "t2bce_audio: Bad GPR sig (%x)", sig);
         return -EINVAL;
     }
     bs_base = ioread32(&a->reg_mem_gpr[2]);
     a->bs = (struct t2audio_buffer_struct *) ((u8 *) a->reg_mem_bs + bs_base);
     if (a->bs->signature != T2AUDIO_SIG) {
-        dev_err(a->dev, "t2audio: Bad BufferStruct sig (%x)", a->bs->signature);
+        dev_err(a->dev, "t2bce_audio: Bad BufferStruct sig (%x)", a->bs->signature);
         return -EINVAL;
     }
-    pr_debug("t2audio: BufferStruct ver = %i\n", a->bs->version);
-    pr_debug("t2audio: Num devices = %i\n", a->bs->num_devices);
+    pr_debug("t2bce_audio: BufferStruct ver = %i\n", a->bs->version);
+    pr_debug("t2bce_audio: Num devices = %i\n", a->bs->num_devices);
     for (i = 0; i < a->bs->num_devices; i++) {
         dev = &a->bs->devices[i];
-        pr_debug("t2audio: Device %i %s\n", i, dev->name);
+        pr_debug("t2bce_audio: Device %i %s\n", i, dev->name);
 
         sdev = t2audio_find_dev_by_uid(a, dev->name);
         if (!sdev) {
-            dev_err(a->dev, "t2audio: Subdevice not found for BufferStruct device %s\n", dev->name);
+            dev_err(a->dev, "t2bce_audio: Subdevice not found for BufferStruct device %s\n", dev->name);
             continue;
         }
         sdev->buf_id = (u8) i;
         dev->num_input_streams = 0;
         for (j = 0; j < dev->num_output_streams; j++) {
-            pr_debug("t2audio: Device %i Stream %i: Output; Buffer Count = %i\n", i, j,
+            pr_debug("t2bce_audio: Device %i Stream %i: Output; Buffer Count = %i\n", i, j,
                      dev->output_streams[j].num_buffers);
             if (j < sdev->out_stream_cnt)
                 t2audio_init_bs_stream(a, &sdev->out_streams[j], &dev->output_streams[j]);
@@ -589,7 +589,7 @@ static int t2audio_init_bs(struct t2audio_device *a)
         if (sdev->buf_id != T2AUDIO_BUFFER_ID_NONE)
             continue;
         sdev->buf_id = i;
-        pr_debug("t2audio: Created device %i %s\n", i, sdev->uid);
+        pr_debug("t2bce_audio: Created device %i %s\n", i, sdev->uid);
         strcpy(a->bs->devices[i].name, sdev->uid);
         a->bs->devices[i].num_input_streams = 0;
         a->bs->devices[i].num_output_streams = 0;
@@ -597,13 +597,13 @@ static int t2audio_init_bs(struct t2audio_device *a)
     }
     list_for_each_entry(sdev, &a->subdevice_list, list) {
         if (sdev->in_stream_cnt == 1) {
-            pr_debug("t2audio: Device %i Host Stream; Input\n", sdev->buf_id);
+            pr_debug("t2bce_audio: Device %i Host Stream; Input\n", sdev->buf_id);
             t2audio_init_bs_stream_host(a, &sdev->in_streams[0], &a->bs->devices[sdev->buf_id].input_streams[0]);
             a->bs->devices[sdev->buf_id].num_input_streams = 1;
             wmb();
 
             if (t2audio_cmd_set_input_stream_address_ranges(a, sdev->dev_id)) {
-                dev_err(a->dev, "t2audio: Failed to set input stream address ranges\n");
+                dev_err(a->dev, "t2bce_audio: Failed to set input stream address ranges\n");
             }
         }
     }
@@ -690,7 +690,7 @@ void t2audio_handle_notification(struct t2audio_device *a, struct t2audio_msg *m
         return;
     switch (base.msg) {
         case T2AUDIO_MSG_NOTIFICATION_BOOT:
-            pr_debug("t2audio: Received boot notification from remote\n");
+            pr_debug("t2bce_audio: Received boot notification from remote\n");
 
             /* Resend the alive notify */
             if (t2audio_send(a, &sctx, 500,
@@ -699,14 +699,14 @@ void t2audio_handle_notification(struct t2audio_device *a, struct t2audio_msg *m
             }
             break;
         case T2AUDIO_MSG_NOTIFICATION_ALIVE:
-            pr_debug("t2audio: Received alive notification from remote\n");
+            pr_debug("t2bce_audio: Received alive notification from remote\n");
             complete_all(&a->remote_alive);
             break;
         case T2AUDIO_MSG_PROPERTY_CHANGED:
             t2audio_handle_prop_change(a, msg);
             break;
         default:
-            pr_debug("t2audio: Unhandled notification %i\n", base.msg);
+            pr_debug("t2bce_audio: Unhandled notification %i\n", base.msg);
             break;
     }
 }
@@ -769,7 +769,7 @@ void t2audio_handle_prop_change(struct t2audio_device *a, struct t2audio_msg *ms
 
 #define t2audio_send_cmd_response(a, sctx, msg, fn, ...) \
     if (t2audio_send_with_tag(a, sctx, ((struct t2audio_msg_header *) msg->data)->tag, 500, fn, ##__VA_ARGS__)) \
-        pr_err("t2audio: Failed to reply to a command\n");
+        pr_err("t2bce_audio: Failed to reply to a command\n");
 
 void t2audio_handle_cmd_timestamp(struct t2audio_device *a, struct t2audio_msg *msg)
 {
@@ -797,7 +797,7 @@ void t2audio_handle_command(struct t2audio_device *a, struct t2audio_msg *msg)
             t2audio_handle_cmd_timestamp(a, msg);
             break;
         default:
-            pr_debug("t2audio: Unhandled device command %i\n", base.msg);
+            pr_debug("t2bce_audio: Unhandled device command %i\n", base.msg);
             break;
     }
 }
@@ -813,7 +813,7 @@ struct dev_pm_ops t2audio_pci_driver_pm = {
         .resume = t2audio_resume
 };
 struct pci_driver t2audio_pci_driver = {
-        .name = "t2audio",
+        .name = "t2bce_audio",
         .id_table = t2audio_ids,
         .probe = t2audio_probe,
         .remove = t2audio_remove,
@@ -827,12 +827,12 @@ struct pci_driver t2audio_pci_driver = {
 static int __init t2audio_module_init(void)
 {
     int result;
-    if ((result = alloc_chrdev_region(&t2audio_chrdev, 0, 1, "t2audio")))
+    if ((result = alloc_chrdev_region(&t2audio_chrdev, 0, 1, "t2bce_audio")))
         goto fail_chrdev;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,4,0)
-    t2audio_class = class_create(THIS_MODULE, "t2audio");
+    t2audio_class = class_create(THIS_MODULE, "t2bce_audio");
 #else
-    t2audio_class = class_create("t2audio");
+    t2audio_class = class_create("t2bce_audio");
 #endif
     if (IS_ERR(t2audio_class)) {
         result = PTR_ERR(t2audio_class);
@@ -842,7 +842,7 @@ static int __init t2audio_module_init(void)
     result = pci_register_driver(&t2audio_pci_driver);
     if (result)
         goto fail_drv;
-    pr_info("t2audio: module initialized\n");
+    pr_info("t2bce_audio: module initialized\n");
     return 0;
 
 fail_drv:
@@ -853,7 +853,7 @@ fail_chrdev:
     unregister_chrdev_region(t2audio_chrdev, 1);
     if (!result)
         result = -EINVAL;
-    pr_info("t2audio: module init failed status=%d\n", result);
+    pr_info("t2bce_audio: module init failed status=%d\n", result);
     return result;
 }
 
@@ -862,7 +862,7 @@ static void __exit t2audio_module_exit(void)
     pci_unregister_driver(&t2audio_pci_driver);
     class_destroy(t2audio_class);
     unregister_chrdev_region(t2audio_chrdev, 1);
-    pr_info("t2audio: module exited\n");
+    pr_info("t2bce_audio: module exited\n");
 }
 
 struct t2audio_alsa_pcm_id_mapping t2audio_alsa_id_mappings[] = {
@@ -878,7 +878,7 @@ module_param_named(index, t2audio_alsa_index, int, 0444);
 MODULE_PARM_DESC(index, "Index value for Apple Internal Audio soundcard.");
 module_param_named(id, t2audio_alsa_id, charp, 0444);
 MODULE_PARM_DESC(id, "ID string for Apple Internal Audio soundcard.");
-MODULE_SOFTDEP("pre: t2bce-core");
+MODULE_SOFTDEP("pre: t2bce_core");
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("André Eikmeyer <andre.eikmeyer@gmail.com>");
 MODULE_DESCRIPTION("Apple T2 Audio Driver");
