@@ -4,6 +4,7 @@
 #include "queue.h"
 #include "transfer.h"
 
+struct device;
 struct usb_hcd;
 struct t2bce_client;
 
@@ -12,7 +13,6 @@ struct bce_vhci_device {
     u32 tq_mask;
 };
 struct bce_vhci {
-    struct t2bce_device *dev;
     struct t2bce_client *client;
     dev_t vdevt;
     struct device *vdev;
@@ -50,7 +50,7 @@ struct bce_vhci {
 int __init bce_vhci_module_init(void);
 void __exit bce_vhci_module_exit(void);
 
-int bce_vhci_create(struct t2bce_device *dev, struct bce_vhci *vhci);
+int bce_vhci_create(struct device *parent, struct bce_vhci *vhci);
 void bce_vhci_destroy(struct bce_vhci *vhci);
 int bce_vhci_start(struct usb_hcd *hcd);
 void bce_vhci_stop(struct usb_hcd *hcd);

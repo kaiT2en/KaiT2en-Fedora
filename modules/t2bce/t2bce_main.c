@@ -146,7 +146,7 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
     global_bce = bce;
 
-    bce_vhci_create(bce, &bce->vhci);
+    bce_vhci_create(bce->dev, &bce->vhci);
 
     return 0;
 

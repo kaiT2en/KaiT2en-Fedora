@@ -1,5 +1,4 @@
 #include "vhci.h"
-#include "../t2bce.h"
 #include "command.h"
 #include <linux/delay.h>
 #include <linux/usb.h>
@@ -35,16 +34,14 @@ static int bce_vhci_start_controller(struct bce_vhci *vhci);
 static void bce_vhci_forget_devices(struct bce_vhci *vhci);
 static int __bce_vhci_add_hcd(struct bce_vhci *vhci);
 
-int bce_vhci_create(struct t2bce_device *dev, struct bce_vhci *vhci)
+int bce_vhci_create(struct device *parent, struct bce_vhci *vhci)
 {
     int status;
 
     spin_lock_init(&vhci->hcd_spinlock);
 
-    vhci->dev = dev;
-
     vhci->vdevt = bce_vhci_chrdev;
-    vhci->vdev = device_create(bce_vhci_class, dev->dev, vhci->vdevt, NULL, "bce-vhci");
+    vhci->vdev = device_create(bce_vhci_class, parent, vhci->vdevt, NULL, "bce-vhci");
     if (IS_ERR_OR_NULL(vhci->vdev)) {
         status = PTR_ERR(vhci->vdev);
         goto fail_dev;
@@ -73,7 +70,7 @@ int bce_vhci_create(struct t2bce_device *dev, struct bce_vhci *vhci)
         status = -ENOMEM;
         goto fail_hcd;
     }
-    vhci->hcd->self.sysdev = &dev->pci->dev;
+    vhci->hcd->self.sysdev = t2bce_client_dma_dev(vhci->client);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,4,0)
     vhci->hcd->self.uses_dma = 1;
 #endif
