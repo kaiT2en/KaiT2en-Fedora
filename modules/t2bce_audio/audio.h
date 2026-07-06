@@ -4,7 +4,7 @@
 #include <linux/types.h>
 #include <linux/workqueue.h>
 #include <sound/pcm.h>
-#include "t2bce_transport.h"
+#include "t2bce_core_transport.h"
 #include "protocol_bce.h"
 #include "description.h"
 

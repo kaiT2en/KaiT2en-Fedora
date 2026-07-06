@@ -2,7 +2,7 @@
 #define BCE_VHCI_QUEUE_H
 
 #include <linux/completion.h>
-#include "t2bce_transport.h"
+#include "t2bce_core_transport.h"
 
 #define VHCI_EVENT_QUEUE_EL_COUNT 256
 #define VHCI_EVENT_PENDING_COUNT 32

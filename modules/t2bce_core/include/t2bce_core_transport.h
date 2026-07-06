@@ -1,5 +1,5 @@
-#ifndef T2BCE_TRANSPORT_H
-#define T2BCE_TRANSPORT_H
+#ifndef T2BCE_CORE_TRANSPORT_H
+#define T2BCE_CORE_TRANSPORT_H
 
 #include <linux/device.h>
 #include <linux/dma-direction.h>
