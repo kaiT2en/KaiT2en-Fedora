@@ -1,7 +1,7 @@
 modname := t2bce
 obj-m += $(modname).o
 
-t2bce-objs := t2bce_main.o mailbox.o queue.o queue_dma.o transport.o
+t2bce-objs := t2bce_main.o mailbox.o queue.o transport.o
 
 MY_CFLAGS += -DWITHOUT_NVME_PATCH
 #MY_CFLAGS += -g -DDEBUG
