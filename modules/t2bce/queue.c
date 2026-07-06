@@ -1,10 +1,11 @@
 #include "queue.h"
-#include "t2bce.h"
+#include <linux/slab.h>
+#include <linux/string.h>
 #include <linux/version.h>
 
 #define REG_DOORBELL_BASE 0x44000
 
-struct bce_queue_cq *bce_alloc_cq(struct t2bce_device *dev, int qid, u32 el_count)
+struct bce_queue_cq *bce_alloc_cq(struct t2bce_dma_engine *dma, int qid, u32 el_count)
 {
     struct bce_queue_cq *q;
     q = kzalloc(sizeof(struct bce_queue_cq), GFP_KERNEL);
@@ -13,7 +14,7 @@ struct bce_queue_cq *bce_alloc_cq(struct t2bce_device *dev, int qid, u32 el_coun
     q->qid = qid;
     q->type = BCE_QUEUE_CQ;
     q->el_count = el_count;
-    q->data = dma_alloc_coherent(&dev->pci->dev, el_count * sizeof(struct bce_qe_completion),
+    q->data = dma_alloc_coherent(dma->dma_dev, el_count * sizeof(struct bce_qe_completion),
             &q->dma_handle, GFP_KERNEL);
     if (!q->data) {
         pr_err("DMA queue memory alloc failed\n");
@@ -33,13 +34,13 @@ void bce_get_cq_memcfg(struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg)
     cfg->length = cq->el_count * sizeof(struct bce_qe_completion);
 }
 
-void bce_free_cq(struct t2bce_device *dev, struct bce_queue_cq *cq)
+void bce_free_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq)
 {
-    dma_free_coherent(&dev->pci->dev, cq->el_count * sizeof(struct bce_qe_completion), cq->data, cq->dma_handle);
+    dma_free_coherent(dma->dma_dev, cq->el_count * sizeof(struct bce_qe_completion), cq->data, cq->dma_handle);
     kfree(cq);
 }
 
-static void bce_handle_cq_completion(struct t2bce_device *dev, struct bce_qe_completion *e, size_t *ce)
+static void bce_handle_cq_completion(struct t2bce_dma_engine *dma, struct bce_qe_completion *e, size_t *ce)
 {
     struct bce_queue *target;
     struct bce_queue_sq *target_sq;
@@ -48,7 +49,7 @@ static void bce_handle_cq_completion(struct t2bce_device *dev, struct bce_qe_com
         pr_err("Device sent a response for qid (%u) >= BCE_MAX_QUEUE_COUNT\n", e->qid);
         return;
     }
-    target = dev->queues[e->qid];
+    target = dma->queues[e->qid];
     if (!target || target->type != BCE_QUEUE_SQ) {
         pr_err("Device sent a response for qid (%u), which does not exist\n", e->qid);
         return;
@@ -60,7 +61,7 @@ static void bce_handle_cq_completion(struct t2bce_device *dev, struct bce_qe_com
     }
     if (!target_sq->has_pending_completions) {
         target_sq->has_pending_completions = true;
-        dev->int_sq_list[(*ce)++] = target_sq;
+        dma->int_sq_list[(*ce)++] = target_sq;
     }
     cmpl = &target_sq->completion_data[e->completion_index];
     cmpl->status = e->status;
@@ -70,7 +71,7 @@ static void bce_handle_cq_completion(struct t2bce_device *dev, struct bce_qe_com
     target_sq->completion_tail = (target_sq->completion_tail + 1) % target_sq->el_count;
 }
 
-void bce_handle_cq_completions_locked(struct t2bce_device *dev, struct bce_queue_cq *cq, size_t *ce)
+void bce_handle_cq_completions_locked(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, size_t *ce)
 {
     struct bce_qe_completion *e;
     e = bce_cq_element(cq, cq->index);
@@ -82,28 +83,28 @@ void bce_handle_cq_completions_locked(struct t2bce_device *dev, struct bce_queue
         if (!(e->flags & BCE_COMPLETION_FLAG_PENDING))
             break;
         pr_debug("t2bce: compl: %i: %i %llx %llx", e->qid, e->status, e->data_size, e->result);
-        bce_handle_cq_completion(dev, e, ce);
+        bce_handle_cq_completion(dma, e, ce);
         e->flags = 0;
         cq->index = (cq->index + 1) % cq->el_count;
     }
     mb();
-    iowrite32(cq->index, (u32 *) ((u8 *) dev->reg_mem_dma +  REG_DOORBELL_BASE) + cq->qid);
+    iowrite32(cq->index, (u32 *) ((u8 *) dma->reg_mem_dma +  REG_DOORBELL_BASE) + cq->qid);
 }
 
-void bce_dispatch_pending_sq_completions(struct t2bce_device *dev, size_t ce)
+void bce_dispatch_pending_sq_completions(struct t2bce_dma_engine *dma, size_t ce)
 {
     struct bce_queue_sq *sq;
 
     while (ce) {
         --ce;
-        sq = dev->int_sq_list[ce];
+        sq = dma->int_sq_list[ce];
         sq->completion(sq);
         sq->has_pending_completions = false;
     }
 }
 
 
-struct bce_queue_sq *bce_alloc_sq(struct t2bce_device *dev, int qid, u32 el_size, u32 el_count,
+struct bce_queue_sq *bce_alloc_sq(struct t2bce_dma_engine *dma, int qid, u32 el_size, u32 el_count,
         bce_sq_completion compl, void *userdata)
 {
     struct bce_queue_sq *q;
@@ -114,19 +115,19 @@ struct bce_queue_sq *bce_alloc_sq(struct t2bce_device *dev, int qid, u32 el_size
     q->type = BCE_QUEUE_SQ;
     q->el_size = el_size;
     q->el_count = el_count;
-    q->data = dma_alloc_coherent(&dev->pci->dev, el_count * el_size,
+    q->data = dma_alloc_coherent(dma->dma_dev, el_count * el_size,
                                  &q->dma_handle, GFP_KERNEL);
     q->completion = compl;
     q->userdata = userdata;
     q->completion_data = kzalloc(sizeof(struct bce_sq_completion_data) * el_count, GFP_KERNEL);
-    q->reg_mem_dma = dev->reg_mem_dma;
+    q->reg_mem_dma = dma->reg_mem_dma;
     atomic_set(&q->available_commands, el_count - 1);
     init_completion(&q->available_command_completion);
     atomic_set(&q->available_command_completion_waiting_count, 0);
     if (!q->data || !q->completion_data) {
         pr_err("DMA queue memory alloc failed\n");
         if (q->data)
-            dma_free_coherent(&dev->pci->dev, el_count * el_size, q->data, q->dma_handle);
+            dma_free_coherent(dma->dma_dev, el_count * el_size, q->data, q->dma_handle);
         kfree(q->completion_data);
         kfree(q);
         return NULL;
@@ -144,9 +145,9 @@ void bce_get_sq_memcfg(struct bce_queue_sq *sq, struct bce_queue_cq *cq, struct 
     cfg->length = sq->el_count * sq->el_size;
 }
 
-void bce_free_sq(struct t2bce_device *dev, struct bce_queue_sq *sq)
+void bce_free_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
 {
-    dma_free_coherent(&dev->pci->dev, sq->el_count * sq->el_size, sq->data, sq->dma_handle);
+    dma_free_coherent(dma->dma_dev, sq->el_count * sq->el_size, sq->data, sq->dma_handle);
     kfree(sq->completion_data);
     kfree(sq);
 }
@@ -202,13 +203,13 @@ void bce_set_submission_single(struct bce_qe_submission *element, dma_addr_t add
 
 static void bce_cmdq_completion(struct bce_queue_sq *q);
 
-struct bce_queue_cmdq *bce_alloc_cmdq(struct t2bce_device *dev, int qid, u32 el_count)
+struct bce_queue_cmdq *bce_alloc_cmdq(struct t2bce_dma_engine *dma, int qid, u32 el_count)
 {
     struct bce_queue_cmdq *q;
     q = kzalloc(sizeof(struct bce_queue_cmdq), GFP_KERNEL);
     if (!q)
         return NULL;
-    q->sq = bce_alloc_sq(dev, qid, BCE_CMD_SIZE, el_count, bce_cmdq_completion, q);
+    q->sq = bce_alloc_sq(dma, qid, BCE_CMD_SIZE, el_count, bce_cmdq_completion, q);
     if (!q->sq) {
         kfree(q);
         return NULL;
@@ -216,23 +217,23 @@ struct bce_queue_cmdq *bce_alloc_cmdq(struct t2bce_device *dev, int qid, u32 el_
     spin_lock_init(&q->lck);
     q->tres = kzalloc(sizeof(struct bce_queue_cmdq_result_el*) * el_count, GFP_KERNEL);
     if (!q->tres) {
-        bce_free_sq(dev, q->sq);
+        bce_free_sq(dma, q->sq);
         kfree(q);
         return NULL;
     }
     q->slot_gen = kzalloc(sizeof(u32) * el_count, GFP_KERNEL);
     if (!q->slot_gen) {
         kfree(q->tres);
-        bce_free_sq(dev, q->sq);
+        bce_free_sq(dma, q->sq);
         kfree(q);
         return NULL;
     }
     return q;
 }
 
-void bce_free_cmdq(struct t2bce_device *dev, struct bce_queue_cmdq *cmdq)
+void bce_free_cmdq(struct t2bce_dma_engine *dma, struct bce_queue_cmdq *cmdq)
 {
-    bce_free_sq(dev, cmdq->sq);
+    bce_free_sq(dma, cmdq->sq);
     kfree(cmdq->slot_gen);
     kfree(cmdq->tres);
     kfree(cmdq);
@@ -351,36 +352,36 @@ u32 bce_cmd_flush_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid)
 }
 
 
-struct bce_queue_cq *bce_create_cq(struct t2bce_device *dev, u32 el_count)
+struct bce_queue_cq *bce_create_cq(struct t2bce_dma_engine *dma, u32 el_count)
 {
     struct bce_queue_cq *cq;
     struct bce_queue_memcfg cfg;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,18,0)
-    int qid = ida_simple_get(&dev->queue_ida, BCE_QUEUE_USER_MIN, BCE_QUEUE_USER_MAX, GFP_KERNEL);
+    int qid = ida_simple_get(&dma->queue_ida, BCE_QUEUE_USER_MIN, BCE_QUEUE_USER_MAX, GFP_KERNEL);
 #else
-    int qid = ida_alloc_range(&dev->queue_ida, BCE_QUEUE_USER_MIN, BCE_QUEUE_USER_MAX - 1, GFP_KERNEL);
+    int qid = ida_alloc_range(&dma->queue_ida, BCE_QUEUE_USER_MIN, BCE_QUEUE_USER_MAX - 1, GFP_KERNEL);
 #endif
     if (qid < 0)
         return NULL;
-    cq = bce_alloc_cq(dev, qid, el_count);
+    cq = bce_alloc_cq(dma, qid, el_count);
     if (!cq)
         return NULL;
     bce_get_cq_memcfg(cq, &cfg);
-    if (bce_cmd_register_queue(dev->cmd_cmdq, &cfg, NULL, false) != 0) {
+    if (bce_cmd_register_queue(dma->cmd_cmdq, &cfg, NULL, false) != 0) {
         pr_err("t2bce: CQ registration failed (%i)", qid);
-        bce_free_cq(dev, cq);
+        bce_free_cq(dma, cq);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,18,0)
-        ida_simple_remove(&dev->queue_ida, (uint) qid);
+        ida_simple_remove(&dma->queue_ida, (uint) qid);
 #else
-        ida_free(&dev->queue_ida, (uint) qid);
+        ida_free(&dma->queue_ida, (uint) qid);
 #endif
         return NULL;
     }
-    dev->queues[qid] = (struct bce_queue *) cq;
+    dma->queues[qid] = (struct bce_queue *) cq;
     return cq;
 }
 
-struct bce_queue_sq *bce_create_sq(struct t2bce_device *dev, struct bce_queue_cq *cq, const char *name, u32 el_count,
+struct bce_queue_sq *bce_create_sq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name, u32 el_count,
         int direction, bce_sq_completion compl, void *userdata)
 {
     struct bce_queue_sq *sq;
@@ -393,65 +394,65 @@ struct bce_queue_sq *bce_create_sq(struct t2bce_device *dev, struct bce_queue_cq
     if (direction != DMA_TO_DEVICE && direction != DMA_FROM_DEVICE)
         return NULL; /* unsupported direction */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,18,0)
-    qid = ida_simple_get(&dev->queue_ida, BCE_QUEUE_USER_MIN, BCE_QUEUE_USER_MAX, GFP_KERNEL);
+    qid = ida_simple_get(&dma->queue_ida, BCE_QUEUE_USER_MIN, BCE_QUEUE_USER_MAX, GFP_KERNEL);
 #else
-    qid = ida_alloc_range(&dev->queue_ida, BCE_QUEUE_USER_MIN, BCE_QUEUE_USER_MAX - 1, GFP_KERNEL);
+    qid = ida_alloc_range(&dma->queue_ida, BCE_QUEUE_USER_MIN, BCE_QUEUE_USER_MAX - 1, GFP_KERNEL);
 #endif
     if (qid < 0)
         return NULL;
-    sq = bce_alloc_sq(dev, qid, sizeof(struct bce_qe_submission), el_count, compl, userdata);
+    sq = bce_alloc_sq(dma, qid, sizeof(struct bce_qe_submission), el_count, compl, userdata);
     if (!sq)
         return NULL;
     bce_get_sq_memcfg(sq, cq, &cfg);
-    if (bce_cmd_register_queue(dev->cmd_cmdq, &cfg, name, direction != DMA_FROM_DEVICE) != 0) {
+    if (bce_cmd_register_queue(dma->cmd_cmdq, &cfg, name, direction != DMA_FROM_DEVICE) != 0) {
         pr_err("t2bce: SQ registration failed (%i)", qid);
-        bce_free_sq(dev, sq);
+        bce_free_sq(dma, sq);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,18,0)
-        ida_simple_remove(&dev->queue_ida, (uint) qid);
+        ida_simple_remove(&dma->queue_ida, (uint) qid);
 #else
-        ida_free(&dev->queue_ida, (uint) qid);
+        ida_free(&dma->queue_ida, (uint) qid);
 #endif
         return NULL;
     }
-    spin_lock(&dev->queues_lock);
-    dev->queues[qid] = (struct bce_queue *) sq;
-    spin_unlock(&dev->queues_lock);
+    spin_lock(&dma->queues_lock);
+    dma->queues[qid] = (struct bce_queue *) sq;
+    spin_unlock(&dma->queues_lock);
     return sq;
 }
 
-struct bce_queue_sq *bce_create_sq_with_flags(struct t2bce_device *dev, struct bce_queue_cq *cq, const char *name,
+struct bce_queue_sq *bce_create_sq_with_flags(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name,
         u32 el_count, u16 flags, bce_sq_completion compl, void *userdata)
 {
     int direction = (flags & 1) ? DMA_TO_DEVICE : DMA_FROM_DEVICE;
-    return bce_create_sq(dev, cq, name, el_count, direction, compl, userdata);
+    return bce_create_sq(dma, cq, name, el_count, direction, compl, userdata);
 }
 
-void bce_destroy_cq(struct t2bce_device *dev, struct bce_queue_cq *cq)
+void bce_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq)
 {
-    if (!dev->is_being_removed && bce_cmd_unregister_memory_queue(dev->cmd_cmdq, (u16) cq->qid))
+    if (!dma->is_being_removed && bce_cmd_unregister_memory_queue(dma->cmd_cmdq, (u16) cq->qid))
         pr_err("t2bce: CQ unregister failed");
-    spin_lock(&dev->queues_lock);
-    dev->queues[cq->qid] = NULL;
-    spin_unlock(&dev->queues_lock);
+    spin_lock(&dma->queues_lock);
+    dma->queues[cq->qid] = NULL;
+    spin_unlock(&dma->queues_lock);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,18,0)
-    ida_simple_remove(&dev->queue_ida, (uint) cq->qid);
+    ida_simple_remove(&dma->queue_ida, (uint) cq->qid);
 #else
-    ida_free(&dev->queue_ida, (uint) cq->qid);
+    ida_free(&dma->queue_ida, (uint) cq->qid);
 #endif
-    bce_free_cq(dev, cq);
+    bce_free_cq(dma, cq);
 }
 
-void bce_destroy_sq(struct t2bce_device *dev, struct bce_queue_sq *sq)
+void bce_destroy_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
 {
-    if (!dev->is_being_removed && bce_cmd_unregister_memory_queue(dev->cmd_cmdq, (u16) sq->qid))
+    if (!dma->is_being_removed && bce_cmd_unregister_memory_queue(dma->cmd_cmdq, (u16) sq->qid))
         pr_err("t2bce: CQ unregister failed");
-    spin_lock(&dev->queues_lock);
-    dev->queues[sq->qid] = NULL;
-    spin_unlock(&dev->queues_lock);
+    spin_lock(&dma->queues_lock);
+    dma->queues[sq->qid] = NULL;
+    spin_unlock(&dma->queues_lock);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,18,0)
-    ida_simple_remove(&dev->queue_ida, (uint) sq->qid);
+    ida_simple_remove(&dma->queue_ida, (uint) sq->qid);
 #else
-    ida_free(&dev->queue_ida, (uint) sq->qid);
+    ida_free(&dma->queue_ida, (uint) sq->qid);
 #endif
-    bce_free_sq(dev, sq);
+    bce_free_sq(dma, sq);
 }

@@ -5,8 +5,12 @@
 #include <linux/pci.h>
 
 #define BCE_CMD_SIZE 0x40
+#define BCE_MAX_QUEUE_COUNT 0x100
 
-struct t2bce_device;
+#define BCE_QUEUE_USER_MIN 2
+#define BCE_QUEUE_USER_MAX (BCE_MAX_QUEUE_COUNT - 1)
+
+struct t2bce_dma_engine;
 
 enum bce_queue_type {
     BCE_QUEUE_CQ, BCE_QUEUE_SQ
@@ -64,6 +68,18 @@ struct bce_queue_cmdq {
     struct spinlock lck;
     struct bce_queue_cmdq_result_el **tres;
     u32 *slot_gen;
+};
+
+struct t2bce_dma_engine {
+    struct device *dma_dev;
+    void __iomem *reg_mem_dma;
+    struct bce_queue *queues[BCE_MAX_QUEUE_COUNT];
+    struct spinlock queues_lock;
+    struct ida queue_ida;
+    struct bce_queue_cq *cmd_cq;
+    struct bce_queue_cmdq *cmd_cmdq;
+    struct bce_queue_sq *int_sq_list[BCE_MAX_QUEUE_COUNT];
+    bool is_being_removed;
 };
 
 struct bce_queue_memcfg {
@@ -144,16 +160,16 @@ static __always_inline struct bce_sq_completion_data *bce_next_completion(struct
     return res;
 }
 
-struct bce_queue_cq *bce_alloc_cq(struct t2bce_device *dev, int qid, u32 el_count);
+struct bce_queue_cq *bce_alloc_cq(struct t2bce_dma_engine *dma, int qid, u32 el_count);
 void bce_get_cq_memcfg(struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg);
-void bce_free_cq(struct t2bce_device *dev, struct bce_queue_cq *cq);
-void bce_handle_cq_completions_locked(struct t2bce_device *dev, struct bce_queue_cq *cq, size_t *ce);
-void bce_dispatch_pending_sq_completions(struct t2bce_device *dev, size_t ce);
+void bce_free_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq);
+void bce_handle_cq_completions_locked(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, size_t *ce);
+void bce_dispatch_pending_sq_completions(struct t2bce_dma_engine *dma, size_t ce);
 
-struct bce_queue_sq *bce_alloc_sq(struct t2bce_device *dev, int qid, u32 el_size, u32 el_count,
+struct bce_queue_sq *bce_alloc_sq(struct t2bce_dma_engine *dma, int qid, u32 el_size, u32 el_count,
         bce_sq_completion compl, void *userdata);
 void bce_get_sq_memcfg(struct bce_queue_sq *sq, struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg);
-void bce_free_sq(struct t2bce_device *dev, struct bce_queue_sq *sq);
+void bce_free_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq);
 int bce_reserve_submission(struct bce_queue_sq *sq, unsigned long *timeout);
 void bce_cancel_submission_reservation(struct bce_queue_sq *sq);
 void *bce_next_submission(struct bce_queue_sq *sq);
@@ -162,8 +178,8 @@ void bce_notify_submission_complete(struct bce_queue_sq *sq);
 
 void bce_set_submission_single(struct bce_qe_submission *element, dma_addr_t addr, size_t size);
 
-struct bce_queue_cmdq *bce_alloc_cmdq(struct t2bce_device *dev, int qid, u32 el_count);
-void bce_free_cmdq(struct t2bce_device *dev, struct bce_queue_cmdq *cmdq);
+struct bce_queue_cmdq *bce_alloc_cmdq(struct t2bce_dma_engine *dma, int qid, u32 el_count);
+void bce_free_cmdq(struct t2bce_dma_engine *dma, struct bce_queue_cmdq *cmdq);
 
 u32 bce_cmd_register_queue(struct bce_queue_cmdq *cmdq, struct bce_queue_memcfg *cfg, const char *name, bool isdirout);
 u32 bce_cmd_unregister_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid);
@@ -172,12 +188,12 @@ u32 bce_cmd_flush_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid);
 
 /* User API - Creates and registers the queue */
 
-struct bce_queue_cq *bce_create_cq(struct t2bce_device *dev, u32 el_count);
-struct bce_queue_sq *bce_create_sq(struct t2bce_device *dev, struct bce_queue_cq *cq, const char *name, u32 el_count,
+struct bce_queue_cq *bce_create_cq(struct t2bce_dma_engine *dma, u32 el_count);
+struct bce_queue_sq *bce_create_sq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name, u32 el_count,
         int direction, bce_sq_completion compl, void *userdata);
-struct bce_queue_sq *bce_create_sq_with_flags(struct t2bce_device *dev, struct bce_queue_cq *cq, const char *name,
+struct bce_queue_sq *bce_create_sq_with_flags(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name,
         u32 el_count, u16 flags, bce_sq_completion compl, void *userdata);
-void bce_destroy_cq(struct t2bce_device *dev, struct bce_queue_cq *cq);
-void bce_destroy_sq(struct t2bce_device *dev, struct bce_queue_sq *sq);
+void bce_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq);
+void bce_destroy_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq);
 
 #endif //BCEDRIVER_MAILBOX_H

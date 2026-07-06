@@ -96,9 +96,11 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
     bce_mailbox_init(&bce->mbox, bce->reg_mem_mb);
     bce_xhci_pm_init(&bce->xhci_pm, bce->reg_mem_mb);
+    bce->dma.dma_dev = &dev->dev;
+    bce->dma.reg_mem_dma = bce->reg_mem_dma;
 
-    spin_lock_init(&bce->queues_lock);
-    ida_init(&bce->queue_ida);
+    spin_lock_init(&bce->dma.queues_lock);
+    ida_init(&bce->dma.queue_ida);
     mutex_init(&bce->pm_lock);
     mutex_init(&bce->clients_lock);
     INIT_LIST_HEAD(&bce->clients);
@@ -189,25 +191,26 @@ static int bce_create_command_queues(struct t2bce_device *bce)
 {
     int status;
     struct bce_queue_memcfg *cfg;
+    struct t2bce_dma_engine *dma = &bce->dma;
 
-    bce->cmd_cq = bce_alloc_cq(bce, 0, 0x20);
-    bce->cmd_cmdq = bce_alloc_cmdq(bce, 1, 0x20);
-    if (bce->cmd_cq == NULL || bce->cmd_cmdq == NULL) {
+    dma->cmd_cq = bce_alloc_cq(dma, 0, 0x20);
+    dma->cmd_cmdq = bce_alloc_cmdq(dma, 1, 0x20);
+    if (dma->cmd_cq == NULL || dma->cmd_cmdq == NULL) {
         status = -ENOMEM;
         goto err;
     }
-    bce->queues[0] = (struct bce_queue *) bce->cmd_cq;
-    bce->queues[1] = (struct bce_queue *) bce->cmd_cmdq->sq;
+    dma->queues[0] = (struct bce_queue *) dma->cmd_cq;
+    dma->queues[1] = (struct bce_queue *) dma->cmd_cmdq->sq;
 
     cfg = kzalloc(sizeof(struct bce_queue_memcfg), GFP_KERNEL);
     if (!cfg) {
         status = -ENOMEM;
         goto err;
     }
-    bce_get_cq_memcfg(bce->cmd_cq, cfg);
+    bce_get_cq_memcfg(dma->cmd_cq, cfg);
     if ((status = bce_register_command_queue(bce, cfg, false)))
         goto err;
-    bce_get_sq_memcfg(bce->cmd_cmdq->sq, bce->cmd_cq, cfg);
+    bce_get_sq_memcfg(dma->cmd_cmdq->sq, dma->cmd_cq, cfg);
     if ((status = bce_register_command_queue(bce, cfg, true)))
         goto err;
     kfree(cfg);
@@ -215,19 +218,21 @@ static int bce_create_command_queues(struct t2bce_device *bce)
     return 0;
 
 err:
-    if (bce->cmd_cq)
-        bce_free_cq(bce, bce->cmd_cq);
-    if (bce->cmd_cmdq)
-        bce_free_cmdq(bce, bce->cmd_cmdq);
+    if (dma->cmd_cq)
+        bce_free_cq(dma, dma->cmd_cq);
+    if (dma->cmd_cmdq)
+        bce_free_cmdq(dma, dma->cmd_cmdq);
     return status;
 }
 
 static void bce_free_command_queues(struct t2bce_device *bce)
 {
-    bce_free_cq(bce, bce->cmd_cq);
-    bce_free_cmdq(bce, bce->cmd_cmdq);
-    bce->cmd_cq = NULL;
-    bce->queues[0] = NULL;
+    struct t2bce_dma_engine *dma = &bce->dma;
+
+    bce_free_cq(dma, dma->cmd_cq);
+    bce_free_cmdq(dma, dma->cmd_cmdq);
+    dma->cmd_cq = NULL;
+    dma->queues[0] = NULL;
 }
 
 static irqreturn_t bce_handle_mb_irq(int irq, void *dev)
@@ -242,12 +247,14 @@ static irqreturn_t bce_handle_dma_irq(int irq, void *dev)
     int i;
     size_t ce = 0;
     struct t2bce_device *bce = pci_get_drvdata(dev);
-    spin_lock(&bce->queues_lock);
+    struct t2bce_dma_engine *dma = &bce->dma;
+
+    spin_lock(&dma->queues_lock);
     for (i = 0; i < BCE_MAX_QUEUE_COUNT; i++)
-        if (bce->queues[i] && bce->queues[i]->type == BCE_QUEUE_CQ)
-            bce_handle_cq_completions_locked(bce, (struct bce_queue_cq *) bce->queues[i], &ce);
-    spin_unlock(&bce->queues_lock);
-    bce_dispatch_pending_sq_completions(bce, ce);
+        if (dma->queues[i] && dma->queues[i]->type == BCE_QUEUE_CQ)
+            bce_handle_cq_completions_locked(dma, (struct bce_queue_cq *) dma->queues[i], &ce);
+    spin_unlock(&dma->queues_lock);
+    bce_dispatch_pending_sq_completions(dma, ce);
     return IRQ_HANDLED;
 }
 
@@ -368,6 +375,7 @@ static void t2bce_remove(struct pci_dev *dev)
 {
     struct t2bce_device *bce = pci_get_drvdata(dev);
     bce->is_being_removed = true;
+    bce->dma.is_being_removed = true;
     global_bce = NULL;
 
     bce_free_state_buffer(bce);
@@ -399,6 +407,7 @@ static void t2bce_shutdown(struct pci_dev *dev)
 
     mutex_lock(&bce->pm_lock);
     bce->is_being_removed = true;
+    bce->dma.is_being_removed = true;
     bce->stateful_suspend_valid = false;
     bce->no_state_fallback = false;
     bce->no_state_resume = false;

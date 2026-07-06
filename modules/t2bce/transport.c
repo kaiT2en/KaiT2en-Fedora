@@ -280,13 +280,13 @@ void t2bce_notify_resume_complete(struct t2bce_device *bce)
 
 struct t2bce_queue_cq *t2bce_create_cq(struct t2bce_client *client, u32 el_count)
 {
-    return to_t2bce_cq(bce_create_cq(client->bce, el_count));
+    return to_t2bce_cq(bce_create_cq(&client->bce->dma, el_count));
 }
 EXPORT_SYMBOL_GPL(t2bce_create_cq);
 
 void t2bce_destroy_cq(struct t2bce_client *client, struct t2bce_queue_cq *cq)
 {
-    bce_destroy_cq(client->bce, to_bce_cq(cq));
+    bce_destroy_cq(&client->bce->dma, to_bce_cq(cq));
 }
 EXPORT_SYMBOL_GPL(t2bce_destroy_cq);
 
@@ -304,7 +304,7 @@ struct t2bce_queue_sq *t2bce_create_sq(struct t2bce_client *client, struct t2bce
     ctx->completion = compl;
     ctx->userdata = userdata;
 
-    sq = bce_create_sq(client->bce, to_bce_cq(cq), name, el_count, direction,
+    sq = bce_create_sq(&client->bce->dma, to_bce_cq(cq), name, el_count, direction,
             t2bce_sq_completion_adapter, ctx);
     if (!sq) {
         kfree(ctx);
@@ -320,7 +320,7 @@ void t2bce_destroy_sq(struct t2bce_client *client, struct t2bce_queue_sq *sq)
     struct bce_queue_sq *bce_sq = to_bce_sq(sq);
     struct t2bce_sq_ctx *ctx = bce_sq->userdata;
 
-    bce_destroy_sq(client->bce, bce_sq);
+    bce_destroy_sq(&client->bce->dma, bce_sq);
     kfree(ctx);
 }
 EXPORT_SYMBOL_GPL(t2bce_destroy_sq);
@@ -397,6 +397,6 @@ EXPORT_SYMBOL_GPL(t2bce_queue_sq_capacity);
 
 int t2bce_flush_queue(struct t2bce_client *client, struct t2bce_queue_sq *sq)
 {
-    return bce_cmd_flush_memory_queue(client->bce->cmd_cmdq, to_bce_sq(sq)->qid);
+    return bce_cmd_flush_memory_queue(client->bce->dma.cmd_cmdq, to_bce_sq(sq)->qid);
 }
 EXPORT_SYMBOL_GPL(t2bce_flush_queue);

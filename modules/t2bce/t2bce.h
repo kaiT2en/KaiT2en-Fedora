@@ -10,10 +10,6 @@
 #include "queue.h"
 
 #define BC_PROTOCOL_VERSION 0x20001
-#define BCE_MAX_QUEUE_COUNT 0x100
-
-#define BCE_QUEUE_USER_MIN 2
-#define BCE_QUEUE_USER_MAX (BCE_MAX_QUEUE_COUNT - 1)
 
 struct t2bce_device {
     struct pci_dev *pci, *pci0;
@@ -21,14 +17,9 @@ struct t2bce_device {
     struct device *dev;
     void __iomem *reg_mem_mb;
     void __iomem *reg_mem_dma;
+    struct t2bce_dma_engine dma;
     struct bce_mailbox mbox;
     struct bce_xhci_pm xhci_pm;
-    struct bce_queue *queues[BCE_MAX_QUEUE_COUNT];
-    struct spinlock queues_lock;
-    struct ida queue_ida;
-    struct bce_queue_cq *cmd_cq;
-    struct bce_queue_cmdq *cmd_cmdq;
-    struct bce_queue_sq *int_sq_list[BCE_MAX_QUEUE_COUNT];
     bool is_being_removed;
 
     dma_addr_t saved_data_dma_addr;
