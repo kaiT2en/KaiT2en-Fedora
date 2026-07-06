@@ -347,9 +347,7 @@ EXPORT_SYMBOL_GPL(t2bce_cancel_submission_reservation);
 
 void t2bce_set_next_submission_single(struct t2bce_queue_sq *sq, dma_addr_t addr, size_t size)
 {
-    struct bce_qe_submission *submission = bce_next_submission(to_bce_sq(sq));
-
-    bce_set_submission_single(submission, addr, size);
+    bce_set_next_submission_single(to_bce_sq(sq), addr, size);
 }
 EXPORT_SYMBOL_GPL(t2bce_set_next_submission_single);
 

@@ -194,11 +194,35 @@ void bce_notify_submission_complete(struct bce_queue_sq *sq)
     }
 }
 
-void bce_set_submission_single(struct bce_qe_submission *element, dma_addr_t addr, size_t size)
+static void bce_write_submission(struct bce_qe_submission *element, const struct bce_submission *submission)
 {
-    element->addr = addr;
-    element->length = size;
-    element->segl_addr = element->segl_length = 0;
+    switch (submission->type) {
+    case BCE_SUBMISSION_SINGLE:
+        element->addr = submission->single.addr;
+        element->length = submission->single.size;
+        element->segl_addr = 0;
+        element->segl_length = 0;
+        break;
+    case BCE_SUBMISSION_SEGMENT_LIST:
+        element->addr = 0;
+        element->length = 0;
+        element->segl_addr = submission->segment_list.addr;
+        element->segl_length = submission->segment_list.size;
+        break;
+    }
+}
+
+void bce_set_next_submission_single(struct bce_queue_sq *sq, dma_addr_t addr, size_t size)
+{
+    struct bce_submission submission = {
+        .type = BCE_SUBMISSION_SINGLE,
+        .single = {
+            .addr = addr,
+            .size = size,
+        },
+    };
+
+    bce_write_submission(bce_next_submission(sq), &submission);
 }
 
 static void bce_cmdq_completion(struct bce_queue_sq *q);

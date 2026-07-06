@@ -127,6 +127,25 @@ struct bce_qe_submission {
     u64 segl_length;
 };
 
+enum bce_submission_type {
+    BCE_SUBMISSION_SINGLE,
+    BCE_SUBMISSION_SEGMENT_LIST,
+};
+
+struct bce_submission {
+    enum bce_submission_type type;
+    union {
+        struct {
+            dma_addr_t addr;
+            size_t size;
+        } single;
+        struct {
+            dma_addr_t addr;
+            size_t size;
+        } segment_list;
+    };
+};
+
 enum bce_cmdq_command {
     BCE_CMD_REGISTER_MEMORY_QUEUE = 0x20,
     BCE_CMD_UNREGISTER_MEMORY_QUEUE = 0x30,
@@ -185,7 +204,7 @@ void *bce_next_submission(struct bce_queue_sq *sq);
 void bce_submit_to_device(struct bce_queue_sq *sq);
 void bce_notify_submission_complete(struct bce_queue_sq *sq);
 
-void bce_set_submission_single(struct bce_qe_submission *element, dma_addr_t addr, size_t size);
+void bce_set_next_submission_single(struct bce_queue_sq *sq, dma_addr_t addr, size_t size);
 
 struct bce_queue_cmdq *bce_alloc_cmdq(struct t2bce_dma_engine *dma, int qid, u32 el_count);
 void bce_free_cmdq(struct t2bce_dma_engine *dma, struct bce_queue_cmdq *cmdq);
