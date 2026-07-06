@@ -8,7 +8,6 @@
 #include <linux/srcu.h>
 #include "mailbox.h"
 #include "queue.h"
-#include "vhci/vhci.h"
 
 #define BC_PROTOCOL_VERSION 0x20001
 #define BCE_MAX_QUEUE_COUNT 0x100
@@ -45,12 +44,16 @@ struct t2bce_device {
     struct list_head clients;
     struct srcu_struct clients_srcu;
     bool clients_srcu_ready;
-
-    struct bce_vhci vhci;
 };
 
 extern struct t2bce_device *global_bce;
 
 void t2bce_notify_resume_complete(struct t2bce_device *bce);
+void t2bce_clients_shutdown(struct t2bce_device *bce);
+void t2bce_clients_pm_reset(struct t2bce_device *bce);
+void t2bce_clients_pm_prepare_no_state(struct t2bce_device *bce);
+void t2bce_clients_pm_mark_no_state_resume(struct t2bce_device *bce);
+bool t2bce_clients_pm_has_no_state_resume(struct t2bce_device *bce);
+void t2bce_clients_pm_complete(struct t2bce_device *bce);
 
 #endif //APPLE_BCE_H

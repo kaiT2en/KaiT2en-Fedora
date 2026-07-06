@@ -12,6 +12,15 @@ struct t2bce_queue_sq;
 typedef void (*t2bce_sq_completion)(struct t2bce_queue_sq *sq);
 typedef void (*t2bce_client_resume_callback)(void *userdata);
 
+struct t2bce_client_pm_ops {
+    void (*shutdown)(void *userdata);
+    void (*pm_reset)(void *userdata);
+    void (*pm_prepare_no_state)(void *userdata);
+    void (*pm_mark_no_state_resume)(void *userdata);
+    bool (*pm_is_no_state_resume)(void *userdata);
+    void (*pm_complete)(void *userdata);
+};
+
 struct t2bce_sq_completion_data {
     u32 status;
     u64 data_size;
@@ -34,6 +43,8 @@ bool t2bce_client_no_state_resume(struct t2bce_client *client);
 
 void t2bce_client_set_resume_complete_callback(struct t2bce_client *client,
         t2bce_client_resume_callback callback, void *userdata);
+void t2bce_client_set_pm_ops(struct t2bce_client *client,
+        const struct t2bce_client_pm_ops *ops, void *userdata);
 
 struct t2bce_queue_cq *t2bce_create_cq(struct t2bce_client *client, u32 el_count);
 void t2bce_destroy_cq(struct t2bce_client *client, struct t2bce_queue_cq *cq);

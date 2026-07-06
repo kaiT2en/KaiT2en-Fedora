@@ -9,6 +9,7 @@ require_command dkms make install rm chown mktemp depmod sed tar find
 
 MODULES=(
 	t2bce
+	t2vhci
 	t2audio
 	t2smc
 	t2bdrm
@@ -57,7 +58,7 @@ copy_module_source() {
 		--exclude='modules.order' \
 		-cf - . | tar -C "$dst" -xf -
 
-	if [[ "$name" == "t2audio" ]]; then
+	if [[ "$name" == "t2audio" || "$name" == "t2vhci" ]]; then
 		local t2bce_version t2bce_symvers
 
 		t2bce_version="$(sed -n 's/^PACKAGE_VERSION="\([^"]*\)".*/\1/p' "$REPO_ROOT/modules/t2bce/dkms.conf")"
@@ -65,7 +66,7 @@ copy_module_source() {
 		t2bce_symvers="$(find "/var/lib/dkms/t2bce/$t2bce_version/$(kernel_release)" -path '*/module/Module.symvers' -print -quit 2>/dev/null || true)"
 		[[ -f "$t2bce_symvers" ]] || fail "missing t2bce Module.symvers; build t2bce before t2audio"
 
-		info "copying t2bce interface into $dst/t2bce for t2audio build"
+		info "copying t2bce interface into $dst/t2bce for $name build"
 		install -d -o root -g root -m 0755 "$dst/t2bce"
 		install -d -o root -g root -m 0755 "$dst/t2bce/include"
 		tar -C "$REPO_ROOT/modules/t2bce/include" \

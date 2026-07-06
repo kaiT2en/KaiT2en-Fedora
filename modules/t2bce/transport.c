@@ -4,6 +4,7 @@
 #include <linux/err.h>
 #include <linux/export.h>
 #include <linux/slab.h>
+#include <linux/string.h>
 
 struct t2bce_client {
     struct t2bce_device *bce;
@@ -12,6 +13,8 @@ struct t2bce_client {
     struct list_head list;
     t2bce_client_resume_callback resume_complete;
     void *resume_complete_userdata;
+    struct t2bce_client_pm_ops pm_ops;
+    void *pm_userdata;
 };
 
 struct t2bce_sq_ctx {
@@ -120,6 +123,109 @@ void t2bce_client_set_resume_complete_callback(struct t2bce_client *client,
     smp_store_release(&client->resume_complete, callback);
 }
 EXPORT_SYMBOL_GPL(t2bce_client_set_resume_complete_callback);
+
+void t2bce_client_set_pm_ops(struct t2bce_client *client,
+        const struct t2bce_client_pm_ops *ops, void *userdata)
+{
+    if (!ops) {
+        memset(&client->pm_ops, 0, sizeof(client->pm_ops));
+        WRITE_ONCE(client->pm_userdata, NULL);
+        return;
+    }
+
+    WRITE_ONCE(client->pm_userdata, userdata);
+    client->pm_ops = *ops;
+}
+EXPORT_SYMBOL_GPL(t2bce_client_set_pm_ops);
+
+void t2bce_clients_shutdown(struct t2bce_device *bce)
+{
+    struct t2bce_client *client;
+    int srcu_idx;
+
+    srcu_idx = srcu_read_lock(&bce->clients_srcu);
+    list_for_each_entry_srcu(client, &bce->clients, list,
+            srcu_read_lock_held(&bce->clients_srcu)) {
+        if (client->pm_ops.shutdown)
+            client->pm_ops.shutdown(READ_ONCE(client->pm_userdata));
+    }
+    srcu_read_unlock(&bce->clients_srcu, srcu_idx);
+}
+
+void t2bce_clients_pm_reset(struct t2bce_device *bce)
+{
+    struct t2bce_client *client;
+    int srcu_idx;
+
+    srcu_idx = srcu_read_lock(&bce->clients_srcu);
+    list_for_each_entry_srcu(client, &bce->clients, list,
+            srcu_read_lock_held(&bce->clients_srcu)) {
+        if (client->pm_ops.pm_reset)
+            client->pm_ops.pm_reset(READ_ONCE(client->pm_userdata));
+    }
+    srcu_read_unlock(&bce->clients_srcu, srcu_idx);
+}
+
+void t2bce_clients_pm_prepare_no_state(struct t2bce_device *bce)
+{
+    struct t2bce_client *client;
+    int srcu_idx;
+
+    srcu_idx = srcu_read_lock(&bce->clients_srcu);
+    list_for_each_entry_srcu(client, &bce->clients, list,
+            srcu_read_lock_held(&bce->clients_srcu)) {
+        if (client->pm_ops.pm_prepare_no_state)
+            client->pm_ops.pm_prepare_no_state(READ_ONCE(client->pm_userdata));
+    }
+    srcu_read_unlock(&bce->clients_srcu, srcu_idx);
+}
+
+void t2bce_clients_pm_mark_no_state_resume(struct t2bce_device *bce)
+{
+    struct t2bce_client *client;
+    int srcu_idx;
+
+    srcu_idx = srcu_read_lock(&bce->clients_srcu);
+    list_for_each_entry_srcu(client, &bce->clients, list,
+            srcu_read_lock_held(&bce->clients_srcu)) {
+        if (client->pm_ops.pm_mark_no_state_resume)
+            client->pm_ops.pm_mark_no_state_resume(READ_ONCE(client->pm_userdata));
+    }
+    srcu_read_unlock(&bce->clients_srcu, srcu_idx);
+}
+
+bool t2bce_clients_pm_has_no_state_resume(struct t2bce_device *bce)
+{
+    struct t2bce_client *client;
+    bool ret = false;
+    int srcu_idx;
+
+    srcu_idx = srcu_read_lock(&bce->clients_srcu);
+    list_for_each_entry_srcu(client, &bce->clients, list,
+            srcu_read_lock_held(&bce->clients_srcu)) {
+        if (client->pm_ops.pm_is_no_state_resume &&
+            client->pm_ops.pm_is_no_state_resume(READ_ONCE(client->pm_userdata))) {
+            ret = true;
+            break;
+        }
+    }
+    srcu_read_unlock(&bce->clients_srcu, srcu_idx);
+    return ret;
+}
+
+void t2bce_clients_pm_complete(struct t2bce_device *bce)
+{
+    struct t2bce_client *client;
+    int srcu_idx;
+
+    srcu_idx = srcu_read_lock(&bce->clients_srcu);
+    list_for_each_entry_srcu(client, &bce->clients, list,
+            srcu_read_lock_held(&bce->clients_srcu)) {
+        if (client->pm_ops.pm_complete)
+            client->pm_ops.pm_complete(READ_ONCE(client->pm_userdata));
+    }
+    srcu_read_unlock(&bce->clients_srcu, srcu_idx);
+}
 
 void t2bce_notify_resume_complete(struct t2bce_device *bce)
 {

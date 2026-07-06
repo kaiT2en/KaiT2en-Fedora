@@ -146,8 +146,6 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
     global_bce = bce;
 
-    bce_vhci_create(bce->dev, &bce->vhci);
-
     return 0;
 
 fail_ts:
@@ -371,8 +369,6 @@ static void t2bce_remove(struct pci_dev *dev)
     bce->is_being_removed = true;
     global_bce = NULL;
 
-    bce_vhci_destroy(&bce->vhci);
-
     bce_free_state_buffer(bce);
     bce_xhci_pm_stop(&bce->xhci_pm);
 #ifndef WITHOUT_NVME_PATCH
@@ -405,14 +401,14 @@ static void t2bce_shutdown(struct pci_dev *dev)
     bce->stateful_suspend_valid = false;
     bce->no_state_fallback = false;
     bce->no_state_resume = false;
-    bce_vhci_pm_reset(&bce->vhci);
+    t2bce_clients_pm_reset(bce);
 
     /*
      * Do not tear down allocations here;
      * just leave the T2 side quiet while command queues and mailbox access are
      * still valid: USB HCD off, XHCI PM sentinel written, mailbox drained.
      */
-    bce_vhci_shutdown(&bce->vhci);
+    t2bce_clients_shutdown(bce);
     bce_xhci_pm_stop(&bce->xhci_pm);
 
     if (bce->mailbox_channel_active) {
@@ -515,7 +511,7 @@ static int t2bce_suspend(struct device *dev)
     bce->stateful_suspend_valid = false;
     bce->no_state_fallback = false;
     bce->no_state_resume = false;
-    bce_vhci_pm_reset(&bce->vhci);
+    t2bce_clients_pm_reset(bce);
 
     status = bce_pm_suspend_prepare(bce);
     if (status)
@@ -523,12 +519,12 @@ static int t2bce_suspend(struct device *dev)
 
     if (!bce_stateful_supported(bce)) {
         /* No-state keeps the current Linux HCD teardown path until the Windows no-state path is rebuilt separately. */
-        bce_vhci_pm_prepare_no_state(&bce->vhci);
+        t2bce_clients_pm_prepare_no_state(bce);
         status = bce_pm_suspend_fallback_no_state(bce);
         if (!status) {
             bce->no_state_fallback = true;
             bce->no_state_resume = true;
-            bce_vhci_pm_mark_no_state_resume(&bce->vhci);
+            t2bce_clients_pm_mark_no_state_resume(bce);
         } else {
             bce_pm_suspend_abort(bce);
         }
@@ -546,12 +542,12 @@ static int t2bce_suspend(struct device *dev)
 
     /* Current Linux path treats the traced 0x19 not-ready reply as stateful reject. */
     pr_debug("t2bce: suspend: stateful path not ready, falling back to no-state\n");
-    bce_vhci_pm_prepare_no_state(&bce->vhci);
+    t2bce_clients_pm_prepare_no_state(bce);
     status = bce_pm_suspend_fallback_no_state(bce);
     if (!status) {
         bce->no_state_fallback = true;
         bce->no_state_resume = true;
-        bce_vhci_pm_mark_no_state_resume(&bce->vhci);
+        t2bce_clients_pm_mark_no_state_resume(bce);
     } else {
         bce_pm_suspend_abort(bce);
     }
@@ -614,12 +610,13 @@ static void t2bce_complete(struct device *dev)
 
     pr_debug("t2bce: complete: entry no_state_fallback=%d no_state_resume=%d\n",
             bce->no_state_fallback, bce->no_state_resume);
-    if (bce->no_state_fallback && bce_vhci_pm_is_no_state_resume(&bce->vhci)) {
-        bce_vhci_pm_complete(&bce->vhci);
+    if (bce->no_state_fallback && t2bce_clients_pm_has_no_state_resume(bce)) {
+        t2bce_clients_pm_complete(bce);
         bce->no_state_fallback = false;
     }
 
     t2bce_notify_resume_complete(bce);
+    bce->no_state_resume = false;
     pr_debug("t2bce: complete: exit\n");
 }
 
@@ -663,11 +660,6 @@ static int __init t2bce_module_init(void)
         result = PTR_ERR(bce_class);
         goto fail_class;
     }
-    if ((result = bce_vhci_module_init())) {
-        pr_err("t2bce: bce-vhci init failed");
-        goto fail_class;
-    }
-
     result = pci_register_driver(&t2bce_pci_driver);
     if (result)
         goto fail_drv;
@@ -688,7 +680,6 @@ static void __exit t2bce_module_exit(void)
 {
     pci_unregister_driver(&t2bce_pci_driver);
 
-    bce_vhci_module_exit();
     class_destroy(bce_class);
     unregister_chrdev_region(bce_chrdev, 1);
 }
@@ -697,5 +688,6 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("André Eikmeyer <andre.eikmeyer@gmail.com>");
 MODULE_DESCRIPTION("T2 BCE Driver");
 MODULE_VERSION("0.06");
+MODULE_SOFTDEP("post: t2vhci");
 module_init(t2bce_module_init);
 module_exit(t2bce_module_exit);

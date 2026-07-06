@@ -6,11 +6,13 @@
 #include <linux/module.h>
 #include <linux/version.h>
 #include <linux/err.h>
+#include <linux/slab.h>
 
 static dev_t bce_vhci_chrdev;
 static struct class *bce_vhci_class;
 static const struct hc_driver bce_vhci_driver;
 static u16 bce_vhci_port_mask = U16_MAX;
+static struct bce_vhci *global_vhci;
 
 enum bce_vhci_port_status_bits {
     BCE_VHCI_PORT_STATUS_OVERCURRENT   = 0x2,
@@ -33,6 +35,21 @@ static void bce_vhci_firmware_event_completion(struct t2bce_queue_sq *sq);
 static int bce_vhci_start_controller(struct bce_vhci *vhci);
 static void bce_vhci_forget_devices(struct bce_vhci *vhci);
 static int __bce_vhci_add_hcd(struct bce_vhci *vhci);
+static void bce_vhci_shutdown_client(void *userdata);
+static void bce_vhci_pm_reset_client(void *userdata);
+static void bce_vhci_pm_prepare_no_state_client(void *userdata);
+static void bce_vhci_pm_mark_no_state_resume_client(void *userdata);
+static bool bce_vhci_pm_is_no_state_resume_client(void *userdata);
+static void bce_vhci_pm_complete_client(void *userdata);
+
+static const struct t2bce_client_pm_ops bce_vhci_pm_ops = {
+        .shutdown = bce_vhci_shutdown_client,
+        .pm_reset = bce_vhci_pm_reset_client,
+        .pm_prepare_no_state = bce_vhci_pm_prepare_no_state_client,
+        .pm_mark_no_state_resume = bce_vhci_pm_mark_no_state_resume_client,
+        .pm_is_no_state_resume = bce_vhci_pm_is_no_state_resume_client,
+        .pm_complete = bce_vhci_pm_complete_client,
+};
 
 int bce_vhci_create(struct device *parent, struct bce_vhci *vhci)
 {
@@ -52,6 +69,7 @@ int bce_vhci_create(struct device *parent, struct bce_vhci *vhci)
         vhci->client = NULL;
         goto fail_client;
     }
+    t2bce_client_set_pm_ops(vhci->client, &bce_vhci_pm_ops, vhci);
 
     if ((status = bce_vhci_create_message_queues(vhci)))
         goto fail_mq;
@@ -87,6 +105,7 @@ fail_hcd:
 fail_eq:
     bce_vhci_destroy_message_queues(vhci);
 fail_mq:
+    t2bce_client_set_pm_ops(vhci->client, NULL, NULL);
     t2bce_client_put(vhci->client);
     vhci->client = NULL;
 fail_client:
@@ -103,6 +122,7 @@ void bce_vhci_destroy(struct bce_vhci *vhci)
     bce_vhci_remove_hcd(vhci);
     bce_vhci_destroy_event_queues(vhci);
     bce_vhci_destroy_message_queues(vhci);
+    t2bce_client_set_pm_ops(vhci->client, NULL, NULL);
     t2bce_client_put(vhci->client);
     vhci->client = NULL;
     device_destroy(bce_vhci_class, vhci->vdevt);
@@ -178,6 +198,36 @@ void bce_vhci_pm_complete(struct bce_vhci *vhci)
     /* Re-add the VHCI HCD after the PM core completed resume ordering. */
     pr_debug("bce-vhci: scheduling HCD re-add after no-state wake\n");
     queue_work(vhci->tq_state_wq, &vhci->w_add_hcd);
+}
+
+static void bce_vhci_pm_reset_client(void *userdata)
+{
+    bce_vhci_pm_reset(userdata);
+}
+
+static void bce_vhci_shutdown_client(void *userdata)
+{
+    bce_vhci_shutdown(userdata);
+}
+
+static void bce_vhci_pm_prepare_no_state_client(void *userdata)
+{
+    bce_vhci_pm_prepare_no_state(userdata);
+}
+
+static void bce_vhci_pm_mark_no_state_resume_client(void *userdata)
+{
+    bce_vhci_pm_mark_no_state_resume(userdata);
+}
+
+static bool bce_vhci_pm_is_no_state_resume_client(void *userdata)
+{
+    return bce_vhci_pm_is_no_state_resume(userdata);
+}
+
+static void bce_vhci_pm_complete_client(void *userdata)
+{
+    bce_vhci_pm_complete(userdata);
 }
 
 static void bce_vhci_add_hcd_w(struct work_struct *ws)
@@ -1146,6 +1196,7 @@ static const struct hc_driver bce_vhci_driver = {
 int __init bce_vhci_module_init(void)
 {
     int result;
+
     if ((result = alloc_chrdev_region(&bce_vhci_chrdev, 0, 1, "bce-vhci")))
         goto fail_chrdev;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,4,0)
@@ -1157,21 +1208,48 @@ int __init bce_vhci_module_init(void)
         result = PTR_ERR(bce_vhci_class);
         goto fail_class;
     }
+
+    global_vhci = kzalloc(sizeof(*global_vhci), GFP_KERNEL);
+    if (!global_vhci) {
+        result = -ENOMEM;
+        goto fail_alloc;
+    }
+
+    result = bce_vhci_create(NULL, global_vhci);
+    if (result)
+        goto fail_create;
+
     return 0;
 
-fail_class:
+fail_create:
+    kfree(global_vhci);
+    global_vhci = NULL;
+fail_alloc:
     class_destroy(bce_vhci_class);
-fail_chrdev:
+fail_class:
     unregister_chrdev_region(bce_vhci_chrdev, 1);
+fail_chrdev:
     if (!result)
         result = -EINVAL;
     return result;
 }
 void __exit bce_vhci_module_exit(void)
 {
+    if (global_vhci) {
+        bce_vhci_destroy(global_vhci);
+        kfree(global_vhci);
+        global_vhci = NULL;
+    }
     class_destroy(bce_vhci_class);
     unregister_chrdev_region(bce_vhci_chrdev, 1);
 }
 
 module_param_named(vhci_port_mask, bce_vhci_port_mask, ushort, 0444);
 MODULE_PARM_DESC(vhci_port_mask, "Specifies which VHCI ports are enabled");
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("André Eikmeyer <andre.eikmeyer@gmail.com>");
+MODULE_DESCRIPTION("Apple T2 BCE VHCI Driver");
+MODULE_VERSION("0.01");
+MODULE_SOFTDEP("pre: t2bce");
+module_init(bce_vhci_module_init);
+module_exit(bce_vhci_module_exit);
