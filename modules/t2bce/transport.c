@@ -98,6 +98,27 @@ void t2bce_client_put(struct t2bce_client *client)
 }
 EXPORT_SYMBOL_GPL(t2bce_client_put);
 
+struct device *t2bce_device_get(void)
+{
+    struct t2bce_device *bce = global_bce;
+
+    if (!bce)
+        return ERR_PTR(-EPROBE_DEFER);
+
+    if (bce->is_being_removed || !bce->dev)
+        return ERR_PTR(-ENODEV);
+
+    return get_device(bce->dev);
+}
+EXPORT_SYMBOL_GPL(t2bce_device_get);
+
+void t2bce_device_put(struct device *dev)
+{
+    if (dev)
+        put_device(dev);
+}
+EXPORT_SYMBOL_GPL(t2bce_device_put);
+
 struct device *t2bce_client_dma_dev(struct t2bce_client *client)
 {
     return &client->bce->pci->dev;

@@ -916,7 +916,7 @@ static int bce_vhci_urb_control_check_status(struct bce_vhci_urb *urb)
                 q->active = false;
                 q->stalled = true;
                 q->state = BCE_VHCI_ENDPOINT_STALLED;
-                pr_info("bce-vhci: EP0 status=3 dev=%u state=%x; completing urb and scheduling endpoint reset paused_by=%x remaining=%u\n",
+                pr_debug("bce-vhci: EP0 status=3 dev=%u state=%x; completing urb and scheduling endpoint reset paused_by=%x remaining=%u\n",
                         q->dev_addr, urb->state, q->paused_by,
                         q->remaining_active_requests);
                 bce_vhci_urb_complete(urb, -EPIPE);

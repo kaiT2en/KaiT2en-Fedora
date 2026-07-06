@@ -1195,6 +1195,7 @@ static const struct hc_driver bce_vhci_driver = {
 
 int __init bce_vhci_module_init(void)
 {
+    struct device *parent;
     int result;
 
     if ((result = alloc_chrdev_region(&bce_vhci_chrdev, 0, 1, "bce-vhci")))
@@ -1215,7 +1216,14 @@ int __init bce_vhci_module_init(void)
         goto fail_alloc;
     }
 
-    result = bce_vhci_create(NULL, global_vhci);
+    parent = t2bce_device_get();
+    if (IS_ERR(parent)) {
+        result = PTR_ERR(parent);
+        goto fail_create;
+    }
+
+    result = bce_vhci_create(parent, global_vhci);
+    t2bce_device_put(parent);
     if (result)
         goto fail_create;
 

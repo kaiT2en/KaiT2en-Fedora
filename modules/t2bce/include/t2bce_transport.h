@@ -38,6 +38,8 @@ enum t2bce_completion_status {
 struct t2bce_client *t2bce_client_get(struct device *dev);
 void t2bce_client_put(struct t2bce_client *client);
 
+struct device *t2bce_device_get(void);
+void t2bce_device_put(struct device *dev);
 struct device *t2bce_client_dma_dev(struct t2bce_client *client);
 bool t2bce_client_no_state_resume(struct t2bce_client *client);
 
