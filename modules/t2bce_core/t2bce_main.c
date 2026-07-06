@@ -445,14 +445,14 @@ static void t2bce_shutdown(struct pci_dev *dev)
     bce->stateful_suspend_valid = false;
     bce->no_state_fallback = false;
     bce->no_state_resume = false;
-    t2bce_clients_pm_reset(bce);
+    t2bce_core_clients_pm_reset(bce);
 
     /*
      * Do not tear down allocations here;
      * just leave the T2 side quiet while command queues and mailbox access are
      * still valid: USB HCD off, XHCI PM sentinel written, mailbox drained.
      */
-    t2bce_clients_shutdown(bce);
+    t2bce_core_clients_shutdown(bce);
     bce_xhci_pm_stop(&bce->xhci_pm);
 
     if (bce->mailbox_channel_active) {
@@ -555,8 +555,8 @@ static int t2bce_suspend(struct device *dev)
     bce->stateful_suspend_valid = false;
     bce->no_state_fallback = false;
     bce->no_state_resume = false;
-    t2bce_clients_pm_reset(bce);
-    t2bce_clients_pm_prepare(bce);
+    t2bce_core_clients_pm_reset(bce);
+    t2bce_core_clients_pm_prepare(bce);
 
     status = bce_pm_suspend_prepare(bce);
     if (status)
@@ -564,12 +564,12 @@ static int t2bce_suspend(struct device *dev)
 
     if (!bce_stateful_supported(bce)) {
         /* No-state keeps the current Linux HCD teardown path until the Windows no-state path is rebuilt separately. */
-        t2bce_clients_pm_prepare_no_state(bce);
+        t2bce_core_clients_pm_prepare_no_state(bce);
         status = bce_pm_suspend_fallback_no_state(bce);
         if (!status) {
             bce->no_state_fallback = true;
             bce->no_state_resume = true;
-            t2bce_clients_pm_mark_no_state_resume(bce);
+            t2bce_core_clients_pm_mark_no_state_resume(bce);
         } else {
             bce_pm_suspend_abort(bce);
         }
@@ -587,12 +587,12 @@ static int t2bce_suspend(struct device *dev)
 
     /* Current Linux path treats the traced 0x19 not-ready reply as stateful reject. */
     pr_debug("t2bce_core: suspend: stateful path not ready, falling back to no-state\n");
-    t2bce_clients_pm_prepare_no_state(bce);
+    t2bce_core_clients_pm_prepare_no_state(bce);
     status = bce_pm_suspend_fallback_no_state(bce);
     if (!status) {
         bce->no_state_fallback = true;
         bce->no_state_resume = true;
-        t2bce_clients_pm_mark_no_state_resume(bce);
+        t2bce_core_clients_pm_mark_no_state_resume(bce);
     } else {
         bce_pm_suspend_abort(bce);
     }
@@ -655,12 +655,12 @@ static void t2bce_complete(struct device *dev)
 
     pr_debug("t2bce_core: complete: entry no_state_fallback=%d no_state_resume=%d\n",
             bce->no_state_fallback, bce->no_state_resume);
-    if (bce->no_state_fallback && t2bce_clients_pm_has_no_state_resume(bce)) {
-        t2bce_clients_pm_complete(bce);
+    if (bce->no_state_fallback && t2bce_core_clients_pm_has_no_state_resume(bce)) {
+        t2bce_core_clients_pm_complete(bce);
         bce->no_state_fallback = false;
     }
 
-    t2bce_notify_resume_complete(bce);
+    t2bce_core_notify_resume_complete(bce);
     bce->no_state_resume = false;
     pr_debug("t2bce_core: complete: exit\n");
 }

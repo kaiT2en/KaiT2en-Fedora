@@ -6,14 +6,14 @@
 
 struct device;
 struct usb_hcd;
-struct t2bce_client;
+struct t2bce_core_client;
 
 struct bce_vhci_device {
     struct bce_vhci_transfer_queue tq[32];
     u32 tq_mask;
 };
 struct bce_vhci {
-    struct t2bce_client *client;
+    struct t2bce_core_client *client;
     dev_t vdevt;
     struct device *vdev;
     struct usb_hcd *hcd;
@@ -25,7 +25,7 @@ struct bce_vhci {
     struct bce_vhci_message_queue msg_asynchronous;
     struct spinlock msg_asynchronous_lock;
     struct bce_vhci_command_queue cq;
-    struct t2bce_queue_cq *ev_cq;
+    struct t2bce_core_queue_cq *ev_cq;
     struct bce_vhci_event_queue ev_commands;
     struct bce_vhci_event_queue ev_system;
     struct bce_vhci_event_queue ev_isochronous;

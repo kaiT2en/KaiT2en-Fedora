@@ -31,7 +31,7 @@ static int bce_vhci_create_message_queues(struct bce_vhci *vhci);
 static void bce_vhci_destroy_message_queues(struct bce_vhci *vhci);
 static void bce_vhci_handle_firmware_events_w(struct work_struct *ws);
 static void bce_vhci_add_hcd_w(struct work_struct *ws);
-static void bce_vhci_firmware_event_completion(struct t2bce_queue_sq *sq);
+static void bce_vhci_firmware_event_completion(struct t2bce_core_queue_sq *sq);
 static int bce_vhci_start_controller(struct bce_vhci *vhci);
 static void bce_vhci_forget_devices(struct bce_vhci *vhci);
 static int __bce_vhci_add_hcd(struct bce_vhci *vhci);
@@ -43,7 +43,7 @@ static void bce_vhci_pm_mark_no_state_resume_client(void *userdata);
 static bool bce_vhci_pm_is_no_state_resume_client(void *userdata);
 static void bce_vhci_pm_complete_client(void *userdata);
 
-static const struct t2bce_client_pm_ops bce_vhci_pm_ops = {
+static const struct t2bce_core_client_pm_ops bce_vhci_pm_ops = {
         .shutdown = bce_vhci_shutdown_client,
         .pm_reset = bce_vhci_pm_reset_client,
         .pm_prepare = bce_vhci_pm_prepare_client,
@@ -65,13 +65,13 @@ int bce_vhci_create(struct device *parent, struct bce_vhci *vhci)
         status = PTR_ERR(vhci->vdev);
         goto fail_dev;
     }
-    vhci->client = t2bce_client_get(vhci->vdev);
+    vhci->client = t2bce_core_client_get(vhci->vdev);
     if (IS_ERR(vhci->client)) {
         status = PTR_ERR(vhci->client);
         vhci->client = NULL;
         goto fail_client;
     }
-    t2bce_client_set_pm_ops(vhci->client, &bce_vhci_pm_ops, vhci);
+    t2bce_core_client_set_pm_ops(vhci->client, &bce_vhci_pm_ops, vhci);
 
     if ((status = bce_vhci_create_message_queues(vhci)))
         goto fail_mq;
@@ -90,7 +90,7 @@ int bce_vhci_create(struct device *parent, struct bce_vhci *vhci)
         status = -ENOMEM;
         goto fail_hcd;
     }
-    vhci->hcd->self.sysdev = t2bce_client_dma_dev(vhci->client);
+    vhci->hcd->self.sysdev = t2bce_core_client_dma_dev(vhci->client);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,4,0)
     vhci->hcd->self.uses_dma = 1;
 #endif
@@ -108,8 +108,8 @@ fail_hcd:
 fail_eq:
     bce_vhci_destroy_message_queues(vhci);
 fail_mq:
-    t2bce_client_set_pm_ops(vhci->client, NULL, NULL);
-    t2bce_client_put(vhci->client);
+    t2bce_core_client_set_pm_ops(vhci->client, NULL, NULL);
+    t2bce_core_client_put(vhci->client);
     vhci->client = NULL;
 fail_client:
     device_destroy(bce_vhci_class, vhci->vdevt);
@@ -125,8 +125,8 @@ void bce_vhci_destroy(struct bce_vhci *vhci)
     bce_vhci_remove_hcd(vhci);
     bce_vhci_destroy_event_queues(vhci);
     bce_vhci_destroy_message_queues(vhci);
-    t2bce_client_set_pm_ops(vhci->client, NULL, NULL);
-    t2bce_client_put(vhci->client);
+    t2bce_core_client_set_pm_ops(vhci->client, NULL, NULL);
+    t2bce_core_client_put(vhci->client);
     vhci->client = NULL;
     device_destroy(bce_vhci_class, vhci->vdevt);
 }
@@ -962,7 +962,7 @@ static void bce_vhci_handle_usb_event(struct bce_vhci_event_queue *q, struct bce
 
 static int bce_vhci_create_event_queues(struct bce_vhci *vhci)
 {
-    vhci->ev_cq = t2bce_create_cq(vhci->client, 0x100);
+    vhci->ev_cq = t2bce_core_create_cq(vhci->client, 0x100);
     if (!vhci->ev_cq)
         return -EINVAL;
 #define CREATE_EVENT_QUEUE(field, name, cb) bce_vhci_event_queue_create(vhci, &vhci->field, name, cb)
@@ -987,7 +987,7 @@ static void bce_vhci_destroy_event_queues(struct bce_vhci *vhci)
     bce_vhci_event_queue_destroy(vhci, &vhci->ev_interrupt);
     bce_vhci_event_queue_destroy(vhci, &vhci->ev_asynchronous);
     if (vhci->ev_cq)
-        t2bce_destroy_cq(vhci->client, vhci->ev_cq);
+        t2bce_core_destroy_cq(vhci->client, vhci->ev_cq);
 }
 
 static void bce_vhci_send_fw_event_response(struct bce_vhci *vhci, struct bce_vhci_message *req, u16 status)
@@ -999,7 +999,7 @@ static void bce_vhci_send_fw_event_response(struct bce_vhci *vhci, struct bce_vh
     r.param1 = req->param1;
     r.param2 = 0;
 
-    if (t2bce_reserve_submission(vhci->msg_system.sq, &timeout)) {
+    if (t2bce_core_reserve_submission(vhci->msg_system.sq, &timeout)) {
         pr_err("t2bce_vhci: Cannot reserve submision for FW event reply\n");
         return;
     }
@@ -1065,27 +1065,27 @@ static void bce_vhci_handle_firmware_events_w(struct work_struct *ws)
     size_t cnt = 0;
     int result;
     struct bce_vhci *vhci = container_of(ws, struct bce_vhci, w_fw_events);
-    struct t2bce_queue_sq *sq = vhci->ev_commands.sq;
-    struct t2bce_sq_completion_data *cq;
+    struct t2bce_core_queue_sq *sq = vhci->ev_commands.sq;
+    struct t2bce_core_sq_completion_data *cq;
     struct bce_vhci_message *msg, *msg2 = NULL;
 
     while (true) {
         if (msg2) {
             msg = msg2;
             msg2 = NULL;
-        } else if ((cq = t2bce_next_completion(sq))) {
+        } else if ((cq = t2bce_core_next_completion(sq))) {
             if (cq->status == T2BCE_COMPLETION_ABORTED) {
-                t2bce_notify_submission_complete(sq);
+                t2bce_core_notify_submission_complete(sq);
                 continue;
             }
-            msg = &vhci->ev_commands.data[t2bce_queue_sq_head(sq)];
+            msg = &vhci->ev_commands.data[t2bce_core_queue_sq_head(sq)];
         } else {
             break;
         }
 
         pr_debug("t2bce_vhci: Got fw event: %x s=%x p1=%x p2=%llx\n", msg->cmd, msg->status, msg->param1, msg->param2);
-        if ((cq = t2bce_next_completion(sq))) {
-            msg2 = &vhci->ev_commands.data[(t2bce_queue_sq_head(sq) + 1) % t2bce_queue_sq_capacity(sq)];
+        if ((cq = t2bce_core_next_completion(sq))) {
+            msg2 = &vhci->ev_commands.data[(t2bce_core_queue_sq_head(sq) + 1) % t2bce_core_queue_sq_capacity(sq)];
             pr_debug("t2bce_vhci: Got second fw event: %x s=%x p1=%x p2=%llx\n",
                     msg->cmd, msg->status, msg->param1, msg->param2);
             if (cq->status != T2BCE_COMPLETION_ABORTED &&
@@ -1094,8 +1094,8 @@ static void bce_vhci_handle_firmware_events_w(struct work_struct *ws)
                 pr_debug("t2bce_vhci: Cancelled\n");
                 bce_vhci_send_fw_event_response(vhci, msg, BCE_VHCI_ABORT);
 
-                t2bce_notify_submission_complete(sq);
-                t2bce_notify_submission_complete(sq);
+                t2bce_core_notify_submission_complete(sq);
+                t2bce_core_notify_submission_complete(sq);
                 msg2 = NULL;
                 cnt += 2;
                 continue;
@@ -1108,19 +1108,19 @@ static void bce_vhci_handle_firmware_events_w(struct work_struct *ws)
         bce_vhci_send_fw_event_response(vhci, msg, (u16) result);
 
 
-        t2bce_notify_submission_complete(sq);
+        t2bce_core_notify_submission_complete(sq);
         ++cnt;
     }
     bce_vhci_event_queue_submit_pending(&vhci->ev_commands, cnt);
-    if (t2bce_queue_sq_available(sq) == t2bce_queue_sq_capacity(sq) - 1) {
+    if (t2bce_core_queue_sq_available(sq) == t2bce_core_queue_sq_capacity(sq) - 1) {
         pr_debug("t2bce_vhci: complete\n");
         complete(&vhci->ev_commands.queue_empty_completion);
     }
 }
 
-static void bce_vhci_firmware_event_completion(struct t2bce_queue_sq *sq)
+static void bce_vhci_firmware_event_completion(struct t2bce_core_queue_sq *sq)
 {
-    struct bce_vhci_event_queue *q = t2bce_queue_sq_userdata(sq);
+    struct bce_vhci_event_queue *q = t2bce_core_queue_sq_userdata(sq);
     queue_work(q->vhci->tq_state_wq, &q->vhci->w_fw_events);
 }
 
@@ -1232,14 +1232,14 @@ int __init bce_vhci_module_init(void)
         goto fail_alloc;
     }
 
-    parent = t2bce_device_get();
+    parent = t2bce_core_device_get();
     if (IS_ERR(parent)) {
         result = PTR_ERR(parent);
         goto fail_create;
     }
 
     result = bce_vhci_create(parent, global_vhci);
-    t2bce_device_put(parent);
+    t2bce_core_device_put(parent);
     if (result)
         goto fail_create;
 

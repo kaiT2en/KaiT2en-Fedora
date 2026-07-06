@@ -39,13 +39,13 @@ struct t2bce_device {
 
 extern struct t2bce_device *global_bce;
 
-void t2bce_notify_resume_complete(struct t2bce_device *bce);
-void t2bce_clients_shutdown(struct t2bce_device *bce);
-void t2bce_clients_pm_reset(struct t2bce_device *bce);
-void t2bce_clients_pm_prepare(struct t2bce_device *bce);
-void t2bce_clients_pm_prepare_no_state(struct t2bce_device *bce);
-void t2bce_clients_pm_mark_no_state_resume(struct t2bce_device *bce);
-bool t2bce_clients_pm_has_no_state_resume(struct t2bce_device *bce);
-void t2bce_clients_pm_complete(struct t2bce_device *bce);
+void t2bce_core_notify_resume_complete(struct t2bce_device *bce);
+void t2bce_core_clients_shutdown(struct t2bce_device *bce);
+void t2bce_core_clients_pm_reset(struct t2bce_device *bce);
+void t2bce_core_clients_pm_prepare(struct t2bce_device *bce);
+void t2bce_core_clients_pm_prepare_no_state(struct t2bce_device *bce);
+void t2bce_core_clients_pm_mark_no_state_resume(struct t2bce_device *bce);
+bool t2bce_core_clients_pm_has_no_state_resume(struct t2bce_device *bce);
+void t2bce_core_clients_pm_complete(struct t2bce_device *bce);
 
 #endif //APPLE_BCE_H

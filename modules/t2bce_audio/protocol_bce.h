@@ -16,15 +16,15 @@ struct t2audio_bce_queue_entry {
     struct completion *cmpl;
 };
 struct t2audio_bce_queue {
-    struct t2bce_queue_cq *cq;
-    struct t2bce_queue_sq *sq;
+    struct t2bce_core_queue_cq *cq;
+    struct t2bce_core_queue_sq *sq;
     void *data;
     dma_addr_t dma_addr;
     size_t data_head, data_tail;
     size_t el_size, el_count;
 };
 struct t2audio_bce {
-    struct t2bce_queue_cq *cq;
+    struct t2bce_core_queue_cq *cq;
     struct t2audio_bce_queue qin;
     struct t2audio_bce_queue qout;
     int tag_num;

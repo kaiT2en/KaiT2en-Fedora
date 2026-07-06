@@ -28,7 +28,7 @@ static void t2audio_resume_complete(void *userdata);
 static void t2audio_pm_prepare_client(void *userdata);
 static void t2audio_pm_shutdown_client(void *userdata);
 
-static const struct t2bce_client_pm_ops t2audio_pm_ops = {
+static const struct t2bce_core_client_pm_ops t2audio_pm_ops = {
         .shutdown = t2audio_pm_shutdown_client,
         .pm_prepare = t2audio_pm_prepare_client,
 };
@@ -56,7 +56,7 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
         goto fail;
     }
 
-    t2audio->bce = t2bce_client_get(&dev->dev);
+    t2audio->bce = t2bce_core_client_get(&dev->dev);
     if (IS_ERR(t2audio->bce)) {
         status = PTR_ERR(t2audio->bce);
         t2audio->bce = NULL;
@@ -67,8 +67,8 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
     t2audio->pci = dev;
     pci_set_drvdata(dev, t2audio);
-    t2bce_client_set_resume_complete_callback(t2audio->bce, t2audio_resume_complete, t2audio);
-    t2bce_client_set_pm_ops(t2audio->bce, &t2audio_pm_ops, t2audio);
+    t2bce_core_client_set_resume_complete_callback(t2audio->bce, t2audio_resume_complete, t2audio);
+    t2bce_core_client_set_pm_ops(t2audio->bce, &t2audio_pm_ops, t2audio);
 
     t2audio->devt = t2audio_chrdev;
     t2audio->dev = device_create(t2audio_class, &dev->dev, t2audio->devt, NULL, "t2bce_audio");
@@ -158,8 +158,8 @@ fail:
         if (!IS_ERR_OR_NULL(t2audio->reg_mem_cfg))
             pci_iounmap(dev, t2audio->reg_mem_cfg);
         if (t2audio->bce)
-            t2bce_client_set_pm_ops(t2audio->bce, NULL, NULL);
-        t2bce_client_put(t2audio->bce);
+            t2bce_core_client_set_pm_ops(t2audio->bce, NULL, NULL);
+        t2bce_core_client_put(t2audio->bce);
         kfree(t2audio);
     }
 
@@ -191,8 +191,8 @@ static void t2audio_remove(struct pci_dev *dev)
     pci_free_irq_vectors(dev);
     pci_release_regions(dev);
     pci_disable_device(dev);
-    t2bce_client_set_pm_ops(t2audio->bce, NULL, NULL);
-    t2bce_client_put(t2audio->bce);
+    t2bce_core_client_set_pm_ops(t2audio->bce, NULL, NULL);
+    t2bce_core_client_put(t2audio->bce);
     kfree(t2audio);
 }
 
@@ -284,7 +284,7 @@ static int t2audio_resume(struct device *dev)
 {
     int status;
     struct t2audio_device *t2audio = pci_get_drvdata(to_pci_dev(dev));
-    bool no_state_resume = t2bce_client_no_state_resume(t2audio->bce);
+    bool no_state_resume = t2bce_core_client_no_state_resume(t2audio->bce);
     const char *path = no_state_resume ? "no-state" : "stateful";
 
     if ((status = pci_enable_device(t2audio->pci))) {

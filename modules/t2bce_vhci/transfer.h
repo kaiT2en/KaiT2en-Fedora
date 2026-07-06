@@ -25,9 +25,9 @@ struct bce_vhci_transfer_queue {
     u32 paused_by;
     bce_vhci_device_t dev_addr;
     u8 endp_addr;
-    struct t2bce_queue_cq *cq;
-    struct t2bce_queue_sq *sq_in;
-    struct t2bce_queue_sq *sq_out;
+    struct t2bce_core_queue_cq *cq;
+    struct t2bce_core_queue_sq *sq_in;
+    struct t2bce_core_queue_sq *sq_out;
     struct list_head evq;
     struct spinlock urb_lock;
     struct mutex pause_lock;

@@ -115,7 +115,7 @@ struct t2audio_device {
 
     struct t2audio_buffer_struct *bs;
 
-    struct t2bce_client *bce;
+    struct t2bce_core_client *bce;
     struct t2audio_bce bcem;
 
     struct snd_card *card;
