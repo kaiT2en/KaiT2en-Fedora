@@ -2,6 +2,10 @@
 
 Buffer Copy Engine fork for Intel Macs with a T2 chip with stateful and no-state resume support.
 
+`t2bce` owns the T2 BCE PCI device, mailbox, PM coordination, and client
+transport API. The shared DMA queue engine lives next to it in `modules/t2dma`
+and must be built/loaded before `t2bce`.
+
 ## Required kernel parameters
 
 These kernel parameters have to be set in Linux commandline:

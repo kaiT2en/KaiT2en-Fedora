@@ -1,9 +1,64 @@
-#include "queue.h"
+#include "t2dma_queue.h"
+#include <linux/export.h>
+#include <linux/init.h>
+#include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/version.h>
 
 #define REG_DOORBELL_BASE 0x44000
+
+struct bce_qe_submission {
+    u64 length;
+    u64 addr;
+
+    u64 segl_addr;
+    u64 segl_length;
+};
+
+enum bce_submission_type {
+    BCE_SUBMISSION_SINGLE,
+    BCE_SUBMISSION_SEGMENT_LIST,
+};
+
+struct bce_submission {
+    enum bce_submission_type type;
+    union {
+        struct {
+            dma_addr_t addr;
+            size_t size;
+        } single;
+        struct {
+            dma_addr_t addr;
+            size_t size;
+        } segment_list;
+    };
+};
+
+enum bce_cmdq_command {
+    BCE_CMD_REGISTER_MEMORY_QUEUE = 0x20,
+    BCE_CMD_UNREGISTER_MEMORY_QUEUE = 0x30,
+    BCE_CMD_FLUSH_MEMORY_QUEUE = 0x40,
+    BCE_CMD_SET_MEMORY_QUEUE_PROPERTY = 0x50
+};
+struct bce_cmdq_simple_memory_queue_cmd {
+    u16 cmd; // bce_cmdq_command
+    u16 flags;
+    u16 qid;
+};
+struct bce_cmdq_register_memory_queue_cmd {
+    u16 cmd; // bce_cmdq_command
+    u16 flags;
+    u16 qid;
+    u16 _pad;
+    u16 el_count;
+    u16 vector_or_cq;
+    u16 _pad2;
+    u16 name_len;
+    char name[0x20];
+    u64 addr;
+    u64 length;
+};
 
 struct bce_queue_cq *bce_alloc_cq(struct t2bce_dma_engine *dma, int qid, u32 el_count)
 {
@@ -23,6 +78,7 @@ struct bce_queue_cq *bce_alloc_cq(struct t2bce_dma_engine *dma, int qid, u32 el_
     }
     return q;
 }
+EXPORT_SYMBOL_GPL(bce_alloc_cq);
 
 void bce_get_cq_memcfg(struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg)
 {
@@ -33,12 +89,14 @@ void bce_get_cq_memcfg(struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg)
     cfg->addr = cq->dma_handle;
     cfg->length = cq->el_count * sizeof(struct bce_qe_completion);
 }
+EXPORT_SYMBOL_GPL(bce_get_cq_memcfg);
 
 void bce_free_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq)
 {
     dma_free_coherent(dma->dma_dev, cq->el_count * sizeof(struct bce_qe_completion), cq->data, cq->dma_handle);
     kfree(cq);
 }
+EXPORT_SYMBOL_GPL(bce_free_cq);
 
 static void bce_handle_cq_completion(struct t2bce_dma_engine *dma, struct bce_qe_completion *e, size_t *ce)
 {
@@ -90,6 +148,7 @@ void bce_handle_cq_completions_locked(struct t2bce_dma_engine *dma, struct bce_q
     mb();
     iowrite32(cq->index, (u32 *) ((u8 *) dma->reg_mem_dma +  REG_DOORBELL_BASE) + cq->qid);
 }
+EXPORT_SYMBOL_GPL(bce_handle_cq_completions_locked);
 
 void bce_dispatch_pending_sq_completions(struct t2bce_dma_engine *dma, size_t ce)
 {
@@ -102,6 +161,7 @@ void bce_dispatch_pending_sq_completions(struct t2bce_dma_engine *dma, size_t ce
         sq->has_pending_completions = false;
     }
 }
+EXPORT_SYMBOL_GPL(bce_dispatch_pending_sq_completions);
 
 
 struct bce_queue_sq *bce_alloc_sq(struct t2bce_dma_engine *dma, int qid, u32 el_size, u32 el_count,
@@ -134,6 +194,7 @@ struct bce_queue_sq *bce_alloc_sq(struct t2bce_dma_engine *dma, int qid, u32 el_
     }
     return q;
 }
+EXPORT_SYMBOL_GPL(bce_alloc_sq);
 
 void bce_get_sq_memcfg(struct bce_queue_sq *sq, struct bce_queue_cq *cq, struct bce_queue_memcfg *cfg)
 {
@@ -144,6 +205,7 @@ void bce_get_sq_memcfg(struct bce_queue_sq *sq, struct bce_queue_cq *cq, struct 
     cfg->addr = sq->dma_handle;
     cfg->length = sq->el_count * sq->el_size;
 }
+EXPORT_SYMBOL_GPL(bce_get_sq_memcfg);
 
 void bce_free_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
 {
@@ -151,6 +213,7 @@ void bce_free_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
     kfree(sq->completion_data);
     kfree(sq);
 }
+EXPORT_SYMBOL_GPL(bce_free_sq);
 
 int bce_reserve_submission(struct bce_queue_sq *sq, unsigned long *timeout)
 {
@@ -166,13 +229,15 @@ int bce_reserve_submission(struct bce_queue_sq *sq, unsigned long *timeout)
     }
     return 0;
 }
+EXPORT_SYMBOL_GPL(bce_reserve_submission);
 
 void bce_cancel_submission_reservation(struct bce_queue_sq *sq)
 {
     atomic_inc(&sq->available_commands);
 }
+EXPORT_SYMBOL_GPL(bce_cancel_submission_reservation);
 
-void *bce_next_submission(struct bce_queue_sq *sq)
+static void *bce_next_submission(struct bce_queue_sq *sq)
 {
     void *ret = bce_sq_element(sq, sq->tail);
     sq->tail = (sq->tail + 1) % sq->el_count;
@@ -184,6 +249,7 @@ void bce_submit_to_device(struct bce_queue_sq *sq)
     mb();
     iowrite32(sq->tail, (u32 *) ((u8 *) sq->reg_mem_dma +  REG_DOORBELL_BASE) + sq->qid);
 }
+EXPORT_SYMBOL_GPL(bce_submit_to_device);
 
 void bce_notify_submission_complete(struct bce_queue_sq *sq)
 {
@@ -193,6 +259,7 @@ void bce_notify_submission_complete(struct bce_queue_sq *sq)
         complete(&sq->available_command_completion);
     }
 }
+EXPORT_SYMBOL_GPL(bce_notify_submission_complete);
 
 static void bce_write_submission(struct bce_qe_submission *element, const struct bce_submission *submission)
 {
@@ -224,6 +291,7 @@ void bce_set_next_submission_single(struct bce_queue_sq *sq, dma_addr_t addr, si
 
     bce_write_submission(bce_next_submission(sq), &submission);
 }
+EXPORT_SYMBOL_GPL(bce_set_next_submission_single);
 
 static void bce_cmdq_completion(struct bce_queue_sq *q);
 
@@ -254,6 +322,7 @@ struct bce_queue_cmdq *bce_alloc_cmdq(struct t2bce_dma_engine *dma, int qid, u32
     }
     return q;
 }
+EXPORT_SYMBOL_GPL(bce_alloc_cmdq);
 
 void bce_free_cmdq(struct t2bce_dma_engine *dma, struct bce_queue_cmdq *cmdq)
 {
@@ -262,6 +331,7 @@ void bce_free_cmdq(struct t2bce_dma_engine *dma, struct bce_queue_cmdq *cmdq)
     kfree(cmdq->tres);
     kfree(cmdq);
 }
+EXPORT_SYMBOL_GPL(bce_free_cmdq);
 
 void bce_cmdq_completion(struct bce_queue_sq *q)
 {
@@ -346,6 +416,7 @@ u32 bce_cmd_register_queue(struct bce_queue_cmdq *cmdq, struct bce_queue_memcfg 
         return (u32)-1;
     return res.status;
 }
+EXPORT_SYMBOL_GPL(bce_cmd_register_queue);
 
 u32 bce_cmd_unregister_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid)
 {
@@ -360,6 +431,7 @@ u32 bce_cmd_unregister_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid)
         return (u32)-1;
     return res.status;
 }
+EXPORT_SYMBOL_GPL(bce_cmd_unregister_memory_queue);
 
 u32 bce_cmd_flush_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid)
 {
@@ -374,6 +446,7 @@ u32 bce_cmd_flush_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid)
         return (u32)-1;
     return res.status;
 }
+EXPORT_SYMBOL_GPL(bce_cmd_flush_memory_queue);
 
 static int bce_register_queue(struct t2bce_dma_engine *dma, struct bce_queue_memcfg *cfg,
         const char *name, bool isdirout)
@@ -429,6 +502,7 @@ struct bce_queue_cq *bce_create_cq(struct t2bce_dma_engine *dma, u32 el_count)
     dma->queues[qid] = (struct bce_queue *) cq;
     return cq;
 }
+EXPORT_SYMBOL_GPL(bce_create_cq);
 
 struct bce_queue_sq *bce_create_sq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name, u32 el_count,
         int direction, bce_sq_completion compl, void *userdata)
@@ -468,6 +542,7 @@ struct bce_queue_sq *bce_create_sq(struct t2bce_dma_engine *dma, struct bce_queu
     spin_unlock(&dma->queues_lock);
     return sq;
 }
+EXPORT_SYMBOL_GPL(bce_create_sq);
 
 struct bce_queue_sq *bce_create_sq_with_flags(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name,
         u32 el_count, u16 flags, bce_sq_completion compl, void *userdata)
@@ -475,6 +550,7 @@ struct bce_queue_sq *bce_create_sq_with_flags(struct t2bce_dma_engine *dma, stru
     int direction = (flags & 1) ? DMA_TO_DEVICE : DMA_FROM_DEVICE;
     return bce_create_sq(dma, cq, name, el_count, direction, compl, userdata);
 }
+EXPORT_SYMBOL_GPL(bce_create_sq_with_flags);
 
 void bce_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq)
 {
@@ -490,6 +566,7 @@ void bce_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq)
 #endif
     bce_free_cq(dma, cq);
 }
+EXPORT_SYMBOL_GPL(bce_destroy_cq);
 
 void bce_destroy_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
 {
@@ -505,8 +582,29 @@ void bce_destroy_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
 #endif
     bce_free_sq(dma, sq);
 }
+EXPORT_SYMBOL_GPL(bce_destroy_sq);
 
 int bce_flush_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
 {
     return bce_flush_queue(dma, (u16) sq->qid);
 }
+EXPORT_SYMBOL_GPL(bce_flush_sq);
+
+static int __init t2dma_module_init(void)
+{
+    pr_info("t2dma: module initialized\n");
+    return 0;
+}
+
+static void __exit t2dma_module_exit(void)
+{
+    pr_info("t2dma: module exited\n");
+}
+
+module_init(t2dma_module_init);
+module_exit(t2dma_module_exit);
+
+MODULE_AUTHOR("André Eikmeyer <andre.eikmeyer@gmail.com>");
+MODULE_DESCRIPTION("Apple T2 BCE DMA queue engine");
+MODULE_VERSION("0.01");
+MODULE_LICENSE("GPL");

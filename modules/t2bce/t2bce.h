@@ -7,7 +7,7 @@
 #include <linux/list.h>
 #include <linux/srcu.h>
 #include "mailbox.h"
-#include "queue.h"
+#include "t2dma_queue.h"
 
 #define BC_PROTOCOL_VERSION 0x20001
 

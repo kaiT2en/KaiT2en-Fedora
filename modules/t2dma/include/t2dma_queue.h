@@ -1,5 +1,5 @@
-#ifndef BCE_QUEUE_H
-#define BCE_QUEUE_H
+#ifndef T2DMA_QUEUE_H
+#define T2DMA_QUEUE_H
 
 #include <linux/completion.h>
 #include <linux/pci.h>
@@ -119,58 +119,6 @@ struct bce_qe_completion {
     u16 flags;  // bce_qe_completion_flags
 };
 
-struct bce_qe_submission {
-    u64 length;
-    u64 addr;
-
-    u64 segl_addr;
-    u64 segl_length;
-};
-
-enum bce_submission_type {
-    BCE_SUBMISSION_SINGLE,
-    BCE_SUBMISSION_SEGMENT_LIST,
-};
-
-struct bce_submission {
-    enum bce_submission_type type;
-    union {
-        struct {
-            dma_addr_t addr;
-            size_t size;
-        } single;
-        struct {
-            dma_addr_t addr;
-            size_t size;
-        } segment_list;
-    };
-};
-
-enum bce_cmdq_command {
-    BCE_CMD_REGISTER_MEMORY_QUEUE = 0x20,
-    BCE_CMD_UNREGISTER_MEMORY_QUEUE = 0x30,
-    BCE_CMD_FLUSH_MEMORY_QUEUE = 0x40,
-    BCE_CMD_SET_MEMORY_QUEUE_PROPERTY = 0x50
-};
-struct bce_cmdq_simple_memory_queue_cmd {
-    u16 cmd; // bce_cmdq_command
-    u16 flags;
-    u16 qid;
-};
-struct bce_cmdq_register_memory_queue_cmd {
-    u16 cmd; // bce_cmdq_command
-    u16 flags;
-    u16 qid;
-    u16 _pad;
-    u16 el_count;
-    u16 vector_or_cq;
-    u16 _pad2;
-    u16 name_len;
-    char name[0x20];
-    u64 addr;
-    u64 length;
-};
-
 static __always_inline void *bce_sq_element(struct bce_queue_sq *q, int i) {
     return (void *) ((u8 *) q->data + q->el_size * i);
 }
@@ -200,7 +148,6 @@ void bce_get_sq_memcfg(struct bce_queue_sq *sq, struct bce_queue_cq *cq, struct 
 void bce_free_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq);
 int bce_reserve_submission(struct bce_queue_sq *sq, unsigned long *timeout);
 void bce_cancel_submission_reservation(struct bce_queue_sq *sq);
-void *bce_next_submission(struct bce_queue_sq *sq);
 void bce_submit_to_device(struct bce_queue_sq *sq);
 void bce_notify_submission_complete(struct bce_queue_sq *sq);
 
@@ -225,4 +172,4 @@ void bce_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq);
 void bce_destroy_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq);
 int bce_flush_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq);
 
-#endif //BCEDRIVER_MAILBOX_H
+#endif

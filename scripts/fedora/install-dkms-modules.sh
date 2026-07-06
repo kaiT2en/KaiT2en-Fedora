@@ -8,6 +8,7 @@ require_fedora
 require_command dkms make install rm chown mktemp depmod sed tar find
 
 MODULES=(
+	t2dma
 	t2bce
 	t2vhci
 	t2audio
@@ -58,13 +59,30 @@ copy_module_source() {
 		--exclude='modules.order' \
 		-cf - . | tar -C "$dst" -xf -
 
+	if [[ "$name" == "t2bce" ]]; then
+		local t2dma_version t2dma_symvers
+
+		t2dma_version="$(sed -n 's/^PACKAGE_VERSION="\([^"]*\)".*/\1/p' "$REPO_ROOT/modules/t2dma/dkms.conf")"
+		[[ -n "$t2dma_version" ]] || fail "missing PACKAGE_VERSION in $REPO_ROOT/modules/t2dma/dkms.conf"
+		t2dma_symvers="$(find "/var/lib/dkms/t2dma/$t2dma_version/$(kernel_release)" -path '*/module/Module.symvers' -print -quit 2>/dev/null || true)"
+		[[ -f "$t2dma_symvers" ]] || fail "missing t2dma Module.symvers; build t2dma before t2bce"
+
+		info "copying t2dma interface into $dst/t2dma for t2bce build"
+		install -d -o root -g root -m 0755 "$dst/t2dma"
+		install -d -o root -g root -m 0755 "$dst/t2dma/include"
+		tar -C "$REPO_ROOT/modules/t2dma/include" \
+			--exclude='.git' \
+			-cf - . | tar -C "$dst/t2dma/include" -xf -
+		install -o root -g root -m 0644 "$t2dma_symvers" "$dst/t2dma/Module.symvers"
+	fi
+
 	if [[ "$name" == "t2audio" || "$name" == "t2vhci" ]]; then
 		local t2bce_version t2bce_symvers
 
 		t2bce_version="$(sed -n 's/^PACKAGE_VERSION="\([^"]*\)".*/\1/p' "$REPO_ROOT/modules/t2bce/dkms.conf")"
 		[[ -n "$t2bce_version" ]] || fail "missing PACKAGE_VERSION in $REPO_ROOT/modules/t2bce/dkms.conf"
 		t2bce_symvers="$(find "/var/lib/dkms/t2bce/$t2bce_version/$(kernel_release)" -path '*/module/Module.symvers' -print -quit 2>/dev/null || true)"
-		[[ -f "$t2bce_symvers" ]] || fail "missing t2bce Module.symvers; build t2bce before t2audio"
+		[[ -f "$t2bce_symvers" ]] || fail "missing t2bce Module.symvers; build t2bce before $name"
 
 		info "copying t2bce interface into $dst/t2bce for $name build"
 		install -d -o root -g root -m 0755 "$dst/t2bce"
