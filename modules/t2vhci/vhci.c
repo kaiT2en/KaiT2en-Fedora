@@ -100,6 +100,7 @@ int bce_vhci_create(struct device *parent, struct bce_vhci *vhci)
     if ((status = __bce_vhci_add_hcd(vhci)))
         goto fail_hcd;
 
+    pr_info("t2vhci: initialized\n");
     return 0;
 
 fail_hcd:
@@ -717,7 +718,7 @@ static int bce_vhci_bus_suspend(struct usb_hcd *hcd)
     status = bce_vhci_suspend_prepare(hcd);
     if (status)
         vhci->system_suspending = false;
-    pr_debug("bce_vhci: bus_suspend exit status=%d\n", status);
+    pr_info("t2vhci: bus_suspend exit status=%d\n", status);
     return status;
 }
 
@@ -737,8 +738,10 @@ static int bce_vhci_resume_no_state(struct usb_hcd *hcd)
     vhci->stateful_resume = false;
     bce_vhci_forget_devices(vhci);
     status = bce_vhci_start_controller(vhci);
-    if (status)
+    if (status) {
+        pr_info("t2vhci: no-state resume exit status=%d\n", status);
         return status;
+    }
 
     pr_debug("bce_vhci: no-state resume, powering off all ports\n");
     for (i = 1; i <= vhci->port_count; i++) {
@@ -757,7 +760,7 @@ static int bce_vhci_resume_no_state(struct usb_hcd *hcd)
     pr_debug("bce_vhci: no-state resume, notifying usbcore about lost power\n");
     usb_root_hub_lost_power(hcd->self.root_hub);
     vhci->no_state_resume = false;
-    pr_debug("bce_vhci: no-state resume exit status=%d\n", status);
+    pr_info("t2vhci: no-state resume exit status=%d\n", status);
     return status;
 }
 
@@ -818,7 +821,7 @@ static int bce_vhci_resume_stateful(struct usb_hcd *hcd)
     status = bce_vhci_resume_all_queues(vhci);
     pr_debug("bce_vhci: stateful resume enabling firmware command events status=%d\n", status);
     bce_vhci_event_queue_resume(&vhci->ev_commands);
-    pr_debug("bce_vhci: stateful resume exit status=%d\n", status);
+    pr_info("t2vhci: stateful resume exit status=%d\n", status);
     return status;
 }
 
@@ -837,7 +840,7 @@ static int bce_vhci_bus_resume(struct usb_hcd *hcd)
     else
         status = bce_vhci_resume_stateful(hcd);
 
-    pr_debug("bce_vhci: bus_resume exit status=%d no_state_resume=%d\n", status, vhci->no_state_resume);
+    pr_info("t2vhci: bus_resume exit status=%d no_state_resume=%d\n", status, vhci->no_state_resume);
     return status;
 }
 
@@ -1240,6 +1243,7 @@ int __init bce_vhci_module_init(void)
     if (result)
         goto fail_create;
 
+    pr_info("t2vhci: module initialized\n");
     return 0;
 
 fail_create:
@@ -1252,6 +1256,7 @@ fail_class:
 fail_chrdev:
     if (!result)
         result = -EINVAL;
+    pr_info("t2vhci: module init failed status=%d\n", result);
     return result;
 }
 void __exit bce_vhci_module_exit(void)
@@ -1263,6 +1268,7 @@ void __exit bce_vhci_module_exit(void)
     }
     class_destroy(bce_vhci_class);
     unregister_chrdev_region(bce_vhci_chrdev, 1);
+    pr_info("t2vhci: module exited\n");
 }
 
 module_param_named(vhci_port_mask, bce_vhci_port_mask, ushort, 0444);

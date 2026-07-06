@@ -144,6 +144,7 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
         }
     }
 
+    pr_info("t2audio: initialized\n");
     return 0;
 
 fail_snd:
@@ -249,7 +250,7 @@ static int t2audio_suspend(struct device *dev)
     dev_dbg(t2audio->dev, "suspend entry\n");
     status = t2audio_quiesce(t2audio, true);
     pci_disable_device(t2audio->pci);
-    dev_dbg(t2audio->dev, "suspend exit status=%d\n", status);
+    pr_info("t2audio: suspend exit status=%d\n", status);
     return 0;
 }
 
@@ -286,8 +287,10 @@ static int t2audio_resume(struct device *dev)
     bool no_state_resume = t2bce_client_no_state_resume(t2audio->bce);
     const char *path = no_state_resume ? "no-state" : "stateful";
 
-    if ((status = pci_enable_device(t2audio->pci)))
+    if ((status = pci_enable_device(t2audio->pci))) {
+        pr_info("t2audio: resume exit status=%d path=%s\n", status, path);
         return status;
+    }
     pci_set_master(t2audio->pci);
     
     /* we are deferring t2audio resume here until vhci is finished*/
@@ -298,6 +301,7 @@ static int t2audio_resume(struct device *dev)
 
     if ((status = t2audio_cmd_set_remote_access(t2audio, T2AUDIO_REMOTE_ACCESS_ON))) {
         dev_err(t2audio->dev, "Failed to set remote access\n");
+        pr_info("t2audio: resume exit status=%d path=%s\n", status, path);
         return status;
     }
 
@@ -305,7 +309,7 @@ static int t2audio_resume(struct device *dev)
     t2audio->pm_quiesced = false;
     t2audio_reset_streams(t2audio);
 
-    pr_debug("t2audio: resume exit status=0 path=%s\n", path);
+    pr_info("t2audio: resume exit status=0 path=%s\n", path);
     return 0;
 }
 
@@ -319,12 +323,13 @@ static void t2audio_resume_work(struct work_struct *ws)
     if (t2audio_cmd_set_remote_access(t2audio, T2AUDIO_REMOTE_ACCESS_ON)) {
         t2audio->resume_deferred = false;
         dev_err(t2audio->dev, "Deferred remote access enable failed\n");
+        pr_info("t2audio: resume deferred path failed\n");
         return;
     }
 
     t2audio->resume_deferred = false;
     t2audio->pm_quiesced = false;
-    pr_debug("t2audio: resume deferred path complete\n");
+    pr_info("t2audio: resume deferred path complete\n");
 }
 
 static void t2audio_resume_complete(void *userdata)
@@ -837,6 +842,7 @@ static int __init t2audio_module_init(void)
     result = pci_register_driver(&t2audio_pci_driver);
     if (result)
         goto fail_drv;
+    pr_info("t2audio: module initialized\n");
     return 0;
 
 fail_drv:
@@ -847,6 +853,7 @@ fail_chrdev:
     unregister_chrdev_region(t2audio_chrdev, 1);
     if (!result)
         result = -EINVAL;
+    pr_info("t2audio: module init failed status=%d\n", result);
     return result;
 }
 
@@ -855,6 +862,7 @@ static void __exit t2audio_module_exit(void)
     pci_unregister_driver(&t2audio_pci_driver);
     class_destroy(t2audio_class);
     unregister_chrdev_region(t2audio_chrdev, 1);
+    pr_info("t2audio: module exited\n");
 }
 
 struct t2audio_alsa_pcm_id_mapping t2audio_alsa_id_mappings[] = {

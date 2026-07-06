@@ -145,6 +145,7 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
     }
 
     global_bce = bce;
+    pr_info("t2bce: initialized\n");
 
     return 0;
 
@@ -391,7 +392,7 @@ static void t2bce_remove(struct pci_dev *dev)
 static void t2bce_shutdown(struct pci_dev *dev)
 {
     struct t2bce_device *bce = pci_get_drvdata(dev);
-    int status;
+    int status = 0;
 
     if (!bce)
         return;
@@ -555,7 +556,7 @@ static int t2bce_suspend(struct device *dev)
 
 out_unlock:
     mutex_unlock(&bce->pm_lock);
-    pr_debug("t2bce: suspend: exit status=%d stateful_valid=%d no_state_resume=%d no_state_fallback=%d\n",
+    pr_info("t2bce: suspend: exit status=%d stateful_valid=%d no_state_resume=%d no_state_fallback=%d\n",
             status, bce->stateful_suspend_valid, bce->no_state_resume, bce->no_state_fallback);
     return status;
 }
@@ -589,7 +590,7 @@ static int t2bce_resume(struct device *dev)
 
 out_unlock:
     mutex_unlock(&bce->pm_lock);
-    pr_debug("t2bce: resume: exit status=%d path=%s stateful_valid=%d no_state_resume=%d no_state_fallback=%d\n",
+    pr_info("t2bce: resume: exit status=%d path=%s stateful_valid=%d no_state_resume=%d no_state_fallback=%d\n",
             status, used_stateful ? "stateful" : "no-state",
             bce->stateful_suspend_valid, bce->no_state_resume, bce->no_state_fallback);
     return status;
@@ -665,6 +666,7 @@ static int __init t2bce_module_init(void)
     if (result)
         goto fail_drv;
 
+    pr_info("t2bce: module initialized\n");
     return 0;
 
 fail_drv:
@@ -675,6 +677,7 @@ fail_chrdev:
     unregister_chrdev_region(bce_chrdev, 1);
     if (!result)
         result = -EINVAL;
+    pr_info("t2bce: module init failed status=%d\n", result);
     return result;
 }
 static void __exit t2bce_module_exit(void)
@@ -683,6 +686,7 @@ static void __exit t2bce_module_exit(void)
 
     class_destroy(bce_class);
     unregister_chrdev_region(bce_chrdev, 1);
+    pr_info("t2bce: module exited\n");
 }
 
 MODULE_LICENSE("GPL");
