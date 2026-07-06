@@ -103,7 +103,7 @@ EXPORT_SYMBOL_GPL(t2bce_client_dma_dev);
 
 bool t2bce_client_no_state_resume(struct t2bce_client *client)
 {
-    return client->bce->vhci.no_state_resume;
+    return client->bce->no_state_resume;
 }
 EXPORT_SYMBOL_GPL(t2bce_client_no_state_resume);
 

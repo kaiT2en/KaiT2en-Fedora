@@ -404,7 +404,8 @@ static void t2bce_shutdown(struct pci_dev *dev)
     bce->is_being_removed = true;
     bce->stateful_suspend_valid = false;
     bce->no_state_fallback = false;
-    bce->vhci.no_state_resume = false;
+    bce->no_state_resume = false;
+    bce_vhci_pm_reset(&bce->vhci);
 
     /*
      * Do not tear down allocations here;
@@ -513,7 +514,8 @@ static int t2bce_suspend(struct device *dev)
 
     bce->stateful_suspend_valid = false;
     bce->no_state_fallback = false;
-    bce->vhci.no_state_resume = false;
+    bce->no_state_resume = false;
+    bce_vhci_pm_reset(&bce->vhci);
 
     status = bce_pm_suspend_prepare(bce);
     if (status)
@@ -521,11 +523,12 @@ static int t2bce_suspend(struct device *dev)
 
     if (!bce_stateful_supported(bce)) {
         /* No-state keeps the current Linux HCD teardown path until the Windows no-state path is rebuilt separately. */
-        bce_vhci_remove_hcd(&bce->vhci);
+        bce_vhci_pm_prepare_no_state(&bce->vhci);
         status = bce_pm_suspend_fallback_no_state(bce);
         if (!status) {
             bce->no_state_fallback = true;
-            bce->vhci.no_state_resume = true;
+            bce->no_state_resume = true;
+            bce_vhci_pm_mark_no_state_resume(&bce->vhci);
         } else {
             bce_pm_suspend_abort(bce);
         }
@@ -543,11 +546,12 @@ static int t2bce_suspend(struct device *dev)
 
     /* Current Linux path treats the traced 0x19 not-ready reply as stateful reject. */
     pr_debug("t2bce: suspend: stateful path not ready, falling back to no-state\n");
-    bce_vhci_remove_hcd(&bce->vhci);
+    bce_vhci_pm_prepare_no_state(&bce->vhci);
     status = bce_pm_suspend_fallback_no_state(bce);
     if (!status) {
         bce->no_state_fallback = true;
-        bce->vhci.no_state_resume = true;
+        bce->no_state_resume = true;
+        bce_vhci_pm_mark_no_state_resume(&bce->vhci);
     } else {
         bce_pm_suspend_abort(bce);
     }
@@ -555,7 +559,7 @@ static int t2bce_suspend(struct device *dev)
 out_unlock:
     mutex_unlock(&bce->pm_lock);
     pr_debug("t2bce: suspend: exit status=%d stateful_valid=%d no_state_resume=%d no_state_fallback=%d\n",
-            status, bce->stateful_suspend_valid, bce->vhci.no_state_resume, bce->no_state_fallback);
+            status, bce->stateful_suspend_valid, bce->no_state_resume, bce->no_state_fallback);
     return status;
 }
 
@@ -590,7 +594,7 @@ out_unlock:
     mutex_unlock(&bce->pm_lock);
     pr_debug("t2bce: resume: exit status=%d path=%s stateful_valid=%d no_state_resume=%d no_state_fallback=%d\n",
             status, used_stateful ? "stateful" : "no-state",
-            bce->stateful_suspend_valid, bce->vhci.no_state_resume, bce->no_state_fallback);
+            bce->stateful_suspend_valid, bce->no_state_resume, bce->no_state_fallback);
     return status;
 }
 
@@ -609,11 +613,9 @@ static void t2bce_complete(struct device *dev)
     struct t2bce_device *bce = pci_get_drvdata(to_pci_dev(dev));
 
     pr_debug("t2bce: complete: entry no_state_fallback=%d no_state_resume=%d\n",
-            bce->no_state_fallback, bce->vhci.no_state_resume);
-    if (bce->no_state_fallback && bce->vhci.no_state_resume) {
-        /* Re-add the VHCI HCD after the PM core completed resume ordering. */
-        pr_debug("t2bce: complete: scheduling VHCI HCD re-add after no-state wake\n");
-        queue_work(bce->vhci.tq_state_wq, &bce->vhci.w_add_hcd);
+            bce->no_state_fallback, bce->no_state_resume);
+    if (bce->no_state_fallback && bce_vhci_pm_is_no_state_resume(&bce->vhci)) {
+        bce_vhci_pm_complete(&bce->vhci);
         bce->no_state_fallback = false;
     }
 

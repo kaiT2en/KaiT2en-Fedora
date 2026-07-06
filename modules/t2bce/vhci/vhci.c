@@ -150,6 +150,36 @@ void bce_vhci_shutdown(struct bce_vhci *vhci)
     bce_vhci_cmd_controller_disable(&vhci->cq);
 }
 
+void bce_vhci_pm_reset(struct bce_vhci *vhci)
+{
+    vhci->no_state_resume = false;
+}
+
+void bce_vhci_pm_prepare_no_state(struct bce_vhci *vhci)
+{
+    bce_vhci_remove_hcd(vhci);
+}
+
+void bce_vhci_pm_mark_no_state_resume(struct bce_vhci *vhci)
+{
+    vhci->no_state_resume = true;
+}
+
+bool bce_vhci_pm_is_no_state_resume(struct bce_vhci *vhci)
+{
+    return vhci->no_state_resume;
+}
+
+void bce_vhci_pm_complete(struct bce_vhci *vhci)
+{
+    if (!vhci->no_state_resume)
+        return;
+
+    /* Re-add the VHCI HCD after the PM core completed resume ordering. */
+    pr_debug("bce-vhci: scheduling HCD re-add after no-state wake\n");
+    queue_work(vhci->tq_state_wq, &vhci->w_add_hcd);
+}
+
 static void bce_vhci_add_hcd_w(struct work_struct *ws)
 {
     struct bce_vhci *vhci = container_of(ws, struct bce_vhci, w_add_hcd);

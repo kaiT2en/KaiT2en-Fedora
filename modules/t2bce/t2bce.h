@@ -38,6 +38,7 @@ struct t2bce_device {
     u32 fw_version;
     bool stateful_suspend_valid;
     bool no_state_fallback;
+    bool no_state_resume;
     bool mailbox_channel_active;
     struct mutex pm_lock;
     struct mutex clients_lock;
