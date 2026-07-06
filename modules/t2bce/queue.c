@@ -351,6 +351,31 @@ u32 bce_cmd_flush_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid)
     return res.status;
 }
 
+static int bce_register_queue(struct t2bce_dma_engine *dma, struct bce_queue_memcfg *cfg,
+        const char *name, bool isdirout)
+{
+    if (!dma->ops || !dma->ops->register_queue)
+        return -ENODEV;
+
+    return dma->ops->register_queue(dma->ops_userdata, cfg, name, isdirout);
+}
+
+static int bce_unregister_queue(struct t2bce_dma_engine *dma, u16 qid)
+{
+    if (!dma->ops || !dma->ops->unregister_queue)
+        return -ENODEV;
+
+    return dma->ops->unregister_queue(dma->ops_userdata, qid);
+}
+
+static int bce_flush_queue(struct t2bce_dma_engine *dma, u16 qid)
+{
+    if (!dma->ops || !dma->ops->flush_queue)
+        return -ENODEV;
+
+    return dma->ops->flush_queue(dma->ops_userdata, qid);
+}
+
 
 struct bce_queue_cq *bce_create_cq(struct t2bce_dma_engine *dma, u32 el_count)
 {
@@ -367,7 +392,7 @@ struct bce_queue_cq *bce_create_cq(struct t2bce_dma_engine *dma, u32 el_count)
     if (!cq)
         return NULL;
     bce_get_cq_memcfg(cq, &cfg);
-    if (bce_cmd_register_queue(dma->cmd_cmdq, &cfg, NULL, false) != 0) {
+    if (bce_register_queue(dma, &cfg, NULL, false) != 0) {
         pr_err("t2bce: CQ registration failed (%i)", qid);
         bce_free_cq(dma, cq);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,18,0)
@@ -404,7 +429,7 @@ struct bce_queue_sq *bce_create_sq(struct t2bce_dma_engine *dma, struct bce_queu
     if (!sq)
         return NULL;
     bce_get_sq_memcfg(sq, cq, &cfg);
-    if (bce_cmd_register_queue(dma->cmd_cmdq, &cfg, name, direction != DMA_FROM_DEVICE) != 0) {
+    if (bce_register_queue(dma, &cfg, name, direction != DMA_FROM_DEVICE) != 0) {
         pr_err("t2bce: SQ registration failed (%i)", qid);
         bce_free_sq(dma, sq);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,18,0)
@@ -429,7 +454,7 @@ struct bce_queue_sq *bce_create_sq_with_flags(struct t2bce_dma_engine *dma, stru
 
 void bce_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq)
 {
-    if (!dma->is_being_removed && bce_cmd_unregister_memory_queue(dma->cmd_cmdq, (u16) cq->qid))
+    if (!dma->is_being_removed && bce_unregister_queue(dma, (u16) cq->qid))
         pr_err("t2bce: CQ unregister failed");
     spin_lock(&dma->queues_lock);
     dma->queues[cq->qid] = NULL;
@@ -444,8 +469,8 @@ void bce_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq)
 
 void bce_destroy_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
 {
-    if (!dma->is_being_removed && bce_cmd_unregister_memory_queue(dma->cmd_cmdq, (u16) sq->qid))
-        pr_err("t2bce: CQ unregister failed");
+    if (!dma->is_being_removed && bce_unregister_queue(dma, (u16) sq->qid))
+        pr_err("t2bce: SQ unregister failed");
     spin_lock(&dma->queues_lock);
     dma->queues[sq->qid] = NULL;
     spin_unlock(&dma->queues_lock);
@@ -455,4 +480,9 @@ void bce_destroy_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
     ida_free(&dma->queue_ida, (uint) sq->qid);
 #endif
     bce_free_sq(dma, sq);
+}
+
+int bce_flush_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq)
+{
+    return bce_flush_queue(dma, (u16) sq->qid);
 }

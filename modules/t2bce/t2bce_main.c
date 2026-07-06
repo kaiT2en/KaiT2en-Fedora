@@ -16,11 +16,21 @@ static irqreturn_t bce_handle_mb_irq(int irq, void *dev);
 static irqreturn_t bce_handle_dma_irq(int irq, void *dev);
 static int bce_fw_version_handshake(struct t2bce_device *bce);
 static int bce_register_command_queue(struct t2bce_device *bce, struct bce_queue_memcfg *cfg, int is_sq);
+static int t2bce_dma_register_queue(void *userdata, struct bce_queue_memcfg *cfg,
+        const char *name, bool isdirout);
+static int t2bce_dma_unregister_queue(void *userdata, u16 qid);
+static int t2bce_dma_flush_queue(void *userdata, u16 qid);
 static int bce_alloc_state_buffer(struct t2bce_device *bce);
 static void bce_free_state_buffer(struct t2bce_device *bce);
 static int bce_pm_suspend_prepare(struct t2bce_device *bce);
 static void bce_pm_suspend_abort(struct t2bce_device *bce);
 static void bce_pm_resume_finish(struct t2bce_device *bce);
+
+static const struct t2bce_dma_engine_ops t2bce_dma_ops = {
+    .register_queue = t2bce_dma_register_queue,
+    .unregister_queue = t2bce_dma_unregister_queue,
+    .flush_queue = t2bce_dma_flush_queue,
+};
 
 static int bce_alloc_state_buffer(struct t2bce_device *bce)
 {
@@ -97,6 +107,8 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
     bce_mailbox_init(&bce->mbox, bce->reg_mem_mb);
     bce_xhci_pm_init(&bce->xhci_pm, bce->reg_mem_mb);
     bce->dma.dma_dev = &dev->dev;
+    bce->dma.ops = &t2bce_dma_ops;
+    bce->dma.ops_userdata = bce;
     bce->dma.reg_mem_dma = bce->reg_mem_dma;
 
     spin_lock_init(&bce->dma.queues_lock);
@@ -369,6 +381,28 @@ static int bce_register_command_queue(struct t2bce_device *bce, struct bce_queue
     if (BCE_MB_TYPE(result) != BCE_MB_REGISTER_COMMAND_QUEUE_REPLY)
         return -EINVAL;
     return 0;
+}
+
+static int t2bce_dma_register_queue(void *userdata, struct bce_queue_memcfg *cfg,
+        const char *name, bool isdirout)
+{
+    struct t2bce_device *bce = userdata;
+
+    return bce_cmd_register_queue(bce->dma.cmd_cmdq, cfg, name, isdirout);
+}
+
+static int t2bce_dma_unregister_queue(void *userdata, u16 qid)
+{
+    struct t2bce_device *bce = userdata;
+
+    return bce_cmd_unregister_memory_queue(bce->dma.cmd_cmdq, qid);
+}
+
+static int t2bce_dma_flush_queue(void *userdata, u16 qid)
+{
+    struct t2bce_device *bce = userdata;
+
+    return bce_cmd_flush_memory_queue(bce->dma.cmd_cmdq, qid);
 }
 
 static void t2bce_remove(struct pci_dev *dev)

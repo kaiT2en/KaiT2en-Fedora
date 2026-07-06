@@ -397,6 +397,6 @@ EXPORT_SYMBOL_GPL(t2bce_queue_sq_capacity);
 
 int t2bce_flush_queue(struct t2bce_client *client, struct t2bce_queue_sq *sq)
 {
-    return bce_cmd_flush_memory_queue(client->bce->dma.cmd_cmdq, to_bce_sq(sq)->qid);
+    return bce_flush_sq(&client->bce->dma, to_bce_sq(sq));
 }
 EXPORT_SYMBOL_GPL(t2bce_flush_queue);

@@ -10,7 +10,14 @@
 #define BCE_QUEUE_USER_MIN 2
 #define BCE_QUEUE_USER_MAX (BCE_MAX_QUEUE_COUNT - 1)
 
-struct t2bce_dma_engine;
+struct bce_queue_memcfg;
+
+struct t2bce_dma_engine_ops {
+    int (*register_queue)(void *userdata, struct bce_queue_memcfg *cfg,
+            const char *name, bool isdirout);
+    int (*unregister_queue)(void *userdata, u16 qid);
+    int (*flush_queue)(void *userdata, u16 qid);
+};
 
 enum bce_queue_type {
     BCE_QUEUE_CQ, BCE_QUEUE_SQ
@@ -72,6 +79,8 @@ struct bce_queue_cmdq {
 
 struct t2bce_dma_engine {
     struct device *dma_dev;
+    const struct t2bce_dma_engine_ops *ops;
+    void *ops_userdata;
     void __iomem *reg_mem_dma;
     struct bce_queue *queues[BCE_MAX_QUEUE_COUNT];
     struct spinlock queues_lock;
@@ -195,5 +204,6 @@ struct bce_queue_sq *bce_create_sq_with_flags(struct t2bce_dma_engine *dma, stru
         u32 el_count, u16 flags, bce_sq_completion compl, void *userdata);
 void bce_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq);
 void bce_destroy_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq);
+int bce_flush_sq(struct t2bce_dma_engine *dma, struct bce_queue_sq *sq);
 
 #endif //BCEDRIVER_MAILBOX_H
