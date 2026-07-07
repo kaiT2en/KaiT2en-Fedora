@@ -1287,7 +1287,7 @@ MODULE_PARM_DESC(vhci_port_mask, "Specifies which VHCI ports are enabled");
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("André Eikmeyer <andre.eikmeyer@gmail.com>");
 MODULE_DESCRIPTION("Apple T2 BCE VHCI Driver");
-MODULE_VERSION("0.01");
+MODULE_VERSION("0.02");
 MODULE_SOFTDEP("pre: t2bce_core");
 module_init(bce_vhci_module_init);
 module_exit(bce_vhci_module_exit);

@@ -34,9 +34,11 @@ struct bce_vhci_transfer_queue {
     struct list_head giveback_urb_list;
     wait_queue_head_t sq_out_wait_queue;
     atomic_t sq_out_pending;
+    struct list_head cancel_urb_list;
 
     struct work_struct w_reset;
     struct work_struct w_resume;
+    struct work_struct w_cancel;
 };
 enum bce_vhci_urb_state {
     BCE_VHCI_URB_INIT_PENDING,
@@ -62,6 +64,9 @@ struct bce_vhci_urb {
     size_t sg_segments_size;
     unsigned int sg_segment_count;
     bool sg_segments_for_device;
+    struct list_head cancel_list;
+    int cancel_status;
+    bool cancel_was_active;
 };
 
 void bce_vhci_create_transfer_queue(struct bce_vhci *vhci, struct bce_vhci_transfer_queue *q,

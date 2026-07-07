@@ -12,9 +12,11 @@ static int bce_vhci_urb_init(struct bce_vhci_urb *vurb);
 static int bce_vhci_urb_update(struct bce_vhci_urb *urb, struct bce_vhci_message *msg);
 static int bce_vhci_urb_transfer_completion(struct bce_vhci_urb *urb, struct t2bce_core_sq_completion_data *c);
 static void bce_vhci_urb_complete(struct bce_vhci_urb *urb, int status);
+static void bce_vhci_urb_free(struct bce_vhci_urb *urb);
 
 static void bce_vhci_transfer_queue_reset_w(struct work_struct *work);
 static void bce_vhci_transfer_queue_resume_w(struct work_struct *work);
+static void bce_vhci_transfer_queue_cancel_w(struct work_struct *work);
 
 void bce_vhci_create_transfer_queue(struct bce_vhci *vhci, struct bce_vhci_transfer_queue *q,
         struct usb_host_endpoint *endp, bce_vhci_device_t dev_addr, enum dma_data_direction dir)
@@ -22,6 +24,7 @@ void bce_vhci_create_transfer_queue(struct bce_vhci *vhci, struct bce_vhci_trans
     char name[0x21];
     INIT_LIST_HEAD(&q->evq);
     INIT_LIST_HEAD(&q->giveback_urb_list);
+    INIT_LIST_HEAD(&q->cancel_urb_list);
     spin_lock_init(&q->urb_lock);
     mutex_init(&q->pause_lock);
     init_waitqueue_head(&q->sq_out_wait_queue);
@@ -41,6 +44,7 @@ void bce_vhci_create_transfer_queue(struct bce_vhci *vhci, struct bce_vhci_trans
     q->cq = t2bce_core_create_cq(vhci->client, 0x100);
     INIT_WORK(&q->w_reset, bce_vhci_transfer_queue_reset_w);
     INIT_WORK(&q->w_resume, bce_vhci_transfer_queue_resume_w);
+    INIT_WORK(&q->w_cancel, bce_vhci_transfer_queue_cancel_w);
     q->sq_in = NULL;
     if (dir == DMA_FROM_DEVICE || dir == DMA_BIDIRECTIONAL) {
         snprintf(name, sizeof(name), "VHC1-%i-%02x", dev_addr, 0x80 | usb_endpoint_num(&endp->desc));
@@ -59,6 +63,7 @@ void bce_vhci_destroy_transfer_queue(struct bce_vhci *vhci, struct bce_vhci_tran
 {
     cancel_work_sync(&q->w_resume);
     cancel_work_sync(&q->w_reset);
+    cancel_work_sync(&q->w_cancel);
     bce_vhci_transfer_queue_giveback(q);
     bce_vhci_transfer_queue_remove_pending(q);
     if (q->sq_in)
@@ -609,6 +614,54 @@ static void bce_vhci_transfer_queue_resume_w(struct work_struct *work)
             q->remaining_active_requests);
 }
 
+static void bce_vhci_transfer_queue_cancel_w(struct work_struct *work)
+{
+    unsigned long flags;
+    struct bce_vhci_transfer_queue *q = container_of(work, struct bce_vhci_transfer_queue, w_cancel);
+    struct bce_vhci_urb *vurb;
+    struct urb *urb;
+    int status;
+    bool was_active;
+
+    for (;;) {
+        spin_lock_irqsave(&q->urb_lock, flags);
+        if (list_empty(&q->cancel_urb_list)) {
+            spin_unlock_irqrestore(&q->urb_lock, flags);
+            return;
+        }
+
+        vurb = list_first_entry(&q->cancel_urb_list, struct bce_vhci_urb, cancel_list);
+        list_del_init(&vurb->cancel_list);
+        urb = vurb->urb;
+        status = vurb->cancel_status;
+        was_active = vurb->cancel_was_active;
+        spin_unlock_irqrestore(&q->urb_lock, flags);
+
+        /*
+         * usbcore may dequeue URBs from timer/softirq context. Endpoint pause
+         * talks to bridgeOS and can sleep, so keep it in this worker.
+         */
+        if (was_active) {
+            pr_debug("t2bce_vhci: [%02x] async cancelling URB\n", q->endp_addr);
+            bce_vhci_transfer_queue_pause(q, BCE_VHCI_PAUSE_INTERNAL_WQ);
+        }
+
+        spin_lock_irqsave(&q->urb_lock, flags);
+        if (was_active)
+            ++q->remaining_active_requests;
+        usb_hcd_unlink_urb_from_ep(q->vhci->hcd, urb);
+        urb->hcpriv = NULL;
+        spin_unlock_irqrestore(&q->urb_lock, flags);
+
+        usb_hcd_giveback_urb(q->vhci->hcd, urb, status);
+
+        if (was_active)
+            bce_vhci_transfer_queue_resume(q, BCE_VHCI_PAUSE_INTERNAL_WQ);
+
+        bce_vhci_urb_free(vurb);
+    }
+}
+
 void bce_vhci_transfer_queue_request_reset(struct bce_vhci_transfer_queue *q)
 {
     queue_work(q->vhci->tq_state_wq, &q->w_reset);
@@ -782,6 +835,7 @@ int bce_vhci_urb_create(struct bce_vhci_transfer_queue *q, struct urb *urb)
     vurb->urb = urb;
     vurb->dir = usb_urb_dir_in(urb) ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
     vurb->is_control = is_control;
+    INIT_LIST_HEAD(&vurb->cancel_list);
     status = bce_vhci_urb_init_sg_segments(vurb);
     if (status) {
         urb->hcpriv = NULL;
@@ -886,6 +940,10 @@ int bce_vhci_urb_request_cancel(struct bce_vhci_transfer_queue *q, struct urb *u
     }
 
     vurb = urb->hcpriv;
+    if (!vurb) {
+        spin_unlock_irqrestore(&q->urb_lock, flags);
+        return -ENOENT;
+    }
 
     old_state = vurb->state;
     bce_vhci_urb_log_control(vurb, "cancel-request");
@@ -897,31 +955,13 @@ int bce_vhci_urb_request_cancel(struct bce_vhci_transfer_queue *q, struct urb *u
     }
 
     vurb->state = BCE_VHCI_URB_CANCELLED;
+    vurb->cancel_status = status;
+    vurb->cancel_was_active = old_state != BCE_VHCI_URB_INIT_PENDING;
 
-    /*
-     * A posted URB may still receive bridgeOS events.  Pause the endpoint
-     * before unlinking it from usbcore-visible state.
-     */
-    if (old_state != BCE_VHCI_URB_INIT_PENDING) {
-        pr_debug("t2bce_vhci: [%02x] Cancelling URB\n", q->endp_addr);
-
-        spin_unlock_irqrestore(&q->urb_lock, flags);
-        bce_vhci_transfer_queue_pause(q, BCE_VHCI_PAUSE_INTERNAL_WQ);
-        spin_lock_irqsave(&q->urb_lock, flags);
-
-        ++q->remaining_active_requests;
-    }
-
-    usb_hcd_unlink_urb_from_ep(q->vhci->hcd, urb);
-
+    if (list_empty(&vurb->cancel_list))
+        list_add_tail(&vurb->cancel_list, &q->cancel_urb_list);
     spin_unlock_irqrestore(&q->urb_lock, flags);
-
-    usb_hcd_giveback_urb(q->vhci->hcd, urb, status);
-
-    if (old_state != BCE_VHCI_URB_INIT_PENDING)
-        bce_vhci_transfer_queue_resume(q, BCE_VHCI_PAUSE_INTERNAL_WQ);
-
-    bce_vhci_urb_free(vurb);
+    queue_work(q->vhci->tq_state_wq, &q->w_cancel);
 
     return 0;
 }
