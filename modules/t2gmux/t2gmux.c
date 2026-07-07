@@ -903,7 +903,7 @@ get_version:
 		ver_minor = gmux_read8(gmux_data, GMUX_PORT_VERSION_MINOR);
 		ver_release = gmux_read8(gmux_data, GMUX_PORT_VERSION_RELEASE);
 	}
-	pr_info("Found gmux version %d.%d.%d [%s]\n", ver_major, ver_minor,
+	pr_debug("Found gmux version %d.%d.%d [%s]\n", ver_major, ver_minor,
 		ver_release, gmux_data->config->name);
 
 	memset(&props, 0, sizeof(props));
