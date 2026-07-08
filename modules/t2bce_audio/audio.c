@@ -399,7 +399,6 @@ static int t2audio_init_cmd(struct t2audio_device *a)
 
 static void t2audio_init_stream_info(struct t2audio_subdevice *sdev, struct t2audio_stream *strm);
 static void t2audio_handle_jack_connection_change(struct t2audio_subdevice *sdev);
-static void t2audio_quiesce_output_routes(struct t2audio_device *a);
 
 static void t2audio_init_dev(struct t2audio_device *a, t2audio_device_id_t dev_id)
 {
@@ -733,29 +732,8 @@ static void t2audio_handle_jack_connection_change(struct t2audio_subdevice *sdev
         dev_err(sdev->a->dev, "Failed to get jack enable status\n");
         return;
     }
-    t2audio_quiesce_output_routes(sdev->a);
     dev_dbg(sdev->a->dev, "Jack is now %s\n", plugged ? "plugged" : "unplugged");
     snd_jack_report(sdev->jack, plugged ? sdev->jack->type : 0);
-}
-
-static void t2audio_quiesce_output_routes(struct t2audio_device *a)
-{
-    struct t2audio_subdevice *sdev;
-    size_t i;
-
-    list_for_each_entry(sdev, &a->subdevice_list, list) {
-        if (strcmp(sdev->uid, "Speaker") && strcmp(sdev->uid, "Codec Output"))
-            continue;
-
-        for (i = 0; i < sdev->out_stream_cnt; i++) {
-            if (!sdev->out_streams[i].started)
-                continue;
-
-            pr_info("t2bce_audio: quiesce output route %s\n", sdev->uid);
-            t2audio_cmd_stop_io(a, sdev->dev_id);
-            t2audio_reset_stream(&sdev->out_streams[i]);
-        }
-    }
 }
 
 void t2audio_handle_prop_change_work(struct work_struct *ws)
