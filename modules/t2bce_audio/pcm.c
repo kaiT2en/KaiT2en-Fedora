@@ -275,8 +275,20 @@ static snd_pcm_uframes_t t2audio_pcm_pointer(struct snd_pcm_substream *substream
     snd_pcm_sframes_t frames;
     snd_pcm_sframes_t buffer_time_length;
 
-    if (!stream->started || stream->waiting_for_first_ts) {
-        pr_debug("t2audio_pcm_pointer while not started\n");
+    if (!stream->started)
+        return 0;
+
+    if (stream->waiting_for_first_ts) {
+        /*
+         * bridgeOS hasn't sent the first timestamp yet — we don't know the
+         * real DMA read position.  Fall back to reporting the application
+         * write pointer so ALSA keeps the pipeline filled instead of
+         * stalling.  Once the first timestamp arrives the normal
+         * interpolation takes over.
+         */
+        if (substream->runtime && substream->runtime->buffer_size)
+            return substream->runtime->control->appl_ptr %
+                   substream->runtime->buffer_size;
         return 0;
     }
 
