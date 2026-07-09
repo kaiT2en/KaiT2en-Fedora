@@ -75,6 +75,7 @@ int t2audio_create_hw_info(struct t2audio_apple_description *desc, struct snd_pc
     alsa_hw->info = (SNDRV_PCM_INFO_MMAP |
                      SNDRV_PCM_INFO_BLOCK_TRANSFER |
                      SNDRV_PCM_INFO_MMAP_VALID |
+                     SNDRV_PCM_INFO_NO_PERIOD_WAKEUP |
                      SNDRV_PCM_INFO_DOUBLE);
     if (desc->format_flags & T2AUDIO_FORMAT_FLAG_NON_MIXABLE)
         pr_warn("t2bce_audio: unsupported hw flag: NON_MIXABLE\n");
@@ -117,9 +118,25 @@ static struct t2audio_dma_buf *t2audio_pcm_dma_buf(struct t2audio_stream *stream
     return &stream->buffers[0];
 }
 
+static void t2audio_dma_memset(struct t2audio_dma_buf *buf, size_t offset, int value, size_t size)
+{
+    if (!buf || offset >= buf->size)
+        return;
+
+    size = min(size, buf->size - offset);
+    switch (buf->type) {
+        case T2AUDIO_DMA_BUF_IOMEM:
+            memset_io((u8 __iomem *) buf->ptr + offset, value, size);
+            break;
+        case T2AUDIO_DMA_BUF_COHERENT:
+            memset((u8 *) buf->ptr + offset, value, size);
+            break;
+    }
+}
+
 static void t2audio_dma_copy_from(struct t2audio_dma_buf *buf, void *dst, size_t offset, size_t size)
 {
-    if (!buf || !dst || !size || offset >= buf->size)
+    if (!buf || offset >= buf->size)
         return;
 
     size = min(size, buf->size - offset);
@@ -135,7 +152,7 @@ static void t2audio_dma_copy_from(struct t2audio_dma_buf *buf, void *dst, size_t
 
 static void t2audio_dma_copy_to(struct t2audio_dma_buf *buf, size_t offset, const void *src, size_t size)
 {
-    if (!buf || !src || !size || offset >= buf->size)
+    if (!buf || offset >= buf->size)
         return;
 
     size = min(size, buf->size - offset);
@@ -147,6 +164,65 @@ static void t2audio_dma_copy_to(struct t2audio_dma_buf *buf, size_t offset, cons
             memcpy((u8 *) buf->ptr + offset, src, size);
             break;
     }
+}
+
+static void t2audio_pcm_zero_frames(struct snd_pcm_substream *substream,
+        snd_pcm_uframes_t first, snd_pcm_uframes_t frames)
+{
+    struct t2audio_stream *stream = t2audio_pcm_stream(substream);
+    struct t2audio_dma_buf *buf = t2audio_pcm_dma_buf(stream);
+    struct snd_pcm_runtime *runtime = substream->runtime;
+    size_t offset;
+    size_t size;
+
+    if (!buf || !runtime || !runtime->buffer_size || !frames)
+        return;
+
+    first %= runtime->buffer_size;
+    if (frames > runtime->buffer_size)
+        frames = runtime->buffer_size;
+
+    offset = frames_to_bytes(runtime, first);
+    if (first + frames <= runtime->buffer_size) {
+        size = frames_to_bytes(runtime, frames);
+        t2audio_dma_memset(buf, offset, 0, size);
+        return;
+    }
+
+    size = frames_to_bytes(runtime, runtime->buffer_size - first);
+    t2audio_dma_memset(buf, offset, 0, size);
+    t2audio_dma_memset(buf, 0, 0, frames_to_bytes(runtime, frames - (runtime->buffer_size - first)));
+}
+
+static void t2audio_pcm_erase_played_frames(struct snd_pcm_substream *substream,
+        snd_pcm_uframes_t hw_ptr)
+{
+    struct t2audio_stream *stream = t2audio_pcm_stream(substream);
+    struct snd_pcm_runtime *runtime = substream->runtime;
+    snd_pcm_uframes_t frames;
+
+    if (substream->stream != SNDRV_PCM_STREAM_PLAYBACK || !runtime || !runtime->buffer_size)
+        return;
+
+    /*
+     * IOAudioFamily keeps an erase head for output engines and clears samples
+     * once the hardware position has passed them. Codec Output appears to be
+     * sensitive to stale samples after route changes, so keep the BridgeOS
+     * playback ring in the same consumed-is-silent state.
+     */
+    hw_ptr %= runtime->buffer_size;
+    if (!stream->erase_head_valid) {
+        stream->erase_head = 0;
+        stream->erase_head_valid = true;
+    }
+
+    if (hw_ptr >= stream->erase_head)
+        frames = hw_ptr - stream->erase_head;
+    else
+        frames = runtime->buffer_size - stream->erase_head + hw_ptr;
+
+    t2audio_pcm_zero_frames(substream, stream->erase_head, frames);
+    stream->erase_head = hw_ptr;
 }
 
 static int t2audio_pcm_open(struct snd_pcm_substream *substream)
@@ -165,6 +241,17 @@ static int t2audio_pcm_close(struct snd_pcm_substream *substream)
 
 static int t2audio_pcm_prepare(struct snd_pcm_substream *substream)
 {
+    struct t2audio_stream *stream = t2audio_pcm_stream(substream);
+
+    stream->waiting_for_first_ts = true;
+    stream->remote_timestamp = 0;
+    stream->frame_min = stream->latency;
+    stream->erase_head = 0;
+    stream->erase_head_valid = false;
+
+    if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK && substream->runtime->buffer_size)
+        t2audio_pcm_zero_frames(substream, 0, substream->runtime->buffer_size);
+
     return 0;
 }
 
@@ -193,9 +280,7 @@ static int t2audio_pcm_start(struct snd_pcm_substream *substream)
     struct t2audio_subdevice *sdev = snd_pcm_substream_chip(substream);
     struct t2audio_stream *stream = t2audio_pcm_stream(substream);
     struct t2audio_dma_buf *dmabuf = t2audio_pcm_dma_buf(stream);
-    struct snd_pcm_runtime *runtime = substream->runtime;
     void *buf = NULL;
-    snd_pcm_uframes_t appl_ptr = 0;
     size_t s = 0;
     ktime_t time_start, time_end;
     bool back_buffer;
@@ -206,29 +291,34 @@ static int t2audio_pcm_start(struct snd_pcm_substream *substream)
     back_buffer = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK);
 
     if (back_buffer) {
-        if (!dmabuf || !runtime || !runtime->buffer_size)
+        snd_pcm_uframes_t appl_ptr;
+
+        if (!dmabuf)
+            return -EINVAL;
+        if (!substream->runtime->buffer_size)
             return -EINVAL;
 
-        appl_ptr = runtime->control->appl_ptr % runtime->buffer_size;
-        s = frames_to_bytes(runtime, appl_ptr);
+        appl_ptr = substream->runtime->control->appl_ptr % substream->runtime->buffer_size;
+        s = frames_to_bytes(substream->runtime, appl_ptr);
         if (s) {
             buf = kmalloc(s, GFP_KERNEL);
             if (!buf)
                 return -ENOMEM;
 
             t2audio_dma_copy_from(dmabuf, buf, 0, s);
+            time_end = ktime_get();
+            pr_debug("t2bce_audio: Backed up the buffer in %lluns [%li]\n", ktime_to_ns(time_end - time_start),
+                    appl_ptr);
         }
-
-        time_end = ktime_get();
-        pr_debug("t2bce_audio: backed up playback buffer in %lluns appl_ptr=%lu\n",
-                ktime_to_ns(time_end - time_start), appl_ptr);
     }
 
     stream->waiting_for_first_ts = true;
     stream->frame_min = stream->latency;
+    stream->erase_head = 0;
+    stream->erase_head_valid = false;
 
     status = t2audio_cmd_start_io(sdev->a, sdev->dev_id);
-    if (back_buffer)
+    if (back_buffer && buf)
         t2audio_dma_copy_to(dmabuf, 0, buf, s);
     kfree(buf);
 
@@ -261,6 +351,7 @@ static int t2audio_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
         case SNDRV_PCM_TRIGGER_STOP:
             t2audio_cmd_stop_io(sdev->a, sdev->dev_id);
             stream->started = 0;
+            stream->erase_head_valid = false;
             break;
         default:
             return -EINVAL;
@@ -310,6 +401,8 @@ static snd_pcm_uframes_t t2audio_pcm_pointer(struct snd_pcm_substream *substream
     frames -= stream->latency;
     if (frames < 0)
         frames += ((-frames - 1) / substream->runtime->buffer_size + 1) * substream->runtime->buffer_size;
+    frames %= substream->runtime->buffer_size;
+    t2audio_pcm_erase_played_frames(substream, (snd_pcm_uframes_t) frames);
     return (snd_pcm_uframes_t) frames;
 }
 

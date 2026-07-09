@@ -80,6 +80,8 @@ struct t2audio_stream {
 
     ktime_t remote_timestamp;
     snd_pcm_sframes_t frame_min;
+    snd_pcm_uframes_t erase_head;
+    bool erase_head_valid;
     int started;
 };
 struct t2audio_subdevice {
