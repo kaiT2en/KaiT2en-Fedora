@@ -18,16 +18,10 @@ MODULES=(
 	hid_t2magicmouse
 	t2mfi_fastcharge
 	t2gmux
-	t2thunderbolt
 )
 
 LEGACY_MODULES=(
-	t2dma
-	t2bce
-	t2bce-dma
-	t2bce-core
-	t2vhci
-	t2audio
+	t2thunderbolt
 )
 
 DKMS_POST_TRANSACTION_OVERRIDE="/etc/dkms/framework.conf.d/kait2en-disable-post-transaction.conf"
