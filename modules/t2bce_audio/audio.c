@@ -28,10 +28,38 @@ static void t2audio_resume_complete(void *userdata);
 static void t2audio_pm_prepare_client(void *userdata);
 static void t2audio_pm_shutdown_client(void *userdata);
 
+#define T2AUDIO_CODEC_OUTPUT_PERIOD_FRAMES 1040
+#define T2AUDIO_CODEC_OUTPUT_PERIODS 16
+
 static const struct t2bce_core_client_pm_ops t2audio_pm_ops = {
         .shutdown = t2audio_pm_shutdown_client,
         .pm_prepare = t2audio_pm_prepare_client,
 };
+
+static void t2audio_apply_codec_output_hw_quirk(struct t2audio_device *a, struct t2audio_stream *strm)
+{
+    struct snd_pcm_hardware *hw = strm->alsa_hw_desc;
+    size_t frame_bytes, period_bytes;
+
+    if (!hw)
+        return;
+
+    frame_bytes = strm->desc.bytes_per_frame ? strm->desc.bytes_per_frame : strm->desc.bytes_per_packet;
+    if (!frame_bytes)
+        return;
+
+    period_bytes = frame_bytes * T2AUDIO_CODEC_OUTPUT_PERIOD_FRAMES;
+    if (hw->buffer_bytes_max < period_bytes * T2AUDIO_CODEC_OUTPUT_PERIODS)
+        return;
+
+    hw->period_bytes_min = period_bytes;
+    hw->period_bytes_max = period_bytes;
+    hw->periods_min = T2AUDIO_CODEC_OUTPUT_PERIODS;
+    hw->periods_max = T2AUDIO_CODEC_OUTPUT_PERIODS;
+
+    dev_dbg(a->dev, "Codec Output PCM quirk: buffer=%lu period=%lu periods=%u\n",
+            hw->buffer_bytes_max, hw->period_bytes_min, hw->periods_min);
+}
 
 static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
@@ -347,8 +375,6 @@ static void t2audio_reset_stream(struct t2audio_stream *stream)
     stream->waiting_for_first_ts = true;
     stream->remote_timestamp = 0;
     stream->frame_min = stream->latency;
-    stream->erase_head = 0;
-    stream->erase_head_valid = false;
 }
 
 static void t2audio_reset_streams(struct t2audio_device *a)
@@ -467,7 +493,8 @@ static void t2audio_init_dev(struct t2audio_device *a, t2audio_device_id_t dev_i
 
     if (sdev->is_pcm)
         t2audio_create_pcm(sdev);
-    /* Headphone Jack status */
+
+    /* Headphone jack status */
     if (!strcmp(sdev->uid, "Codec Output")) {
         if (snd_jack_new(a->card, sdev->uid, SND_JACK_HEADPHONE, &sdev->jack, true, false))
             dev_warn(a->dev, "Failed to create an attached jack for %s\n", sdev->uid);
@@ -581,8 +608,11 @@ static int t2audio_init_bs(struct t2audio_device *a)
         for (j = 0; j < dev->num_output_streams; j++) {
             pr_debug("t2bce_audio: Device %i Stream %i: Output; Buffer Count = %i\n", i, j,
                      dev->output_streams[j].num_buffers);
-            if (j < sdev->out_stream_cnt)
+            if (j < sdev->out_stream_cnt) {
                 t2audio_init_bs_stream(a, &sdev->out_streams[j], &dev->output_streams[j]);
+                if (!strcmp(sdev->uid, "Codec Output"))
+                    t2audio_apply_codec_output_hw_quirk(a, &sdev->out_streams[j]);
+            }
         }
     }
 
@@ -723,8 +753,10 @@ struct t2audio_prop_change_work_struct {
 static void t2audio_handle_jack_connection_change(struct t2audio_subdevice *sdev)
 {
     u32 plugged;
+
     if (!sdev->jack)
         return;
+
     /* NOTE: Apple made the plug status scoped to the input and output streams. This makes no sense for us, so I just
      * always pick the OUTPUT status. */
     if (t2audio_cmd_get_primitive_property(sdev->a, sdev->dev_id, sdev->dev_id,
@@ -732,6 +764,7 @@ static void t2audio_handle_jack_connection_change(struct t2audio_subdevice *sdev
         dev_err(sdev->a->dev, "Failed to get jack enable status\n");
         return;
     }
+
     dev_dbg(sdev->a->dev, "Jack is now %s\n", plugged ? "plugged" : "unplugged");
     snd_jack_report(sdev->jack, plugged ? sdev->jack->type : 0);
 }
