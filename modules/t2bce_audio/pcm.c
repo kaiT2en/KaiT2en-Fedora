@@ -317,6 +317,8 @@ static int t2audio_pcm_start(struct snd_pcm_substream *substream)
     stream->frame_min = stream->latency;
     stream->erase_head = 0;
     stream->erase_head_valid = false;
+    stream->hw_frames_since_start = 0;
+    stream->hw_accum_valid = false;
 
     status = t2audio_cmd_start_io(sdev->a, sdev->dev_id);
     if (back_buffer && buf)
@@ -367,6 +369,7 @@ static int t2audio_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 
 static snd_pcm_uframes_t t2audio_pcm_pointer(struct snd_pcm_substream *substream)
 {
+    struct t2audio_subdevice *sdev = snd_pcm_substream_chip(substream);
     struct t2audio_stream *stream = t2audio_pcm_stream(substream);
     ktime_t time_from_start;
     snd_pcm_sframes_t frames;
@@ -412,6 +415,49 @@ static snd_pcm_uframes_t t2audio_pcm_pointer(struct snd_pcm_substream *substream
     if (frames < 0)
         frames += ((-frames - 1) / substream->runtime->buffer_size + 1) * substream->runtime->buffer_size;
     frames %= substream->runtime->buffer_size;
+
+    /*
+     * The estimate above is pure clock interpolation with no readback of
+     * real DMA progress, so nothing stops it from claiming more frames
+     * were consumed than the application has actually written — a real
+     * DMA engine can't outrun the data it was given, but this software
+     * stand-in can (e.g. while the stream drains, or if the anchor is
+     * off right after resume). Bound it with a monotonic accumulator fed
+     * by small incremental deltas: each poll adds min(raw wrapped delta
+     * since the last poll, current backlog), where backlog = appl_ptr
+     * (host-side, not device-clock-dependent) minus what the accumulator
+     * has claimed so far. By construction the accumulator can never
+     * exceed appl_ptr, regardless of how wrong the raw estimate is, and
+     * it only ever advances in small steps — so a big reported-position
+     * swing can't be misread as a ring wraparound by ALSA's own hw_ptr
+     * tracking.
+     */
+    if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+        snd_pcm_uframes_t appl_now = substream->runtime->control->appl_ptr;
+        snd_pcm_sframes_t raw_delta;
+        u64 backlog, delta;
+
+        if (!stream->hw_accum_valid) {
+            stream->hw_accum_valid = true;
+            stream->hw_accum_last_raw = 0;
+            stream->hw_frames_since_start = 0;
+        }
+
+        raw_delta = (snd_pcm_sframes_t) frames - (snd_pcm_sframes_t) stream->hw_accum_last_raw;
+        if (raw_delta < 0)
+            raw_delta += substream->runtime->buffer_size;
+        stream->hw_accum_last_raw = (snd_pcm_uframes_t) frames;
+
+        backlog = (appl_now > stream->hw_frames_since_start) ? (appl_now - stream->hw_frames_since_start) : 0;
+        delta = (u64) raw_delta < backlog ? (u64) raw_delta : backlog;
+        if (delta < (u64) raw_delta)
+            pr_debug_ratelimited("t2bce_audio: pointer capped %s raw_delta=%ld backlog=%llu\n",
+                    sdev->uid, raw_delta, backlog);
+        stream->hw_frames_since_start += delta;
+
+        frames = (snd_pcm_sframes_t) (stream->hw_frames_since_start % substream->runtime->buffer_size);
+    }
+
     t2audio_pcm_erase_played_frames(substream, (snd_pcm_uframes_t) frames);
     return (snd_pcm_uframes_t) frames;
 }

@@ -84,6 +84,22 @@ struct t2audio_stream {
     snd_pcm_uframes_t erase_head;
     bool erase_head_valid;
     int started;
+
+    /*
+     * Playback only: monotonic frame-consumed accumulator used to bound
+     * the reported pointer so it can never claim more frames were
+     * consumed than appl_ptr has actually made available, no matter how
+     * wrong the clock-derived estimate is (see t2audio_pcm_pointer()).
+     * Each poll adds min(raw wrapped delta since the last poll, current
+     * backlog = appl_ptr - hw_frames_since_start), so it is provably
+     * always <= appl_ptr and never needs a large corrective jump.
+     * hw_accum_last_raw/hw_accum_valid track the raw formula output
+     * between polls purely to derive that incremental delta; they are
+     * reset at the start of every t2audio_pcm_start().
+     */
+    u64 hw_frames_since_start;
+    snd_pcm_uframes_t hw_accum_last_raw;
+    bool hw_accum_valid;
 };
 struct t2audio_subdevice {
     struct t2audio_device *a;
