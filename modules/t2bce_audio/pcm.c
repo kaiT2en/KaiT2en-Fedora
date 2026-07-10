@@ -195,6 +195,18 @@ static void t2audio_pcm_zero_frames(struct snd_pcm_substream *substream,
     t2audio_dma_memset(buf, 0, 0, frames_to_bytes(runtime, frames - (runtime->buffer_size - first)));
 }
 
+/*
+ * How far the erase head trails the reported hardware pointer, in frames
+ * (~21ms at 48kHz). The pointer is an interpolated estimate, not real DMA
+ * readback, and can transiently run a few hundred frames ahead of the
+ * device's true read position while the message-cadence estimate converges
+ * after a real rate deviation (see msg_interval_ns in audio.h); erasing
+ * right up to the estimate would zero frames the device has not played
+ * yet. Trailing by this margin is immaterial for the erase head's purpose
+ * (clearing already-consumed samples before route changes).
+ */
+#define T2AUDIO_ERASE_MARGIN_FRAMES 1024
+
 static void t2audio_pcm_erase_played_frames(struct snd_pcm_substream *substream,
         snd_pcm_uframes_t hw_ptr)
 {
@@ -212,6 +224,8 @@ static void t2audio_pcm_erase_played_frames(struct snd_pcm_substream *substream,
      * playback ring in the same consumed-is-silent state.
      */
     hw_ptr %= runtime->buffer_size;
+    if (runtime->buffer_size > 2 * T2AUDIO_ERASE_MARGIN_FRAMES)
+        hw_ptr = (hw_ptr + runtime->buffer_size - T2AUDIO_ERASE_MARGIN_FRAMES) % runtime->buffer_size;
     if (!stream->erase_head_valid) {
         stream->erase_head = 0;
         stream->erase_head_valid = true;
@@ -221,6 +235,16 @@ static void t2audio_pcm_erase_played_frames(struct snd_pcm_substream *substream,
         frames = hw_ptr - stream->erase_head;
     else
         frames = runtime->buffer_size - stream->erase_head + hw_ptr;
+
+    /*
+     * A span of more than half the ring means the margin-lagged target is
+     * still *behind* the erase head (e.g. right after a restart, before
+     * the pointer has advanced past the margin) — wait instead of
+     * wrapping around and zeroing nearly the whole ring including
+     * unplayed frames.
+     */
+    if (frames > runtime->buffer_size / 2)
+        return;
 
     t2audio_pcm_zero_frames(substream, stream->erase_head, frames);
     stream->erase_head = hw_ptr;
