@@ -86,6 +86,34 @@ struct t2audio_stream {
     int started;
 
     /*
+     * Host-clock capture time of the most recent bridgeOS timestamp
+     * message. Consecutive values measure the real message cadence,
+     * which feeds msg_interval_ns below.
+     */
+    ktime_t last_os_timestamp;
+
+    /*
+     * EWMA of the interval between bridgeOS timestamp messages, in ns
+     * (0 = no estimate yet, fall back to the nominal buffer duration).
+     * bridgeOS sends one timestamp message per ring cycle, so this
+     * measures the device's *real* consumption rate. Around a resume the
+     * device can genuinely run several percent slow for seconds at a
+     * time (measured on MacBookPro16,2: ~375ms cadence instead of the
+     * nominal ~346ms, i.e. ~44.3kHz effective instead of 48kHz);
+     * interpolating the pointer at the nominal rate during such a window
+     * makes the estimate run ahead of the device's true read position
+     * within every cycle, and the erase head then zeroes frames the
+     * device has not played yet — audible as rhythmic crackling for the
+     * whole window. Interpolating over this measured interval instead
+     * keeps the pointer tracking the device's actual rate. Deliberately
+     * persists across stream restarts and suspend/resume: a restart
+     * during a deviation window should inherit the measured rate, and a
+     * stale estimate can only make the pointer lag (the safe direction)
+     * until it re-converges (time constant ~4 messages, ~1.5s).
+     */
+    s64 msg_interval_ns;
+
+    /*
      * Playback only: monotonic frame-consumed accumulator used to bound
      * the reported pointer so it can never claim more frames were
      * consumed than appl_ptr has actually made available, no matter how

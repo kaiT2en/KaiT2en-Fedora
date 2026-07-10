@@ -374,6 +374,7 @@ static snd_pcm_uframes_t t2audio_pcm_pointer(struct snd_pcm_substream *substream
     ktime_t time_from_start;
     snd_pcm_sframes_t frames;
     snd_pcm_sframes_t buffer_time_length;
+    s64 cycle_ns;
 
     if (!stream->started)
         return 0;
@@ -397,16 +398,33 @@ static snd_pcm_uframes_t t2audio_pcm_pointer(struct snd_pcm_substream *substream
     else
         time_from_start = ktime_get_boottime() - stream->remote_timestamp;
 
-    /* bridgeOS reports coarse timestamps; interpolate the ALSA pointer locally. */
+    /*
+     * bridgeOS reports coarse timestamps; interpolate the ALSA pointer
+     * locally. Interpolate over the *measured* message cadence
+     * (msg_interval_ns, see audio.h), not the nominal buffer duration:
+     * the device's real consumption rate can deviate several percent
+     * from nominal for seconds around a resume, and sweeping at the
+     * nominal rate through such a window pushes the estimate ahead of
+     * the device's true read position within every cycle. The clamp
+     * bounds the sweep rate even if the estimate is corrupted; the
+     * frame_min ratchet below (holding the pointer flat instead of ever
+     * moving it backward across an anchor reset) is unchanged and works
+     * the same over the measured cycle length.
+     */
     buffer_time_length = NSEC_PER_SEC * substream->runtime->buffer_size / substream->runtime->rate;
-    frames = (ktime_to_ns(time_from_start) % buffer_time_length) * substream->runtime->buffer_size / buffer_time_length;
-    if (ktime_to_ns(time_from_start) < buffer_time_length) {
+    cycle_ns = stream->msg_interval_ns;
+    if (cycle_ns)
+        cycle_ns = clamp_t(s64, cycle_ns, buffer_time_length * 3 / 4, buffer_time_length * 3 / 2);
+    else
+        cycle_ns = buffer_time_length;
+    frames = (ktime_to_ns(time_from_start) % cycle_ns) * substream->runtime->buffer_size / cycle_ns;
+    if (ktime_to_ns(time_from_start) < cycle_ns) {
         if (frames < stream->frame_min)
             frames = stream->frame_min;
         else
             stream->frame_min = 0;
     } else {
-        if (ktime_to_ns(time_from_start) < 2 * buffer_time_length)
+        if (ktime_to_ns(time_from_start) < 2 * cycle_ns)
             stream->frame_min = frames;
         else
             stream->frame_min = 0;
@@ -534,6 +552,32 @@ static void t2audio_handle_stream_timestamp(struct snd_pcm_substream *substream,
 
     stream = t2audio_pcm_stream(substream);
     snd_pcm_stream_lock_irqsave(substream, flags);
+    /*
+     * Feed the message-cadence estimate (see msg_interval_ns in
+     * audio.h). Host-domain intervals are used because the pointer
+     * anchor is also host-domain (os_timestamp) — the sweep duration to
+     * the next anchor must be measured in the same domain it is
+     * interpolated in. Intervals outside (nominal/2, nominal*2) are
+     * dropped entirely rather than averaged in: those are missed/
+     * duplicated messages or restart artifacts, not a real rate change
+     * (the largest genuine deviation observed is ~8%).
+     */
+    if (!stream->waiting_for_first_ts &&
+            substream->runtime && substream->runtime->rate && substream->runtime->buffer_size) {
+        s64 nominal_ns = (s64) NSEC_PER_SEC * substream->runtime->buffer_size / substream->runtime->rate;
+        s64 interval_ns = ktime_to_ns(ktime_sub(os_timestamp, stream->last_os_timestamp));
+
+        if (interval_ns > nominal_ns / 2 && interval_ns < nominal_ns * 2) {
+            if (!stream->msg_interval_ns)
+                stream->msg_interval_ns = interval_ns;
+            else
+                stream->msg_interval_ns += (interval_ns - stream->msg_interval_ns) >> 2;
+        }
+        pr_debug("t2bce_audio: ts interval %s interval_us=%lld cyc_est_us=%lld\n",
+                sdev->uid, interval_ns / 1000, stream->msg_interval_ns / 1000);
+    }
+    stream->last_os_timestamp = os_timestamp;
+
     /*
      * Anchor on os_timestamp (host ktime_get_boottime(), captured when
      * this message was processed), not dev_timestamp: the latter is
