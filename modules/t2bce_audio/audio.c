@@ -806,12 +806,14 @@ void t2audio_handle_cmd_timestamp(struct t2audio_device *a, struct t2audio_msg *
 
     offset_sample = ktime_to_ns(time_os) - (s64)timestamp;
     spin_lock_irqsave(&a->clock_lock, flags);
-    if (!a->clock_offset_valid || offset_sample < a->clock_offset_ns) {
-        a->clock_offset_ns = offset_sample;
-        a->clock_offset_valid = true;
+    if (offset_sample >= 0) {
+        if (!a->clock_offset_valid || offset_sample < a->clock_offset_ns) {
+            a->clock_offset_ns = offset_sample;
+            a->clock_offset_valid = true;
+        }
+        if (a->clock_samples < 2)
+            a->clock_samples++;
     }
-    if (a->clock_samples < 2)
-        a->clock_samples++;
     clock_offset_ns = a->clock_offset_ns;
     clock_ready = a->clock_samples >= 2;
     spin_unlock_irqrestore(&a->clock_lock, flags);
