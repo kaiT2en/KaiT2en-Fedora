@@ -9,12 +9,11 @@
 
 [Back to README](../README.md)
 
-KaiT2en is designed for stock Fedora kernels. On affected machines you may need
-to install KaiT2en first so internal input devices, storage, audio or networking
-stay usable. After KaiT2en is installed, use this guide to remove the remaining
-T2 Linux Fedora packaging layer and move back toward a stock Fedora kernel.
+KaiT2en is designed for stock Fedora kernels. After KaiT2en is installed, 
+use this guide to remove the remaining T2 Linux Fedora packaging layer 
+and move back toward a stock Fedora kernel.
 
-This guide removes the T2 Linux Fedora COPR, support packages and configuration
+The script in this guide removes the T2 Linux Fedora COPR, support packages and configuration
 files that conflict with KaiT2en or hide bugs behind distribution-specific
 workarounds. It intentionally does not remove KaiT2en files.
 
@@ -37,12 +36,12 @@ files:
 - `t2fanrd`
   - `/usr/bin/t2fanrd`
   - `/usr/lib/systemd/system/t2fanrd.service`
-- recommended packages such as `tiny-dfr`
+- `tiny-dfr`
 - a patched kernel from the `sharpenedblade/t2linux` COPR
 
 KaiT2en provides its own modules, UCM profile, fan/SMC tools, Touch Bar daemon,
-T2 CDC-NCM handling and suspend helpers. Do not keep both stacks active at the
-same time.
+T2 CDC-NCM handling and suspend helpers that are compatible to upstream mainline
+and survive suspend. Do not keep both stacks active at the same time.
 
 ## Revert script
 
@@ -211,53 +210,3 @@ Reboot after the script completes:
 sudo reboot
 ```
 
-After reboot, verify that you are no longer running a T2 Linux kernel:
-
-```bash
-uname -r
-```
-
-The kernel release should not contain `.t2`. If `.t2` is still shown, install a
-Fedora kernel again with:
-
-```bash
-sudo dnf install -y kernel-core kernel-modules kernel-modules-extra kernel-devel
-sudo reboot
-```
-
-During the Fedora kernel transaction, DKMS autoinstall builds the already
-registered KaiT2en modules for the new Fedora kernel. The script then rebuilds
-the initramfs for installed non-`.t2` kernel packages only. After reboot, verify
-the DKMS state for the running kernel:
-
-```bash
-dkms status
-```
-
-If any KaiT2en module is missing for the running kernel, repair that exact
-running kernel manually:
-
-```bash
-sudo dkms autoinstall -k "$(uname -r)"
-sudo depmod -a "$(uname -r)"
-sudo dracut --force
-sudo reboot
-```
-
-Only rerun [Install KaiT2en modules and apps](04-install-kait2en-modules-and-apps.md)
-if DKMS reports that KaiT2en module sources are missing.
-
-## Notes
-
-The script intentionally does not remove user-copied firmware from `/lib/firmware`
-or `/usr/lib/firmware`. Broadcom Wi-Fi and Bluetooth firmware copied from macOS
-is still needed on stock Fedora and KaiT2en systems.
-
-The script also does not remove KaiT2en files. If KaiT2en was installed before
-running this guide, verify its files afterwards with:
-
-```bash
-dkms status
-test -f /usr/share/alsa/ucm2/AppleT2/HiFi.conf
-systemctl status kait2en-suspend.service
-```

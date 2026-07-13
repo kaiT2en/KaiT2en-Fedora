@@ -5,7 +5,7 @@
 3. [Prepare macOS and the Fedora installer](02-prepare-macos-and-fedora-usb.md)
 4. [Install Broadcom firmware on Fedora](03-install-broadcom-firmware.md)
 5. [Install KaiT2en modules and apps](04-install-kait2en-modules-and-apps.md)
-6. [Revert T2 Linux Fedora to vanilla + KaiT2en](05-revert-t2linux-fedora.md) (optional)
+6. [Revert T2 Linux Fedora to vanilla + KaiT2en](05-revert-t2linux-fedora.md)
 
 Previous: [Introduction](00-introduction.md) | Next: [Prepare macOS and the Fedora installer](02-prepare-macos-and-fedora-usb.md)
 

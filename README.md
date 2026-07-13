@@ -26,10 +26,8 @@ to complement the T2linux community by offering an alternative
 development workflow. While pre-patched distributions serve a purpose,
 managing multiple custom flavors can introduce fragmented workarounds,
 which complicates driver developing and testing.
-There is a distinct difference in making broken things work and in
-fixing broken things. We want code to be fixed for upstream.
 
-KaiT2en will not work on other distros than Fedora. This was a deliberate choice.
+KaiT2en will not work on other distros than Fedora.
 In the first place we want a unified clean platform for debugging. We do not
 support ports to other distros. We know many of you prefer Arch. But we need
 our base to be as conventional as possible to get things sorted.
@@ -42,7 +40,7 @@ The repository is meant to be used as an offline USB kit. Copy it to a USB
 drive, keep that drive connected, and run all commands from the repository root
 unless a guide says otherwise.
 
-The setup is intentionally explicit. You will use the terminal, inspect logs and
+The setup is intentionally explicit. You will use the terminal, run commands and
 know which file was installed where.
 
 ## Start here
@@ -54,10 +52,7 @@ Read the howto documents in order:
 3. [Prepare macOS and the Fedora installer](howto/02-prepare-macos-and-fedora-usb.md)
 4. [Install Broadcom firmware on Fedora](howto/03-install-broadcom-firmware.md)
 5. [Install KaiT2en modules and apps](howto/04-install-kait2en-modules-and-apps.md)
-6. [Revert T2 Linux Fedora to vanilla + KaiT2en](howto/05-revert-t2linux-fedora.md) (optional)
-
-macOS must stay installed. If you want to erase macOS completely, use the regular
-T2 Linux documentation instead.
+6. [Revert T2 Linux Fedora to vanilla + KaiT2en](howto/05-revert-t2linux-fedora.md)
 
 ## Community
 
