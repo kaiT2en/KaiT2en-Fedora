@@ -14,7 +14,7 @@ DKMS modules, which are constantly improved for later direct mainline
 kernel submission. This has some major advantages for users
 and developers alike:
 
-- most users get a working daily driver out of the box
+- most users get a working daily driver out of the box. See [*remaining work*](#remaining-work)
 - driver behaviour is isolated by a clean environment
 - you always get the latest vanilla kernel directly from Fedora
 - devs don't need to compile the kernel for debugging modules
@@ -27,7 +27,7 @@ development workflow. While pre-patched distributions serve a purpose,
 managing multiple custom flavors can introduce fragmented workarounds,
 which complicates driver developing and testing.
 There is a distinct difference in making broken things work and in
-fixing broken things. We want things to be fixed for upstream.
+fixing broken things. We want code to be fixed for upstream.
 
 KaiT2en will not work on other distros than Fedora. This was a deliberate choice.
 In the first place we want a unified clean platform for debugging. We do not
@@ -63,32 +63,6 @@ T2 Linux documentation instead.
 
 Join the [KaiT2en community on Discord](https://discord.gg/AGfjRk4ydj)
 
-## Working state and remaining work
-
-KaiT2en is meant to provide a usable daily-driver baseline on stock Fedora.
-It carries the missing pieces out of tree while the
-real fixes are prepared for upstream.
-
-The table below is not just a feature checklist. It also shows where work is
-still needed before the KaiT2en patches can become normal upstream Linux
-support. Contributions that move these items toward clean upstreamable fixes are
-welcome.
-
-| Area | Daily-driver state | Upstreamed | Remaining work |
-| --- | --- | --- | --- |
-| Audio | Working | Prepared | - |
-| Bluetooth | Working | Partial | `brcmfmac` and `hci_bcm4377` needs suspend quirks. |
-| Camera | Working | No | - |
-| Hybrid graphics | Working | Partial | `amdgpu` and `gmux` behavior needs proper fixes instead of suspend-time workarounds. |
-| Keyboard | Working | Yes | - |
-| Suspend | Working | No | We install suspend helpers for model-specific `amdgpu` and BCM4377 handling. Which need fixes in drivers. |
-| Thunderbolt | Working | Partial | Some Mac models show pcie ordering/tunnel issues which don't seem to affect operation  |
-| Touch Bar | Working | Yes | - |
-| Touch ID | Not working | No | Needs reverse engineering. |
-| T2 AVE | Not working | No | Needs reverse engineering. |
-| Trackpad | Working | Partial | Depends on Asahi patches which need to be upstreamed by them |
-| Wi-Fi | Working | Yes | Requires firmware copied from macOS. Firmware handling must stay user-local. |
-
 ## Driver naming
 
 KaiT2en renames drivers it maintains because the original Fedora, upstream Linux
@@ -116,9 +90,29 @@ read.
 Contributions are welcome, especially when they move KaiT2en fixes closer to
 clean upstream Linux support.
 
-Please keep changes focused. A good contribution should explain what hardware
-was tested, which Fedora kernel was used and what changed in the logs or device
-behavior.
+Please keep changes and PR desciptions focused. You may use AI for debugging, but we will notice
+slop and we will refuse to review or even merge obvious slop. We are not interested in workarounds.
+There is a distinct difference in just making broken things work and fixing things. 
+
+## Remaining work
+
+Though with a very few exceptions everything is working OOTB when installing KaiT2en,
+we are still using some workarounds to make thinks work. In long terms this should
+be replaced with real fixes that can be upstreamed.
+
+- `t2bce` is our replacement for apple-bce. It is divided into separate modules for 
+Core functions, DMA, VHCI and Audio. For upstreaming it needs code review and 
+commenting T2 particularities (don't use AI on this).
+- We need a OSDW quirk in upstream ACPI/Thunderbolt drivers to get away from kernel param `!Darwin` 
+- Macbook 15,1 needs gmux, vgaswitcheroo, amdgpu and maybe even i915 work for the SMU to
+survive suspend.
+- iMac situation is unclear where the dGPU is sporadically not properly intitialized on boot.
+Also 5k support remains an issue on 27" iMacs.
+- Broadcom 4377 chips need a fix in brcmfmac to work around the firmware refusing D0 to D3cold transition.
+- If anyhow possible find a way to make Apple Broadcom chips work without MacOS firmware.
+- Get bridgeOS logs from T2 without macOS.
+- AVE support needs reverse engineering-
+- Fingerprint support needs reverse engineering.
 
 ## License
 
