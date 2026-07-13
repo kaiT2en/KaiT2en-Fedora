@@ -5,9 +5,14 @@
 3. [Prepare macOS and the Fedora installer](02-prepare-macos-and-fedora-usb.md)
 4. [Install Broadcom firmware on Fedora](03-install-broadcom-firmware.md)
 5. [Install KaiT2en modules and apps](04-install-kait2en-modules-and-apps.md)
+6. [Revert T2 Linux Fedora to vanilla + KaiT2en](05-revert-t2linux-fedora.md) (optional)
 
 Previous: [Introduction](00-introduction.md) | Next: [Prepare macOS and the Fedora installer](02-prepare-macos-and-fedora-usb.md)
 
+*When you already have T2 Linux Fedora installed and you are using our revert
+script, you can jump to [Install KaiT2en modules and apps](04-install-kait2en-modules-and-apps.md).*
+
+Boot into macOS.
 Open the macOS Terminal in the root folder of this repository on your USB drive.
 Then execute the code below. It takes some time to complete. This is normal:
 
