@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/kaiT2en-logo-tr.png" alt="KaiT2en logo" width="240">
+  <img src="assets/kait2en-fedora.jpeg" alt="KaiT2en logo" width="720">
 </p>
 
 # KaiT2en Fedora
