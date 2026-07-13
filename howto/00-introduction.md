@@ -65,11 +65,7 @@ and repairable.
 
 Firmware files copied from macOS are never distributed by KaiT2en. The guides
 only show how to copy the correct firmware files from your own Mac and install
-them locally. This is important because T2linux.org is missing a few important
-steps here. For example it never installs the bluetooth firmware.
-KaiT2en will find it and convert it from `.hex` to the needed `.hcd` format
-using a fork of hex2hcd which was specifically re-written to support the
-particularities of Apple Bluetooth firmware files.
+them locally.
 
 So for now best luck for the installation. If you happen to run into issues or inconsistencies,
 please open a PR or file an issue.

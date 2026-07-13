@@ -7,28 +7,36 @@
 KaiT2en [ˈkaɪ̯zɛn] refers to the Japanese philosophy of "kaizen". Which
 means constant small improvements.
 
-Kait2en is using DKMS modules to add T2 Mac driver support to stock Fedora.
+Kait2en is not a standalone distribution. By design. 
+It delivers T2 Mac driver support to stock Fedora using out-of-tree
+DKMS modules, which are constantly improved for later direct mainline
+kernel submission. This has some major advantages for users
+and developers alike:
 
-It also ships with the latest workarounds to make suspend working and includes
-T2 specific apps and tools.
+- most users get a working daily driver out of the box
+- driver behaviour is isolated by a clean environment
+- you always get the latest vanilla kernel directly from Fedora
+- devs don't need to compile the kernel for debugging modules
+- by distributing updates through OOTM, devs get instant feedback from users
+- we are able to react to regressions instantly
 
-The DKMS modules in this repository build against the currently installed
-kernel. This makes it possible for developers to quickly test patches without
-the need of recompiling the kernel. Also users can profit quickly from the
-latest efforts. Modules and Kernels are updated separately.
-So you will always get the latest
-kernel from upstream Fedora and decide for yourself if you want to update
-the modules from this repo.
+Our goal is upstream to mainline kernel in the first place, but also
+to complement the T2linux community by offering an alternative
+development workflow. While pre-patched distributions serve a purpose,
+managing multiple custom flavors can introduce fragmented workarounds,
+which complicates driver developing and testing.
+There is a distinct difference in making broken things work and in
+fixing broken things. We want things to be fixed for upstream.
 
-KaiT2en can also be installed on top of existing T2linux.org kernels.
-It blacklists already upstreamed drivers and replaces them with its own.
-*Note there will be still remnants of T2linux stuff when doing so, what is
-not helpful when dealing with issues.* That's why we recommend installing
-KaiT2en on top of stock Fedora.
+KaiT2en can also be installed on top of existing T2linux.org Fedora kernels.
+It blacklists all drivers which we think or know are problematic and replaces
+them with its own. Note that a clean Fedora install is preferred because
+T2linux Fedora comes with some workarounds and Kernel parameters baked in.
 
 KaiT2en will not work on other distros than Fedora. This was a deliberate choice.
 In the first place we want a unified clean platform for debugging. We do not
-support ports to other distros.
+support ports to other distros. We know many of you prefer Arch. But we need
+our base to be as conventional as possible to really get things sorted.
 
 The repository is meant to be used as an offline USB kit. Copy it to a USB
 drive, keep that drive connected, and run all commands from the repository root
@@ -52,8 +60,8 @@ T2 Linux documentation instead.
 
 ## Working state and remaining work
 
-KaiT2en is meant to provide a usable daily-driver baseline on stock Fedora. Most
-hardware works because KaiT2en carries the missing pieces out of tree while the
+KaiT2en is meant to provide a usable daily-driver baseline on stock Fedora.
+It carries the missing pieces out of tree while the
 real fixes are prepared for upstream.
 
 The table below is not just a feature checklist. It also shows where work is
@@ -63,24 +71,18 @@ welcome.
 
 | Area | Daily-driver state | Upstreamed | Remaining work |
 | --- | --- | --- | --- |
-| Audio | Working | No | Provided through `t2bce`. Audio should be split out of BCE internals. |
-| Bluetooth | Working | Partial | `brcmfmac` and `hci_bcm4377` need firmware and suspend quirks. |
-| Camera | Working | No | Provided through the T2 BCE path. |
+| Audio | Working | Prepared | - |
+| Bluetooth | Working | Partial | `brcmfmac` and `hci_bcm4377` needs suspend quirks. |
+| Camera | Working | No | - |
 | Hybrid graphics | Working | Partial | `amdgpu` and `gmux` behavior needs proper fixes instead of suspend-time workarounds. |
-| Keyboard | Working | Yes | Depends on the T2 BCE VHCI path and KaiT2en input drivers. |
+| Keyboard | Working | Yes | - |
 | Suspend | Working | No | We install suspend helpers for model-specific `amdgpu` and BCM4377 handling. Which need fixes in drivers. |
-| Thunderbolt | Working | Yes | We added further fixes that need upstreaming |
-| Touch Bar | Working | Yes | Depends on T2 BCE VHCI which is not upstreamed |
+| Thunderbolt | Working | Partial | Some Mac models show pcie ordering/tunnel issues which don't seem to affect operation  |
+| Touch Bar | Working | Yes | - |
 | Touch ID | Not working | No | Needs reverse engineering. |
 | T2 AVE | Not working | No | Needs reverse engineering. |
-| Trackpad | Working | Yes | Depends on T2 BCE VHCI which is not upstreamed |
+| Trackpad | Working | Partial | Depends on Asahi patches which need to be upstreamed by them |
 | Wi-Fi | Working | Yes | Requires firmware copied from macOS. Firmware handling must stay user-local. |
-
-The largest remaining kernel task is `t2bce` aka `apple-bce`. It should be
-broken into smaller upstreamable pieces instead of staying as one large T2
-bridge driver. Known areas are DMA which should support scatter-gather support,
-mailbox handling, VHCI, audio and suspend/resume ordering. Suspend in particular
-needs a fast reverse path.
 
 ## Driver naming
 
@@ -95,13 +97,12 @@ read.
 | KaiT2en driver | Replaces or carries | Upstream state | Function |
 | --- | --- | --- | --- |
 | `hid_t2magicmouse` | `hid_magicmouse` with T2 patches | Partial | Apple Magic Mouse, Magic Trackpad and T2 Wellspring trackpad HID support. |
-| `t2bce` | `apple-bce` | No | T2 bridge controller, VHCI devices, audio and camera transport. |
-| `t2bdrm` | `appletbdrm` | Partial | Touch Bar display DRM device for `react-drm`. |
+| `t2bce_<module>` | `apple-bce` | No | T2 bridge controller, VHCI devices, DMA and mailbox. |
+| `t2bdrm` | `appletbdrm` | Yes | Touch Bar display DRM device for `react-drm`. |
 | `t2gmux` | `apple_gmux` | Partial | GMUX handling on dual-GPU T2 Macs. |
-| `t2hid` | `hid_apple` | Partial | Apple HID quirks for T2 keyboards and related internal input devices. |
-| `t2mfi_fastcharge` | `apple_mfi_fastcharge` | No | iPhone and iPad fast charging on Apple USB controllers. |
+| `t2hid` | `hid_apple` | Yes | Apple HID quirks for T2 keyboards and related internal input devices. |
+| `t2mfi_fastcharge` | `apple_mfi_fastcharge` | Yes | iPhone and iPad fast charging on Apple USB controllers. |
 | `t2smc` | `applesmc`, `macsmc` pieces | No | Fan control, battery charge limit, hwmon sensors and RTC through the T2 SMC. |
-| `t2thunderbolt` | `thunderbolt` | Partial | Thunderbolt and USB4 controller support on T2 Macs. |
 | `t2touchbar_bl` | `hid_appletb_bl` | Yes | Touch Bar backlight handling. |
 | `t2touchbar_kbd` | `hid_appletb_kbd` | Yes | Touch Bar keyboard mode handling. |
 
