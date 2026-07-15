@@ -205,7 +205,7 @@
         ],
         "node.virtual": "false",
         "priority.session": 850,
-        "state.default-volume": 0.75,
+        "state.default-volume": 1.0,
         "device.icon-name": "audio-speakers"
     },
     "playback.props": {
