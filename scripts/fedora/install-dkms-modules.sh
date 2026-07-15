@@ -21,6 +21,12 @@ MODULES=(
 )
 
 LEGACY_MODULES=(
+	t2bce
+	t2dma
+	t2audio
+	t2vhci
+	t2bce-core
+	t2bce-dma
 	t2thunderbolt
 )
 
@@ -56,11 +62,24 @@ remove_dkms_module_versions() {
 	done < <(dkms status -m "$name" 2>/dev/null | sed -n "s|^$name/\\([^,:]*\\)[,:].*|\\1|p")
 }
 
+remove_module_sources() {
+	local name=$1 source base
+
+	while IFS= read -r -d '' source; do
+		base="${source##*/}"
+		[[ "$source" == /usr/src/* && "$base" == "$name-"* ]] ||
+			fail "refusing to remove unexpected module source path $source"
+		info "removing stale module source $base"
+		rm -rf "$source"
+	done < <(find /usr/src -mindepth 1 -maxdepth 1 -type d -name "$name-*" -print0)
+}
+
 remove_legacy_dkms_modules() {
 	local module
 
 	for module in "${LEGACY_MODULES[@]}"; do
 		remove_dkms_module_versions "$module"
+		remove_module_sources "$module"
 	done
 }
 
@@ -69,6 +88,7 @@ remove_repo_dkms_modules() {
 
 	for module in "${MODULES[@]}"; do
 		remove_dkms_module_versions "$module"
+		remove_module_sources "$module"
 	done
 }
 

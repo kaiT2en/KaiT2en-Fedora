@@ -5,7 +5,9 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib.sh"
 require_root
 require_repo_root
 require_fedora
-require_command make cargo tar getent cut id rpm dnf systemctl udevadm
+require_command \
+	awk cargo chown cut dnf env getent grep id install make mktemp npm rm rpm \
+	sleep sudo systemctl tar tr udevadm usermod
 
 REACT_DRM_FEDORA_PACKAGES=(
 	nodejs22-bin
@@ -35,6 +37,14 @@ REACT_DRM_CONFLICT_DAEMONS=(
 	tiny-dfr
 	mac-touchbar-plus
 )
+
+remove_obsolete_apps() {
+	info "removing obsolete t2-gpu-switch installation"
+	rm -f \
+		/usr/local/bin/t2-gpu-switch \
+		/usr/local/libexec/t2-gpu-switch-helper \
+		/usr/local/share/applications/org.t2gpuswitch.gtk.desktop
+}
 
 install_rust_app() {
 	local path=$1 name=$2 target_user
@@ -214,6 +224,7 @@ install_react_drm() {
 		fail "react-drm failed to remain active; inspect it with 'journalctl --user -u react-drm.service -b'"
 }
 
+remove_obsolete_apps
 install_rust_app "$REPO_ROOT/apps/t2-fan-control" "t2-fan-control"
 install_rust_app "$REPO_ROOT/apps/t2-smc-control" "t2-smc-control"
 install_react_drm

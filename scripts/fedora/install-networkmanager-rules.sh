@@ -4,6 +4,7 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib.sh"
 
 require_root
 require_fedora
+require_command install mktemp rm udevadm
 
 readonly RULE_DIR="/etc/udev/rules.d"
 readonly RULE_FILE="$RULE_DIR/90-kait2en-t2-network.rules"
@@ -12,7 +13,10 @@ info "installing NetworkManager exclusion for the internal T2 NCM interface"
 
 install -d -m 0755 "$RULE_DIR"
 
-cat >"$RULE_FILE" <<'EOF'
+RULE_TMP="$(mktemp)"
+trap 'rm -f "$RULE_TMP"' EXIT
+
+cat >"$RULE_TMP" <<'EOF'
 # Apple T2 internal CDC-NCM interface.
 #
 # Do not match by MAC address or interface name:
@@ -24,7 +28,7 @@ ACTION=="add", SUBSYSTEM=="net", ENV{ID_BUS}=="usb", ENV{ID_VENDOR_ID}=="05ac", 
 ACTION=="change", SUBSYSTEM=="net", KERNEL=="t2_ncm", ENV{NM_UNMANAGED}="1", TAG+="systemd", ENV{SYSTEMD_WANTS}+="kait2en-t2-ncm-down.service"
 EOF
 
-chmod 0644 "$RULE_FILE"
+install -o root -g root -m 0644 "$RULE_TMP" "$RULE_FILE"
 
 udevadm control --reload-rules
 

@@ -1405,7 +1405,7 @@ def atomic_copy(source: Path, destination: Path, mode: int = 0o644) -> None:
     os.replace(temporary, destination)
 
 
-def updated_dracut_conf(existing: str) -> str:
+def updated_dracut_conf(existing: str, enable: bool) -> str:
     retained: list[str] = []
     setting_re = re.compile(r"^\s*(acpi_override|acpi_table_dir)\s*=")
     for line in existing.splitlines():
@@ -1413,10 +1413,11 @@ def updated_dracut_conf(existing: str) -> str:
             retained.append(line)
     while retained and not retained[-1].strip():
         retained.pop()
-    if retained:
+    if enable and retained:
         retained.append("")
-    retained.extend(DRACUT_REQUIRED_LINES)
-    return "\n".join(retained) + "\n"
+    if enable:
+        retained.extend(DRACUT_REQUIRED_LINES)
+    return "\n".join(retained) + ("\n" if retained else "")
 
 
 def write_atomic_text(path: Path, text: str, mode: int = 0o644) -> None:
@@ -1463,7 +1464,9 @@ def check_cpussdt_duplicates(target_name: str) -> None:
 
 # ---------------------------------------------------------------------------
 
-def deploy_tables(tables: Sequence[BuiltTable], timestamp: str) -> Path:
+def deploy_tables(
+    tables: Sequence[BuiltTable], timestamp: str, product_name: str
+) -> Path:
     backup_dir = BACKUP_ROOT / timestamp
     backup_dir.mkdir(parents=True, exist_ok=False)
     backup_dir.chmod(0o700)
@@ -1476,7 +1479,13 @@ def deploy_tables(tables: Sequence[BuiltTable], timestamp: str) -> Path:
         check_cpussdt_duplicates(cpussdt.deploy_name)
 
     targets = [DEPLOY_DIR / table.deploy_name for table in tables]
-    tracked = targets + [DRACUT_CONF]
+    desired_targets = set(targets)
+    managed_targets = {
+        DEPLOY_DIR / "dsdt.aml",
+        DEPLOY_DIR / cpussdt_deploy_name(product_name),
+    }
+    obsolete_targets = sorted(managed_targets - desired_targets)
+    tracked = sorted(desired_targets | set(obsolete_targets)) + [DRACUT_CONF]
     existed_before = {path: path.exists() or path.is_symlink() for path in tracked}
     for path in tracked:
         backup_path(path, backup_dir)
@@ -1493,13 +1502,19 @@ def deploy_tables(tables: Sequence[BuiltTable], timestamp: str) -> Path:
     try:
         for table, target in zip(tables, targets):
             atomic_copy(table.aml, target)
+        for target in obsolete_targets:
+            target.unlink(missing_ok=True)
 
         existing = (
             DRACUT_CONF.read_text(encoding="utf-8", errors="replace")
             if DRACUT_CONF.exists()
             else ""
         )
-        write_atomic_text(DRACUT_CONF, updated_dracut_conf(existing))
+        updated_conf = updated_dracut_conf(existing, bool(tables))
+        if updated_conf:
+            write_atomic_text(DRACUT_CONF, updated_conf)
+        else:
+            DRACUT_CONF.unlink(missing_ok=True)
     except Exception as original_error:
         rollback_errors: list[str] = []
         for path in reversed(tracked):
@@ -1528,23 +1543,22 @@ def main() -> int:
 
     info("checking whether ACPI firmware fixes are needed")
     detection = detect_problems()
-    if not detection.cpussdt_problem and not detection.dsdt_problem:
-        info("ACPI firmware fixes are not needed")
-        return 0
-
-    require_commands(("iasl",))
     timestamp = safe_timestamp()
-    workdir = make_workdir(timestamp)
-
     tables: list[BuiltTable] = []
-    if detection.cpussdt_problem:
-        tables.append(build_cpussdt(workdir, product_name))
-    if detection.dsdt_problem:
-        tables.append(build_dsdt(workdir))
+    if detection.cpussdt_problem or detection.dsdt_problem:
+        require_commands(("iasl",))
+        workdir = make_workdir(timestamp)
+        if detection.cpussdt_problem:
+            tables.append(build_cpussdt(workdir, product_name))
+        if detection.dsdt_problem:
+            tables.append(build_dsdt(workdir))
 
-    deploy_tables(tables, timestamp)
-    kinds = ", ".join(table.kind for table in tables)
-    info(f"ACPI firmware fixes prepared for initramfs rebuild: {kinds}")
+    deploy_tables(tables, timestamp, product_name)
+    if not tables:
+        info("ACPI firmware fixes are not needed; removed obsolete KaiT2en overrides")
+    else:
+        kinds = ", ".join(table.kind for table in tables)
+        info(f"ACPI firmware fixes prepared for initramfs rebuild: {kinds}")
     return 0
 
 
