@@ -162,7 +162,6 @@ tmp_conf="$(mktemp)"
 	printf '    {\n'
 	printf '        matches = [\n'
 	printf '            { node.name = "%s" }\n' "$speaker_sink"
-	printf '            { api.alsa.card.name = "Apple T2 Audio", alsa.name = "Speaker" }\n'
 	printf '        ]\n'
 	printf '        actions = { create-filter = { filter-path = "%s/graph.json" hide-parent = false } }\n' "$dst_dir"
 	printf '    }\n'
@@ -170,7 +169,6 @@ tmp_conf="$(mktemp)"
 		printf '    {\n'
 		printf '        matches = [\n'
 		printf '            { node.name = "%s" }\n' "$mic_source"
-		printf '            { api.alsa.card.name = "Apple T2 Audio", alsa.name = "Digital Mic" }\n'
 		printf '        ]\n'
 		printf '        actions = { create-filter = { filter-path = "%s/mic.json" hide-parent = false } }\n' "$dst_dir"
 		printf '    }\n'

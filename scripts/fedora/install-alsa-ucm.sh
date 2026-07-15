@@ -76,13 +76,17 @@ reset_wireplumber_t2_profile_state() {
 	fi
 }
 
-[[ -r "$UCM_SRC/AppleT2/HiFi.conf" ]] ||
-	fail "missing Apple T2 UCM profile in $UCM_SRC"
-
 info "installing Apple T2 ALSA UCM profile"
 
 install -d -o root -g root -m 0755 "$UCM_DST/AppleT2"
-install -o root -g root -m 0644 "$UCM_SRC/AppleT2/HiFi.conf" "$UCM_DST/AppleT2/HiFi.conf"
+
+for profile in HiFi-x2 HiFi-x4 HiFi-x6; do
+	[[ -r "$UCM_SRC/AppleT2/$profile.conf" ]] ||
+		fail "missing $profile UCM profile in $UCM_SRC"
+
+	install -o root -g root -m 0644 \
+		"$UCM_SRC/AppleT2/$profile.conf" "$UCM_DST/AppleT2/$profile.conf"
+done
 
 for driver in AppleT2x2 AppleT2x4 AppleT2x6; do
 	[[ -r "$UCM_SRC/conf.d/$driver/$driver.conf" ]] ||
