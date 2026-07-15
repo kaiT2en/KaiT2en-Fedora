@@ -28,6 +28,11 @@ Please reboot after the script completed without errors.
 sudo reboot
 ```
 
+Below you will find all scripts and apps that are installed when running `install.sh`.
+You dont't need to run them manually. You can do that when you only want
+to install updates partially. 
+Also devs please note [how to enable debugging](#kernel-debug-logs) on the very bottom of this document.
+
 ## Automatic ACPI firmware fixes
 
 Before rebuilding the initramfs, the installer checks for two known ACPI
@@ -58,51 +63,55 @@ journalctl -b0 -k --grep=AE_AML_BUFFER_LIMIT
 journalctl -b0 -k --grep='Marking method'
 ```
 
-## Apps
+# Apple T2 Audio DSP
 
-The installer installs the required KaiT2en apps:
+This is a fork of [Lemmyg's Apple-T2-Audio-DSP repo)](https://github.com/lemmyg/t2-apple-audio-dsp).
+Leave him a proper GitHub star for his work. We adapted it to make
+it work on Fedora. Most FIR files originate from lemmyg's
+`t2-apple-audio-dsp`; the MacBook Pro 15,1 FIRs were generated from UMIK-1
+measurements of that model by deqrocks.
 
-- t2-fan-control # Adjustable fan curves with GUI
-- t2-smc-control # Battery charge limit and SMC sensors in a GUI
-- react-drm # Touchbar daemon - only on Touch Bar Macs
+This is PipeWire/WirePlumber DSP graphs and FIR files for Apple T2 audio.
+The profiles in `firs/` are installed by `scripts/fedora/install-dsp.sh` when
 
-t2-fan-control and t2-smc-control can be found in the GNOME-App-Drawer
-after installation is finished.
+Supported profiles:
 
-`t2-fan-control` installs:
+- `MacBookPro16,1` -> `16_1`
+- `MacBookPro16,2` -> `16_2`
+- `MacBookPro16,4` -> `16_4`
+- `MacBookAir9,1` -> `9_1`
+- `MacBookPro15,1` -> `15_1`
 
-- Binary: `/usr/local/bin/t2-fancontrol-gtk`
-- Desktop file: `/usr/local/share/applications/org.t2fancontrol.gtk.desktop`
-- Icon: `/usr/local/share/icons/hicolor/scalable/apps/org.t2fancontrol.gtk.svg`
-- systemd service: `/usr/local/lib/systemd/system/t2-fancontrol.service`
-- The service is enabled with `systemctl enable --now t2-fancontrol.service`
+The `16_2` profile starts from the same two-channel DSP and FIR configuration
+as `9_1`, but is kept in a separate directory so both models can be tuned
+independently. `16,1` and `16,4` are also bit-identical.
 
-`t2-smc-control` installs:
+The installer copies the matching files to:
 
-- Binary: `/usr/local/bin/t2-smc-control`
-- Desktop file: `/usr/local/share/applications/org.t2smccontrol.gtk.desktop`
-- Icon: `/usr/local/share/icons/hicolor/scalable/apps/org.t2smccontrol.gtk.svg`
-- systemd service: `/usr/local/lib/systemd/system/kait2en-t2-smc-charge-limit.service`
-- Config file, after the first saved limit: `/etc/t2-smc-control/config.txt`
-- The service is enabled with `systemctl enable kait2en-t2-smc-charge-limit.service`
+```text
+/usr/share/kait2en/audio-dsp/<profile>/
+```
 
-When the GUI successfully sets the battery charge limit, it saves the selected
-value in `/etc/t2-smc-control/config.txt`. On later boots,
-`kait2en-t2-smc-charge-limit.service` restores that value through the `t2smc` hwmon
-`battery_charge_limit` attribute.
+It generates a WirePlumber configuration at:
 
-`react-drm` installs:
+```text
+/etc/wireplumber/wireplumber.conf.d/51-kait2en-t2-dsp.conf
+```
 
-- Source and build directory: `$HOME/react-drm` for the user who invoked `sudo`
-- udev rule: `/etc/udev/rules.d/99-react-drm.rules`
-- User service: `$HOME/.config/systemd/user/react-drm.service`
-- The service is enabled with `systemctl --user enable --now react-drm.service`
-- Service `WorkingDirectory`: `$HOME/react-drm/linux-touchbar-control-center`
-- Service `ExecStart`: `node $HOME/react-drm/linux-touchbar-control-center/dist/index.js`
+The graph target is rewritten at install time to match the detected Apple T2
+audio PCI device and KaiT2en UCM sink/source names.
 
-The installer builds `t2-fan-control` and `t2-smc-control` as the user who
-invoked `sudo`, then installs them system-wide below `/usr/local`. `react-drm`
-is copied into that user's home directory and built there.
+Required Fedora packages are installed by `install-dsp.sh`, not by the common
+dependency installer:
+
+- `pipewire`
+- `pipewire-pulseaudio`
+- `wireplumber`
+- `pipewire-module-filter-chain-lv2`
+- `lv2-bankstown`
+- `lv2-triforce`
+- `lsp-plugins-lv2`
+- `lv2-swh-plugins`
 
 ## Suspend helper
 
@@ -166,6 +175,52 @@ product ID plus the `cdc_ncm` driver, renames it to `t2_ncm`, marks it
 unmanaged for NetworkManager and asks systemd to start the helper service for
 that device. The helper then forces `t2_ncm` back down for a short retry window
 so late boot activity does not leave the debug interface up.
+
+## T2-specific Apps
+
+The installer installs the required KaiT2en apps:
+
+- t2-fan-control # Adjustable fan curves with GUI
+- t2-smc-control # Battery charge limit and SMC sensors in a GUI
+- react-drm # Touchbar daemon - only on Touch Bar Macs
+
+t2-fan-control and t2-smc-control can be found in the GNOME-App-Drawer
+after installation is finished.
+
+`t2-fan-control` installs:
+
+- Binary: `/usr/local/bin/t2-fancontrol-gtk`
+- Desktop file: `/usr/local/share/applications/org.t2fancontrol.gtk.desktop`
+- Icon: `/usr/local/share/icons/hicolor/scalable/apps/org.t2fancontrol.gtk.svg`
+- systemd service: `/usr/local/lib/systemd/system/t2-fancontrol.service`
+- The service is enabled with `systemctl enable --now t2-fancontrol.service`
+
+`t2-smc-control` installs:
+
+- Binary: `/usr/local/bin/t2-smc-control`
+- Desktop file: `/usr/local/share/applications/org.t2smccontrol.gtk.desktop`
+- Icon: `/usr/local/share/icons/hicolor/scalable/apps/org.t2smccontrol.gtk.svg`
+- systemd service: `/usr/local/lib/systemd/system/kait2en-t2-smc-charge-limit.service`
+- Config file, after the first saved limit: `/etc/t2-smc-control/config.txt`
+- The service is enabled with `systemctl enable kait2en-t2-smc-charge-limit.service`
+
+When the GUI successfully sets the battery charge limit, it saves the selected
+value in `/etc/t2-smc-control/config.txt`. On later boots,
+`kait2en-t2-smc-charge-limit.service` restores that value through the `t2smc` hwmon
+`battery_charge_limit` attribute.
+
+`react-drm` installs:
+
+- Source and build directory: `$HOME/react-drm` for the user who invoked `sudo`
+- udev rule: `/etc/udev/rules.d/99-react-drm.rules`
+- User service: `$HOME/.config/systemd/user/react-drm.service`
+- The service is enabled with `systemctl --user enable --now react-drm.service`
+- Service `WorkingDirectory`: `$HOME/react-drm/linux-touchbar-control-center`
+- Service `ExecStart`: `node $HOME/react-drm/linux-touchbar-control-center/dist/index.js`
+
+The installer builds `t2-fan-control` and `t2-smc-control` as the user who
+invoked `sudo`, then installs them system-wide below `/usr/local`. `react-drm`
+is copied into that user's home directory and built there.
 
 ## Kernel debug logs
 
