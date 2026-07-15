@@ -7,6 +7,7 @@
 5. [Install KaiT2en modules and apps](04-install-kait2en-modules-and-apps.md)
 6. [Revert T2 Linux Fedora to vanilla + KaiT2en](05-revert-t2linux-fedora.md)
 7. [Configure GPUs](06-configuring-gpus.md)
+8. [How to update](07-updating.md)
 
 Previous: [Introduction](00-introduction.md) | Next: [Prepare macOS and the Fedora installer](02-prepare-macos-and-fedora-usb.md)
 

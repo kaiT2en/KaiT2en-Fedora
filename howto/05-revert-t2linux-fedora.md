@@ -1,4 +1,4 @@
-# Revert T2 Linux Fedora to vanilla + KaiT2en
+# Revert T2 Linux Fedora to vanilla Fedora + KaiT2en
 
 1. [Introduction](00-introduction.md)
 2. [Get Broadcom firmware from macOS](01-get-broadcom-firmware.md)
@@ -7,12 +7,13 @@
 5. [Install KaiT2en modules and apps](04-install-kait2en-modules-and-apps.md)
 6. [Revert T2 Linux Fedora to vanilla + KaiT2en](05-revert-t2linux-fedora.md) (you are here)
 7. [Configure GPUs](06-configuring-gpus.md)
+8. [How to update](07-updating.md)
 
 Previous: [Install KaiT2en modules and apps](04-install-kait2en-modules-and-apps.md) | Next: [Configure GPUs](06-configuring-gpus.md)
 
-KaiT2en is designed for stock Fedora kernels. After KaiT2en is installed, 
-use this guide to remove the remaining T2 Linux Fedora packaging layer 
-and move back toward a stock Fedora kernel.
+KaiT2en is designed for stock Fedora kernels. When you come from T2 Linux Fedora
+you can use this guide to remove the remaining T2 Linux Fedora packaging layers
+and move back to a stock Fedora kernel. You will do this **AFTER** KaiT2en installation.
 
 The script in this guide removes the T2 Linux Fedora COPR, support packages and configuration
 files that conflict with KaiT2en or hide bugs behind distribution-specific

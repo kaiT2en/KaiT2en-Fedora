@@ -7,12 +7,12 @@
 KaiT2en [ˈkaɪ̯zɛn] refers to the Japanese philosophy of "kaizen". Which
 means constant small improvements.
 
-Kait2en is not a standalone distribution. By design. 
+Kait2en is not a standalone distribution. That is by design.
 It can be installed on top of stock Fedora or T2Linux Fedora.
 It delivers T2 Mac driver support to stock Fedora using out-of-tree
 DKMS modules, which are constantly improved for later direct mainline
-kernel submission. This has some major advantages for users
-and developers alike:
+kernel submission.
+This has some major advantages for users and developers alike:
 
 - most users get a working daily driver out of the box. See [*problematic macs*](#problematic-macs)
 - driver behaviour is isolated by a clean environment
@@ -49,10 +49,11 @@ know which file was installed where.
 - react-drm as replacement for tiny-dfr - content aware touchbar controls
 - t2-fan-control is a GUI app for temperature/fan control curves that replaces t2fan-rd
 - `t2bce_audio` replaces `aaudio` with stutter-free audio and upstream-friendly UCM support
+- ships with a fork of `apple-t2-audio-dsp`. [(Supported devices)](howto/04-install-kait2en-modules-and-apps.md#apple-t2-audio-dsp)
 - `t2smc` replaces `applesmc`, adds rtc, hwmon support, SMC sensor support and battery charge limiting
 - t2-smc-control is a GUI app for setting battery charge limit and inspecting rtc and real time SMC sensor data
 - automatically fixes Apple's broken ACPI tables that show as `AE_AML_BUFFER_LIMIT`and `AE_ALREADY_EXISTS` in journal
-- always up-to-date vanilla Fedora kernel
+- always up-to-date vanilla Fedora kernel by nature
 
 ## Start here
 
@@ -65,6 +66,7 @@ Read the howto documents in order:
 5. [Install KaiT2en modules and apps](howto/04-install-kait2en-modules-and-apps.md)
 6. [Revert T2 Linux Fedora to vanilla + KaiT2en](howto/05-revert-t2linux-fedora.md)
 7. [Configure GPUs](howto/06-configuring-gpus.md)
+8. [How to update](howto/07-updating.md)
 
 ## Community
 
@@ -111,7 +113,6 @@ mostly GPU related.
 - iMac 27" 5k will only display 4k. The cause is suspected to be around ACPI, EFI, SMC, `gmux`, `vgaswitcheroo`...
 - iMac 20" and 27" show inconsistent GPU behaviour on boot like sporadical black screens.
  
-
 ## Remaining work
 
 Though with a very few exceptions everything is working OOTB when installing KaiT2en,

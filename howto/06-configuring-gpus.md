@@ -7,8 +7,9 @@
 5. [Install KaiT2en modules and apps](04-install-kait2en-modules-and-apps.md)
 6. [Revert T2 Linux Fedora to vanilla + KaiT2en](05-revert-t2linux-fedora.md)
 7. [Configure GPUs](06-configuring-gpus.md) (you are here)
+8. [How to update](07-updating.md)
 
-Previous: [Revert T2 Linux Fedora to vanilla + KaiT2en](05-revert-t2linux-fedora.md) | [Back to README](../README.md)
+Previous: [Revert T2 Linux Fedora to vanilla + KaiT2en](05-revert-t2linux-fedora.md) | Next: [How to update](07-updating.md)
 
 If a Mac has a dGPU, it will use it for boot and it will also use it as primary
 display adapter by default. An iMac is no exception in that aspect, but it is
@@ -116,4 +117,4 @@ and dGPU turned off as described above.
 Also KaiT2en will automatically install a script that will `modprobe -r amdgpu`
 on suspend when it finds a 15,1.
 
-Previous: [Revert T2 Linux Fedora to vanilla + KaiT2en](05-revert-t2linux-fedora.md) | [Back to README](../README.md)
+Previous: [Revert T2 Linux Fedora to vanilla + KaiT2en](05-revert-t2linux-fedora.md) | Next: [How to update](07-updating.md)
