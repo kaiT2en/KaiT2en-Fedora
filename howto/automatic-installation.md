@@ -44,6 +44,12 @@ Choose the Fedora desktop and USB drive. The script downloads and verifies the
 official Fedora image, finds the Apple Wi-Fi firmware used by this Mac and asks
 for an exact confirmation before erasing the USB drive.
 
+The official Fedora image itself is not modified. After writing the verified
+vanilla image, the script adds KaiT2en boot files only to the USB drive's EFI
+partition. Separate initramfs overlays provide the temporary input drivers and
+installer integration at boot; Fedora's live system and installation payload
+remain unchanged.
+
 Be exact when selecting the drive. All data on it will be destroyed.
 
 ## Install Fedora
