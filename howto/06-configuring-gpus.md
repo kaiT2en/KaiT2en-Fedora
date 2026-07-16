@@ -25,6 +25,7 @@ This guide is only for Macbook Pro users.
 
 ## Set the iGPU as primary display adapter
 
+KaiT2en ships with vanilla gmux. So we wont have the `force_igd=y` kernel parameter.
 Instead of forcing the iGPU from GRUB, we simply do the equivalent using efivars.
 Run this in a terminal:
 
@@ -33,9 +34,9 @@ Run this in a terminal:
 sudo chattr -i /sys/firmware/efi/efivars/gpu-power-prefs-fa4ce28d-b62f-4c99-9cc3-6815686e30f9
 
 # 2. write the iGPU value 
-printf '\x07\x00\x00\x00\x00\x00\x00\x00' | sudo tee /sys/firmware/efi/efivars/gpu-power-prefs-fa4ce28d-b62f-4c99-9cc3-6815686e30f9
+printf '\x07\x00\x00\x00\x01\x00\x00\x00' | sudo tee /sys/firmware/efi/efivars/gpu-power-prefs-fa4ce28d-b62f-4c99-9cc3-6815686e30f9
 
-# 3. add the immutable flag agin so that macOS won't overwrite it
+# 3. add the immutable flag again so that macOS won't overwrite it
 sudo chattr +i /sys/firmware/efi/efivars/gpu-power-prefs-fa4ce28d-b62f-4c99-9cc3-6815686e30f9
 ```
 
@@ -46,9 +47,9 @@ For making the dGPU primary again we only have to change one bit:
 sudo chattr -i /sys/firmware/efi/efivars/gpu-power-prefs-fa4ce28d-b62f-4c99-9cc3-6815686e30f9
 
 # 2. write the dGPU value 
-printf '\x07\x00\x00\x00\x01\x00\x00\x00' | sudo tee /sys/firmware/efi/efivars/gpu-power-prefs-fa4ce28d-b62f-4c99-9cc3-6815686e30f9
+printf '\x07\x00\x00\x00\x00\x00\x00\x00' | sudo tee /sys/firmware/efi/efivars/gpu-power-prefs-fa4ce28d-b62f-4c99-9cc3-6815686e30f9
 
-# 3. add the immutable flag agin so that macOS won't overwrite it
+# 3. add the immutable flag again so that macOS won't overwrite it
 sudo chattr +i /sys/firmware/efi/efivars/gpu-power-prefs-fa4ce28d-b62f-4c99-9cc3-6815686e30f9
 ```
 
@@ -109,7 +110,7 @@ alias dgpu-status='sudo cat /sys/kernel/debug/vgaswitcheroo/switch'
 # then press ctrl+o, then press enter to confirm saving and exit with ctrl +x
 ```
 
-After logging out and in again, when you enter `dgpu-off`, it will enable the 
+After logging out and in again, when you enter `dgpu-off`, it will enable the
 service and reboot while `dgpu-on` will disable it and reboot, and `dgpu-status`
 will show you if the dGPU is currently on or off.
 
