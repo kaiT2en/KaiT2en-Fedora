@@ -109,19 +109,14 @@ it work on Fedora. Most FIR files originate from lemmyg's
 measurements of that model by deqrocks.
 
 This is PipeWire/WirePlumber DSP graphs and FIR files for Apple T2 audio.
-The profiles in `firs/` are installed by `scripts/fedora/install-dsp.sh` when
+The profiles in `firs/` are installed by `scripts/fedora/install-dsp.sh`.
 
 Supported profiles:
 
-- `MacBookPro16,1` -> `16_1`
-- `MacBookPro16,2` -> `16_2`
-- `MacBookPro16,4` -> `16_4`
-- `MacBookAir9,1` -> `9_1`
-- `MacBookPro15,1` -> `15_1`
-
-The `16_2` profile starts from the same two-channel DSP and FIR configuration
-as `9_1`, but is kept in a separate directory so both models can be tuned
-independently. `16,1` and `16,4` are also bit-identical.
+- `MacBookPro16,1`
+- `MacBookPro16,4`
+- `MacBookAir9,1`
+- `MacBookPro15,1`
 
 The installer copies the matching files to:
 
@@ -152,9 +147,9 @@ dependency installer:
 
 ### Suspend helper
 
-The installer creates and enables `kait2en-suspend.service`. It runs before suspend and
-after resume. The helper detects the local hardware and only applies fixes that
-match the machine.
+The installer creates and enables `kait2en-suspend.service`. It runs
+before suspend and after resume. The helper detects the local hardware and
+only applies fixes that match the machine.
 
 The suspend helper is installed as:
 

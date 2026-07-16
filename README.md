@@ -53,7 +53,7 @@ know which file was installed where.
 - ships with a fork of `apple-t2-audio-dsp`. [(Supported devices)](howto/04-install-kait2en-modules-and-apps.md#apple-t2-audio-dsp)
 - `t2smc` replaces `applesmc`, adds rtc, hwmon support, SMC sensor support and battery charge limiting
 - t2-smc-control is a GUI app for setting battery charge limit and inspecting rtc and real time SMC sensor data
-- automatically fixes Apple's broken ACPI tables that show as `AE_AML_BUFFER_LIMIT`and `AE_ALREADY_EXISTS` in journal
+- fixes broken ACPI tables that show as `AE_AML_BUFFER_LIMIT`and `AE_ALREADY_EXISTS` in journal
 - always up-to-date vanilla Fedora kernel by nature
 
 ## Start Installation from here
@@ -92,10 +92,9 @@ Please keep changes and PR desciptions focused. You may use AI for debugging, bu
 slop and we will refuse to review or even merge obvious slop. We are not interested in workarounds.
 There is a distinct difference in just making broken things work and fixing things.
 
-### Remaining work
+#### Remaining work for contributors
 
-Though with a very few exceptions everything is working OOTB when installing KaiT2en,
-we are still using some workarounds to make thinks work. In long terms this should
+We are still using some workarounds to make things work. In long terms this should
 be replaced with real fixes that can be upstreamed.
 
 - `t2bce` is our replacement for apple-bce. It is divided into separate modules for 
@@ -110,7 +109,7 @@ Also 5k support remains an issue on 27" iMacs.
 - Broadcom 4377 chips need a fix in brcmfmac to work around the firmware refusing D0 to D3cold transition.
 - If anyhow possible find a way to make Apple Broadcom chips work without MacOS firmware.
 - Get bridgeOS logs from T2 without macOS.
-- AVE support needs reverse engineering-
+- AVE support needs reverse engineering
 - Fingerprint support needs reverse engineering.
 
 ## License

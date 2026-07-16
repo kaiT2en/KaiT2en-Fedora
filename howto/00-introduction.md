@@ -21,14 +21,13 @@ to run a script or paste a command block, do that in a terminal in the **root fo
 this repository**. The guides and scripts use relative paths, so files are 
 expected below the KaiT2en USB root folder.
 
-KaiT2en can be installed in three ways: 
+KaiT2en can be installed in two ways:
 - clean install on top of vanilla Fedora. 
 - clean install on top of existing T2 Linux Fedora and reverting to vanilla Fedora + Kait2en
 as described in [05-revert-t2linux-fedora.md](howto/05-revert-t2linux-fedora.md).
-- dirty install on top of T2 Linux Fedora (not recommended/supported)
 
 On vanilla Fedora install internal keyboard and trackpad won't work on MacBooks.
-Also WiFi will not. USB ethernet will work though. 
+Also WiFi will not. USB ethernet will work though.
 
 The DKMS modules in this repository build against the currently installed
 kernel. And they will rebuild automatically on kernel updates.

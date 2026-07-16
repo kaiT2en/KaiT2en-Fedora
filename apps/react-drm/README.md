@@ -1,3 +1,11 @@
+
+> [!WARNING]
+> This version of react-drm is meant to run on KaiT2en only!!!
+> Use the `install-apps.sh` to install it on KaiT2en!
+> Do not use the `install.sh` in the react-drm folder!
+> The actually incompatible readme and install script
+> is only for internal reference.
+
 # react-drm
 
 react-drm provides a React renderer for drawing directly to Linux DRM/KMS
