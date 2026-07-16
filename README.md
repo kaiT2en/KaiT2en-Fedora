@@ -37,14 +37,6 @@ our base to be as conventional as possible to get things sorted.
 > our revert script in [howto 05](howto/05-revert-t2linux-fedora.md)
 > after installation of KaiT2en.
 
-For a new installation, the recommended macOS installer creates one Fedora USB
-drive with working keyboard and trackpad support. It also carries the matching
-Apple Wi-Fi firmware into the installed system and guides you through the
-remaining KaiT2en setup after the first boot.
-
-The existing manual installation remains available as an explicit, offline USB
-kit. It shows every step and is also useful for troubleshooting.
-
 ## Technical achievements beyond the current T2Linux stack
 
 - `t2bce` replaces apple-bce. It is split into four separate upstreamable modules for core, vhci, (sg-)DMA, audio
@@ -59,6 +51,10 @@ kit. It shows every step and is also useful for troubleshooting.
 - always up-to-date vanilla Fedora kernel by nature
 
 ## Start installation from here
+
+We are offering two installation methods.
+- The automatic installation is the convenient way to clean install KaiT2en and best suited for beginners. You will have keyboard and Trackpad support during installation.
+- The manual installation is for people who want to know how we do things, where stuff comes from and where it goes. You will need external keyboard and mouse for installation. If you want to revert your existing T2 Linux Fedora to vanilla Fedora + Kaitzen, this is the way to go.
 
 ### Automatic installation
 
@@ -75,7 +71,7 @@ start.
 
 ### Manual installation
 
-For the existing manual method, read these documents in order:
+For the manual method, read these documents in order:
 
 1. [Introduction to installation](howto/00-introduction.md)
 2. [Get Broadcom firmware from macOS](howto/01-get-broadcom-firmware.md)
