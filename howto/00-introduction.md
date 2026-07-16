@@ -2,7 +2,11 @@
   <img src="../assets/kaiT2en-logo-tr.png" alt="KaiT2en logo" width="220">
 </p>
 
-# Introduction
+# Manual installation: Introduction
+
+[Automatic installation](automatic-installation.md)
+
+Manual installation:
 
 1. [Introduction](00-introduction.md) (you are here)
 2. [Get Broadcom firmware from macOS](01-get-broadcom-firmware.md)
@@ -14,6 +18,10 @@
 8. [How to update](07-updating.md)
 
 [Back to README](../README.md) | Next: [Get Broadcom firmware from macOS](01-get-broadcom-firmware.md)
+
+This is the complete manual installation path. It remains available for offline
+installation, troubleshooting and users who want to perform every step
+themselves.
 
 **This repository is meant to be copied to a USB drive before installation. Keep
 that drive connected while working through these guides**. Whenever a guide asks you

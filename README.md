@@ -37,11 +37,13 @@ our base to be as conventional as possible to get things sorted.
 > our revert script in [howto 05](howto/05-revert-t2linux-fedora.md)
 > after installation of KaiT2en.
 
-The repository is meant to be used as an offline USB kit. Copy it to a USB
-drive, keep that drive connected, and run all commands from the repository root
-unless a guide says otherwise.
-The setup is intentionally explicit. You will use the terminal, run commands and
-know which file was installed where.
+For a new installation, the recommended macOS installer creates one Fedora USB
+drive with working keyboard and trackpad support. It also carries the matching
+Apple Wi-Fi firmware into the installed system and guides you through the
+remaining KaiT2en setup after the first boot.
+
+The existing manual installation remains available as an explicit, offline USB
+kit. It shows every step and is also useful for troubleshooting.
 
 ## Technical achievements beyond the current T2Linux stack
 
@@ -56,9 +58,24 @@ know which file was installed where.
 - automatically fixes Apple's broken ACPI tables that show as `AE_AML_BUFFER_LIMIT`and `AE_ALREADY_EXISTS` in journal
 - always up-to-date vanilla Fedora kernel by nature
 
-## Start Installation from here
+## Start installation from here
 
-Read the howto documents in order:
+### Automatic installation
+
+Boot macOS, connect an empty USB drive and run:
+
+```bash
+curl -fsSL https://github.com/kaiT2en/KaiT2en-Fedora/releases/latest/download/install-kait2en-fedora.sh | bash
+```
+
+The installer downloads and verifies Fedora, prepares the USB drive and then
+guides you through the remaining steps. Read the short
+[automatic installation howto](howto/automatic-installation.md) before you
+start.
+
+### Manual installation
+
+For the existing manual method, read these documents in order:
 
 1. [Introduction to installation](howto/00-introduction.md)
 2. [Get Broadcom firmware from macOS](howto/01-get-broadcom-firmware.md)

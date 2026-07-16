@@ -1,5 +1,9 @@
 # How to update
 
+[Automatic installation](automatic-installation.md)
+
+Manual installation:
+
 1. [Introduction](00-introduction.md)
 2. [Get Broadcom firmware from macOS](01-get-broadcom-firmware.md)
 3. [Prepare macOS and the Fedora installer](02-prepare-macos-and-fedora-usb.md)
@@ -20,7 +24,18 @@ As long as this isn't the case, we need to update the Fedora kernel and our modu
 The question how to do that has kept us a bit busy. We could go COPR and offer .rpm.
 But the project is yet too small to fund itself.
 
-## Updating KaiT2en code
+## Updating an automatically installed system
+
+Open a terminal and run:
+
+```bash
+kait2en-install
+```
+
+This updates the KaiT2en Git checkout and runs the regular project installer.
+Review its output and reboot after it completes successfully.
+
+## Updating KaiT2en code manually
 
 For now we presume you just git pull the latest commits to update modules, services and apps.
 We may switch to versioned releases in the near future, when the amount of everyday

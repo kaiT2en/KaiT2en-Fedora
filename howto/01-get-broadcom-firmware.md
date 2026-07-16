@@ -1,5 +1,9 @@
 # Get Broadcom firmware from macOS
 
+[Automatic installation](automatic-installation.md)
+
+Manual installation:
+
 1. [Introduction](00-introduction.md)
 2. [Get Broadcom firmware from macOS](01-get-broadcom-firmware.md) (you are here)
 3. [Prepare macOS and the Fedora installer](02-prepare-macos-and-fedora-usb.md)
