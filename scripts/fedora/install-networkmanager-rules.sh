@@ -25,7 +25,8 @@ cat >"$RULE_TMP" <<'EOF'
 # 05ac:8233 = Apple T2 Controller
 # cdc_ncm   = internal USB CDC-NCM network function
 ACTION=="add", SUBSYSTEM=="net", ENV{ID_BUS}=="usb", ENV{ID_VENDOR_ID}=="05ac", ENV{ID_MODEL_ID}=="8233", DRIVERS=="cdc_ncm", NAME:="t2_ncm", ENV{NM_UNMANAGED}="1", TAG+="systemd", ENV{SYSTEMD_WANTS}+="kait2en-t2-ncm-down.service"
-ACTION=="change", SUBSYSTEM=="net", KERNEL=="t2_ncm", ENV{NM_UNMANAGED}="1", TAG+="systemd", ENV{SYSTEMD_WANTS}+="kait2en-t2-ncm-down.service"
+# Renaming eth0 to t2_ncm emits a move event; retain the final properties.
+ACTION=="change|move", SUBSYSTEM=="net", KERNEL=="t2_ncm", ENV{NM_UNMANAGED}="1", TAG+="systemd", ENV{SYSTEMD_WANTS}+="kait2en-t2-ncm-down.service"
 EOF
 
 install -o root -g root -m 0644 "$RULE_TMP" "$RULE_FILE"
