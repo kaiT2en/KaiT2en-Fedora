@@ -13,8 +13,15 @@ import {
 import { BackButton } from '../components/BackButton';
 import { keys } from '../services/keyInjector';
 
-const KBD_ILLUM_DOWN_ICON = path.join(__dirname, '..', 'assets', 'kbd_illum_down.svg');
-const KBD_ILLUM_UP_ICON = path.join(__dirname, '..', 'assets', 'kbd_illum_up.svg');
+const isBuilt = __dirname.includes(path.sep + 'dist' + path.sep);
+
+const KBD_ILLUM_DOWN_ICON = isBuilt
+  ? path.join(__dirname, '..', '..', 'assets', 'kbd_illum_down.svg')
+  : path.join(__dirname, '..', 'assets', 'kbd_illum_down.svg');
+
+const KBD_ILLUM_UP_ICON = isBuilt
+  ? path.join(__dirname, '..', '..', 'assets', 'kbd_illum_up.svg')
+  : path.join(__dirname, '..', 'assets', 'kbd_illum_up.svg');
 
 // ── Actions ────────────────────────────────────────────────────────────────────
 
