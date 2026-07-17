@@ -29,6 +29,7 @@ model_dir_for_product() {
 	case "$1" in
 		MacBookPro15,1) printf '%s\n' "15_1" ;;
 		MacBookPro16,1) printf '%s\n' "16_1" ;;
+		MacBookPro16,2) printf '%s\n' "16_2" ;;
 		MacBookPro16,4) printf '%s\n' "16_4" ;;
 		MacBookAir9,1) printf '%s\n' "9_1" ;;
 		*) return 1 ;;
@@ -105,7 +106,7 @@ clean_installed_profile() {
 	# Only remove file types managed by this installer. Do not recursively
 	# replace the directory in case an administrator keeps other files there.
 	find "$dir" -maxdepth 1 -type f \
-		\( -name '*.wav' -o -name '*.lua' -o -name 'graph.json' -o -name 'mic.json' \) \
+		\( -name '*.wav' -o -name '*.lua' -o -name 'graph.json' -o -name 'mic.json' -o -name 'LICENSE.*' \) \
 		-delete
 }
 
@@ -115,20 +116,6 @@ if [[ -r /sys/class/dmi/id/product_name ]]; then
 fi
 if [[ -z "$product_name" ]]; then
 	info "skipping audio DSP: cannot detect product name"
-	exit 0
-fi
-
-if [[ "$product_name" == "MacBookPro16,2" ]]; then
-	info "removing unsupported audio DSP profile for $product_name"
-	clean_installed_profile "$DSP_DST_BASE/16_2"
-	rm -f \
-		"$WP_CONF" \
-		"$WP_CONF_DIR/51-t2-dsp.conf" \
-		"$WP_SCRIPT_DIR/t2-force-unmute.lua" \
-		/etc/pipewire/pipewire.conf.d/t2_*_speakers.conf \
-		/etc/pipewire/pipewire.conf.d/t2_*_mic.conf
-	restart_user_audio
-	info "audio DSP is not supported on $product_name"
 	exit 0
 fi
 
@@ -157,7 +144,7 @@ dnf install -y "${DSP_PACKAGES[@]}"
 
 install -d -o root -g root -m 0755 "$dst_dir"
 clean_installed_profile "$dst_dir"
-find "$src_dir" -maxdepth 1 -type f \( -name '*.wav' -o -name '*.lua' \) \
+find "$src_dir" -maxdepth 1 -type f \( -name '*.wav' -o -name '*.lua' -o -name 'LICENSE.*' \) \
 	-exec install -o root -g root -m 0644 {} "$dst_dir/" \;
 install -o root -g root -m 0644 "$DSP_UNMUTE_SCRIPT" "$dst_dir/t2-force-unmute.lua"
 
