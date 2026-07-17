@@ -2,55 +2,93 @@
 
 # Introduction
 
-Howtos:
+KAIT2EN adds Intel T2 Mac support to stock Fedora without replacing Fedora's
+kernel. Hardware support is provided by DKMS modules, system configuration and
+small desktop tools maintained in this repository. Fedora kernel updates remain
+normal Fedora updates; DKMS rebuilds the out-of-tree modules for each new
+kernel.
 
-- [Introduction](introduction.md) (you are here)
-- Installation
-  - [Automatic installation](installation/automatic/index.md)
-  - Manual installation
-    - [Get Broadcom firmware](installation/manual/00-get-broadcom-firmware.md)
-    - [Prepare macOS and Fedora USB](installation/manual/01-prepare-macos-and-fedora-usb.md)
-    - [Install Broadcom firmware](installation/manual/02-install-broadcom-firmware.md)
-    - [Install KAIT2EN modules and apps](installation/manual/03-install-kait2en-modules-and-apps.md)
-- Migration
-  - [Revert T2 Linux Fedora to vanilla + KAIT2EN](migration/revert-t2linux-fedora.md)
-- Post-install
-  - [Configure GPUs](postinstall/configuring-gpus.md)
-  - [How to update](postinstall/updating.md)
+KAIT2EN supports Fedora only. The project deliberately uses an otherwise stock
+Fedora installation so hardware problems can be reproduced, fixed and moved
+toward upstream Linux without distribution-specific kernel patches obscuring
+the result.
 
-**This repository is meant to be copied to a USB drive before installation. Keep
-that drive connected while working through these guides**. Whenever a guide asks you
-to run a script or paste a command block, do that in a terminal in the **root folder of
-this repository**. The guides and scripts use relative paths, so files are 
-expected below the KAIT2EN USB root folder.
+## Choose an installation path
 
-KAIT2EN can be installed in two ways:
-- clean install on top of vanilla Fedora. 
-- clean install on top of existing T2 Linux Fedora and reverting to vanilla Fedora + KAIT2EN
-as described in [revert guide](migration/revert-t2linux-fedora.md).
+### Automatic installation
 
-On vanilla Fedora install internal keyboard and trackpad won't work on MacBooks.
-Also WiFi will not. USB ethernet will work though.
+The [automatic installer](installation/automatic/index.md) is the recommended
+path for a new Fedora installation. Run it from macOS with an empty USB drive.
+It prepares an official Fedora installer with temporary KAIT2EN boot support,
+copies the matching Apple firmware and continues the setup after Fedora has
+been installed.
 
-The DKMS modules in this repository build against the currently installed
-kernel. And they will rebuild automatically on kernel updates.
+Internal keyboard and trackpad work in the automatic installer. The Fedora
+installation payload and kernel remain stock; KAIT2EN is installed afterward
+as a separate driver, configuration and tooling layer.
 
-The setup is intentionally explicit. You will use the terminal, run commands and
-know which file was installed where. The point is to make the setup understandable
-and repairable.
+### Manual installation
 
-**macOS must stay installed.** It is the clean source for Apple firmware, it can
-recover T2/bridgeOS hardware states, and it is the only place where bridgeOS
-panic logs are available. If you want to erase macOS completely, KAIT2EN is the
-wrong path. We are focussed on fixing and debugging things. Don't ask for support
-when using custom installations.
+Use the manual path when you need to inspect or control every installation
+step. Start by [copying the Broadcom firmware from
+macOS](installation/manual/00-get-broadcom-firmware.md), then prepare a standard
+Fedora installer and install KAIT2EN from this repository.
 
-Firmware files copied from macOS are never distributed by KAIT2EN. The guides
-only show how to copy the correct firmware files from your own Mac and install
-them locally.
+A plain Fedora installer does not contain the required T2 input drivers. On a
+MacBook, the manual path therefore requires a wired USB keyboard and mouse, or
+wireless devices with their own USB receiver. Bluetooth input devices will not
+work at that stage. Wi-Fi also becomes available only after the Apple firmware
+has been installed.
 
-So for now best luck for the installation. If you happen to run into issues or inconsistencies,
-please file an issue on GitHub or join the [KAIT2EN community on Discord](https://discord.gg/AGfjRk4ydj)
-or the [KAIT2EN Matrix space](https://matrix.to/#/%23kait2en:matrix.org).
+Keep a separate copy of this repository and the firmware files. Fedora Media
+Writer and `dd` overwrite the installer drive, so using a second USB drive is
+the least error-prone manual setup.
 
-Next: [Get Broadcom firmware from macOS](installation/manual/00-get-broadcom-firmware.md)
+### Existing T2 Linux Fedora installation
+
+KAIT2EN can also replace the patched T2 Linux stack on an existing Fedora
+installation. Install the KAIT2EN modules and applications first, then follow
+the [migration guide](migration/revert-t2linux-fedora.md) to remove conflicting
+T2 Linux packages and return to Fedora's stock kernel.
+
+Do not keep both driver stacks active. They provide competing modules and
+configuration for the same hardware.
+
+## Before you start
+
+KAIT2EN is intended for Intel Macs with an Apple T2 security chip. Back up
+important data before changing partitions or boot settings.
+
+**Keep macOS installed.** It is the clean source for model-specific Apple
+firmware, can recover T2 and bridgeOS hardware states, and is the only place
+where bridgeOS panic logs are available. If macOS must be removed completely,
+this installation path is not supported.
+
+Create a real partition for Fedora from macOS Disk Utility. Do not delete the
+EFI partition or the macOS installation. Apple Secure Boot must be disabled and
+booting from external media must be allowed before a standard Fedora installer
+can start.
+
+Firmware copied from macOS is never distributed by KAIT2EN. The installer and
+manual guide only copy firmware already present on your own Mac and install it
+locally.
+
+## After installation
+
+To update KAIT2EN, pull the latest repository changes and run the main installer
+from the repository root:
+
+```bash
+sudo bash ./scripts/fedora/install.sh
+```
+
+See [Updating KAIT2EN](postinstall/updating.md) for details.
+
+Some T2 models still require specific GPU configuration or have unresolved
+hardware limitations. Review [Configure GPUs](postinstall/configuring-gpus.md)
+before changing graphics modes or testing suspend on a dual-GPU Mac.
+
+For installation problems, open an issue on
+[GitHub](https://github.com/kaiT2en/KaiT2en-Fedora), join the
+[Discord community](https://discord.gg/AGfjRk4ydj), or use the
+[KAIT2EN Matrix space](https://matrix.to/#/%23kait2en:matrix.org).
