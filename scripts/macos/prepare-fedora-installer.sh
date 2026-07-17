@@ -112,6 +112,16 @@ pick_one() {
 	printf '%s\n' "${files[0]}"
 }
 
+copy_file_contents() {
+	local source=$1
+	local destination=$2
+
+	# Apple firmware can carry BSD flags that an unprivileged user cannot
+	# reproduce. Copy only the bytes needed by Linux, not macOS metadata.
+	/bin/cat "$source" >"$destination"
+	chmod 0644 "$destination"
+}
+
 copy_firmware_candidates() {
 	local source_dir=$1
 	local destination=$2
@@ -124,7 +134,7 @@ copy_firmware_candidates() {
 		"$source_dir"/*.txcb \
 		"$source_dir"/P-*.txt; do
 		[[ -f "$candidate" ]] || continue
-		cp -p "$candidate" "$destination/"
+		copy_file_contents "$candidate" "$destination/${candidate##*/}"
 	done
 }
 
@@ -148,7 +158,8 @@ collect_macos_firmware() {
 		[[ -f "$firmware_path" ]] || continue
 		case "${firmware_path##*/}" in
 			*.trx|*.clmb|*.txcb|P-*.txt)
-				cp -p "$firmware_path" "$destination/"
+				copy_file_contents "$firmware_path" \
+					"$destination/${firmware_path##*/}"
 				;;
 		esac
 	done <"$path_list"
