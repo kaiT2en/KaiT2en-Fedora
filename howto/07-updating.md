@@ -52,6 +52,18 @@ changed, then you would only run `install-kernel-args.sh`.
 You just update Fedora like everyone else. DKMS will notice and recompile our modules against the
 latest kernel. It's always worth visiting the [KaiT2en community on Discord](https://discord.gg/AGfjRk4ydj) or [Matrix](https://matrix.to/#/%23kait2en:matrix.org) to make sure you won't run into issues like kernel regressions.
 
+## So you messed up?
+
+You can mess up DKMS when upgrading the kernel. For example when interrupting DKMS while the new Kernel is booting.
+Then you are left with half broken KaiT2en modules. To repair this, just boot into an older kernel and clean up the new.
+
+```
+#replace the kernel version 7.1.3-201.fc44.x86_64 with your own
+sudo dracut --force /boot/initramfs-7.1.3-201.fc44.x86_64.img 7.1.3-201.fc44.x86_64 
+sudo kernel-install add 7.1.3-201.fc44.x86_64 /lib/modules/7.1.3-201.fc44.x86_64/vmlinuz
+sudo grubby --set-default /boot/vmlinuz-7.1.3-201.fc44.x86_64
+```
+
 ## Murphy's law: We **WILL** mess up!
 
 We are humans. We will mess up at some point. We recommend not to update when
