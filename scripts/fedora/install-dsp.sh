@@ -8,6 +8,7 @@ require_fedora
 require_command basename cp dnf find id install ln mktemp rm runuser sed systemctl
 
 DSP_SRC="$REPO_ROOT/modules/t2bce_audio-dsp/firs"
+DSP_UNMUTE_SCRIPT="$REPO_ROOT/modules/t2bce_audio-dsp/t2-force-unmute.lua"
 DSP_DST_BASE="/usr/share/kait2en/audio-dsp"
 WP_CONF_DIR="/etc/wireplumber/wireplumber.conf.d"
 WP_CONF="$WP_CONF_DIR/51-kait2en-t2-dsp.conf"
@@ -158,6 +159,7 @@ install -d -o root -g root -m 0755 "$dst_dir"
 clean_installed_profile "$dst_dir"
 find "$src_dir" -maxdepth 1 -type f \( -name '*.wav' -o -name '*.lua' \) \
 	-exec install -o root -g root -m 0644 {} "$dst_dir/" \;
+install -o root -g root -m 0644 "$DSP_UNMUTE_SCRIPT" "$dst_dir/t2-force-unmute.lua"
 
 install_graph "$src_dir/graph.json" "$dst_dir/graph.json" \
 	"$old_audio_root" "$dst_dir" \
@@ -172,10 +174,8 @@ if [[ -f "$src_dir/mic.json" ]]; then
 fi
 
 rm -f "$WP_SCRIPT_DIR/t2-force-unmute.lua"
-if [[ -f "$dst_dir/t2-force-unmute.lua" ]]; then
-	install -d -o root -g root -m 0755 "$WP_SCRIPT_DIR"
-	ln -sf "$dst_dir/t2-force-unmute.lua" "$WP_SCRIPT_DIR/t2-force-unmute.lua"
-fi
+install -d -o root -g root -m 0755 "$WP_SCRIPT_DIR"
+ln -sf "$dst_dir/t2-force-unmute.lua" "$WP_SCRIPT_DIR/t2-force-unmute.lua"
 
 install -d -o root -g root -m 0755 "$WP_CONF_DIR"
 rm -f /etc/pipewire/pipewire.conf.d/t2_*_speakers.conf
@@ -202,14 +202,10 @@ tmp_conf="$(mktemp)"
 		printf '    }\n'
 	fi
 	printf ']\n\n'
-	if [[ -f "$dst_dir/t2-force-unmute.lua" ]]; then
-		printf 'wireplumber.components = [\n'
-		printf '    { name = %s/t2-force-unmute.lua, type = script/lua, provides = custom.kait2en-t2-audio }\n' "$dst_dir"
-		printf ']\n\n'
-		printf 'wireplumber.profiles = { main = { node.software-dsp = required custom.kait2en-t2-audio = required } }\n'
-	else
-		printf 'wireplumber.profiles = { main = { node.software-dsp = required } }\n'
-	fi
+	printf 'wireplumber.components = [\n'
+	printf '    { name = %s/t2-force-unmute.lua, type = script/lua, provides = custom.kait2en-t2-audio }\n' "$dst_dir"
+	printf ']\n\n'
+	printf 'wireplumber.profiles = { main = { node.software-dsp = required custom.kait2en-t2-audio = required } }\n'
 } >"$tmp_conf"
 install -o root -g root -m 0644 "$tmp_conf" "$WP_CONF"
 rm -f "$tmp_conf"

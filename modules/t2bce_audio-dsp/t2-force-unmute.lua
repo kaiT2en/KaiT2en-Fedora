@@ -1,6 +1,5 @@
--- Force T2 raw audio devices to be unmuted at full volume
--- This ensures the DSP has proper input/output levels
--- Based on Asahi Linux's asahi-limit-volume.lua
+-- Keep T2 hardware routes at unity so volume is controlled by the DSP nodes.
+-- Based on Asahi Linux's asahi-limit-volume.lua.
 
 local config = ... or {}
 
@@ -22,9 +21,10 @@ function handleDevice(device)
       goto skip_route
     end
 
-    -- Handle both Speakers and BuiltinMic/Digital Mic
+    -- Match the route descriptions exposed by the supported UCM profiles.
     local desc = route.description
-    if desc ~= "Speakers" and desc ~= "Speaker" and desc ~= "BuiltinMic" and desc ~= "Digital Mic" then
+    if desc ~= "Speakers" and desc ~= "Speaker" and desc ~= "Internal Speakers" and
+       desc ~= "BuiltinMic" and desc ~= "Digital Mic" and desc ~= "Internal Microphone" then
       goto skip_route
     end
 
