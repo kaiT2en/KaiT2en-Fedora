@@ -1,0 +1,78 @@
+From 8ed42d506ae28a2aefac6e24173739304ec8459a Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Sat, 18 Jul 2026 17:05:43 +0200
+Subject: [PATCH] HID: apple: fix endianness of keyboard backlight reports
+
+The raw reports used by the T2 butterfly keyboard backlight contain
+little-endian 16-bit fields. They are currently read and written as native
+u16 values, leaving the wire format dependent on host endianness.
+
+We should describe these fields as __le16 and convert them explicitly when
+reading the backlight limits and writing the brightness and transition
+rate.
+
+Reported-by: Sashiko AI review <sashiko-bot@kernel.org>
+Link: https://lore.kernel.org/r/20260718123641.DA2FF1F000E9@smtp.kernel.org
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ drivers/hid/hid-apple.c | 18 +++++++++++-------
+ 1 file changed, 11 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/hid/hid-apple.c b/drivers/hid/hid-apple.c
+index bf7dd0fbf249..473b6722938e 100644
+--- a/drivers/hid/hid-apple.c
++++ b/drivers/hid/hid-apple.c
+@@ -94,14 +94,16 @@ struct apple_sc_backlight {
+ struct apple_backlight_config_report {
+ 	u8 report_id;
+ 	u8 version;
+-	u16 backlight_off, backlight_on_min, backlight_on_max;
++	__le16 backlight_off;
++	__le16 backlight_on_min;
++	__le16 backlight_on_max;
+ };
+ 
+ struct apple_backlight_set_report {
+ 	u8 report_id;
+ 	u8 version;
+-	u16 backlight;
+-	u16 rate;
++	__le16 backlight;
++	__le16 rate;
+ };
+ 
+ struct apple_magic_backlight {
+@@ -803,8 +805,8 @@ static int apple_backlight_set(struct hid_device *hdev, u16 value, u16 rate)
+ 
+ 	rep->report_id = 0xB0;
+ 	rep->version = 1;
+-	rep->backlight = value;
+-	rep->rate = rate;
++	rep->backlight = cpu_to_le16(value);
++	rep->rate = cpu_to_le16(rate);
+ 
+ 	ret = hid_hw_raw_request(hdev, 0xB0u, (u8 *) rep, sizeof(*rep),
+ 				 HID_OUTPUT_REPORT, HID_REQ_SET_REPORT);
+@@ -848,7 +850,9 @@ static int apple_backlight_init(struct hid_device *hdev)
+ 	}
+ 
+ 	hid_dbg(hdev, "backlight config: off=%u, on_min=%u, on_max=%u\n",
+-		rep->backlight_off, rep->backlight_on_min, rep->backlight_on_max);
++		le16_to_cpu(rep->backlight_off),
++		le16_to_cpu(rep->backlight_on_min),
++		le16_to_cpu(rep->backlight_on_max));
+ 
+ 	asc->backlight = devm_kzalloc(&hdev->dev, sizeof(*asc->backlight), GFP_KERNEL);
+ 	if (!asc->backlight) {
+@@ -858,7 +862,7 @@ static int apple_backlight_init(struct hid_device *hdev)
+ 
+ 	asc->backlight->hdev = hdev;
+ 	asc->backlight->cdev.name = "apple::kbd_backlight";
+-	asc->backlight->cdev.max_brightness = rep->backlight_on_max;
++	asc->backlight->cdev.max_brightness = le16_to_cpu(rep->backlight_on_max);
+ 	asc->backlight->cdev.brightness_set_blocking = apple_backlight_led_set;
+ 	asc->backlight->cdev.flags = LED_CORE_SUSPENDRESUME;
+ 
+-- 
+2.55.0
+
