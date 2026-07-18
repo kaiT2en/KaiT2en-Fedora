@@ -98,14 +98,16 @@ static int apple_backlight_resume_brightness = -1;
 struct apple_backlight_config_report {
 	u8 report_id;
 	u8 version;
-	u16 backlight_off, backlight_on_min, backlight_on_max;
+	__le16 backlight_off;
+	__le16 backlight_on_min;
+	__le16 backlight_on_max;
 };
 
 struct apple_backlight_set_report {
 	u8 report_id;
 	u8 version;
-	u16 backlight;
-	u16 rate;
+	__le16 backlight;
+	__le16 rate;
 };
 
 struct apple_magic_backlight {
@@ -824,8 +826,8 @@ static int apple_backlight_set(struct hid_device *hdev, u16 value, u16 rate)
 
 	rep->report_id = 0xB0;
 	rep->version = 1;
-	rep->backlight = value;
-	rep->rate = rate;
+	rep->backlight = cpu_to_le16(value);
+	rep->rate = cpu_to_le16(rate);
 
 	ret = hid_hw_raw_request(hdev, 0xB0u, (u8 *) rep, sizeof(*rep),
 				 HID_OUTPUT_REPORT, HID_REQ_SET_REPORT);
@@ -870,7 +872,9 @@ static int apple_backlight_init(struct hid_device *hdev)
 	}
 
 	hid_dbg(hdev, "backlight config: off=%u, on_min=%u, on_max=%u\n",
-		rep->backlight_off, rep->backlight_on_min, rep->backlight_on_max);
+		le16_to_cpu(rep->backlight_off),
+		le16_to_cpu(rep->backlight_on_min),
+		le16_to_cpu(rep->backlight_on_max));
 
 	asc->backlight = devm_kzalloc(&hdev->dev, sizeof(*asc->backlight), GFP_KERNEL);
 	if (!asc->backlight) {
@@ -880,7 +884,7 @@ static int apple_backlight_init(struct hid_device *hdev)
 
 	asc->backlight->hdev = hdev;
 	asc->backlight->cdev.name = ":white:" LED_FUNCTION_KBD_BACKLIGHT;
-	asc->backlight->cdev.max_brightness = rep->backlight_on_max;
+	asc->backlight->cdev.max_brightness = le16_to_cpu(rep->backlight_on_max);
 	asc->backlight->cdev.brightness_set_blocking = apple_backlight_led_set;
 	/* VHCI re-enumeration restores the cached brightness in the next probe. */
 
@@ -888,7 +892,8 @@ static int apple_backlight_init(struct hid_device *hdev)
 	if (brightness < 0)
 		brightness = LED_OFF;
 	else
-		brightness = min_t(int, brightness, rep->backlight_on_max);
+		brightness = min_t(int, brightness,
+				   le16_to_cpu(rep->backlight_on_max));
 
 	ret = apple_backlight_set(hdev, brightness, 0);
 	if (ret < 0) {
