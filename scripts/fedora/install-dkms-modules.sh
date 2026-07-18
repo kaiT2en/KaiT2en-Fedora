@@ -148,6 +148,26 @@ remove_repo_dkms_modules() {
 	done
 }
 
+migrate_keyboard_backlight_state() {
+	local old_state new_state
+	local old_suffix=':leds:apple::kbd_backlight'
+	local new_suffix=':leds::white:kbd_backlight'
+
+	[[ -d /var/lib/systemd/backlight ]] || return 0
+
+	while IFS= read -r -d '' old_state; do
+		new_state="${old_state%"$old_suffix"}$new_suffix"
+		[[ "$new_state" != "$old_state" ]] ||
+			fail "refusing to migrate unexpected backlight state path $old_state"
+		[[ -e "$new_state" ]] && continue
+
+		info "migrating keyboard backlight state to the standard LED name"
+		install -m 0644 "$old_state" "$new_state"
+		chown --reference="$old_state" "$new_state"
+	done < <(find /var/lib/systemd/backlight -maxdepth 1 -type f \
+		-name "*$old_suffix" -print0)
+}
+
 dkms_module_version_exists() {
 	local name=$1 version=$2
 
@@ -252,6 +272,7 @@ install_module() {
 
 install_dkms_kernel_hook
 disable_dkms_post_transaction
+migrate_keyboard_backlight_state
 remove_legacy_dkms_modules
 remove_repo_dkms_modules
 

@@ -78,8 +78,7 @@ User=root
 Type=oneshot
 RemainAfterExit=yes
 
-ExecStart=-/usr/bin/sh -c "/usr/bin/echo 0 | /usr/bin/tee /sys/class/leds/apple::kbd_backlight/brightness" # this is for butterfly keyboards 
-ExecStart=-/usr/bin/sh -c "/usr/bin/echo 0 | /usr/bin/tee /sys/class/leds/:white:kbd_backlight/brightness" # this is for magic keyboards 
+ExecStart=-/usr/bin/sh -c "/usr/bin/echo 0 | /usr/bin/tee /sys/class/leds/:white:kbd_backlight/brightness"
 ExecStart=-/usr/bin/systemctl stop tiny-dfr.service
 ExecStart=-/usr/bin/modprobe -r t2touchbar_kbd
 
@@ -89,7 +88,6 @@ ExecStop=-/usr/bin/sleep 1
 ExecStop=-/usr/bin/sh -c 'echo 2 > /sys/bus/usb/devices/3-6/bConfigurationValue'
 ExecStop=-/usr/bin/udevadm settle
 ExecStop=-/usr/bin/systemctl restart tiny-dfr.service
-ExecStopPost=-/usr/bin/sh -c "/usr/bin/echo 200 | /usr/bin/tee /sys/class/leds/apple::kbd_backlight/brightness"
 ExecStopPost=-/usr/bin/sh -c "/usr/bin/echo 200 | /usr/bin/tee /sys/class/leds/:white:kbd_backlight/brightness"
 
 

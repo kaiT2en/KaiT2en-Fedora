@@ -10,8 +10,8 @@ import { useLayers } from './index';
 
 // Device names vary by hardware: the panel backlight is gmux_backlight on
 // dual-GPU Macs but intel_backlight on single-GPU ones (e.g. 2020 13" Intel),
-// and the keyboard LED is exposed under names like ':white:kbd_backlight' or
-// 'apple::kbd_backlight'. Auto-detect instead of hardcoding so the sliders work
+// and the keyboard LED is exposed as ':white:kbd_backlight'. Auto-detect instead
+// of hardcoding so the sliders work
 // across machines and don't spam "Device not found" from the poll loop.
 // Display candidate list mirrors tiny-dfr's find_display_backlight().
 function findDevice(base: string, match: (name: string) => boolean): string | null {
