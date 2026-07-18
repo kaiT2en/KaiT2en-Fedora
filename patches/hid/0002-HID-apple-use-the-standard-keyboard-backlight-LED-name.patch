@@ -1,0 +1,40 @@
+From d70f315628c6e3fc79a87a6d0f194d698e12038d Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Sat, 18 Jul 2026 13:51:47 +0200
+Subject: [PATCH 2/2] HID: apple: use the standard keyboard backlight LED name
+
+The T2-attached butterfly keyboard backlight is exposed as
+apple::kbd_backlight. This leaves the color field empty and gives
+userspace a model-specific name for the same white keyboard-backlight
+function exposed by Magic Keyboards.
+
+Magic Keyboard backlight support was added later and already follows the
+current LED naming convention. As a result, userspace has to handle two
+different names for the same function.
+
+We should use :white:kbd_backlight for both implementations. This follows
+the LED color and function naming convention and lets userspace discover
+either keyboard generation without a special case for the butterfly
+models.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ drivers/hid/hid-apple.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/hid/hid-apple.c b/drivers/hid/hid-apple.c
+index a5f232cc2b66..0f30cf4670ce 100644
+--- a/drivers/hid/hid-apple.c
++++ b/drivers/hid/hid-apple.c
+@@ -861,7 +861,7 @@ static int apple_backlight_init(struct hid_device *hdev)
+ 	}
+ 
+ 	asc->backlight->hdev = hdev;
+-	asc->backlight->cdev.name = "apple::kbd_backlight";
++	asc->backlight->cdev.name = ":white:" LED_FUNCTION_KBD_BACKLIGHT;
+ 	asc->backlight->cdev.max_brightness = rep->backlight_on_max;
+ 	asc->backlight->cdev.brightness_set_blocking = apple_backlight_led_set;
+ 	/* VHCI re-enumeration restores the cached brightness in the next probe. */
+-- 
+2.55.0
+
