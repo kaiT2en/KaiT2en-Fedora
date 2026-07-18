@@ -335,4 +335,13 @@ Known non-fatal message, but likely related to audio stutters:
 failed to write update baudrate (-16)
 ```
 
+### In case of fatal errors
+
+If you come across fatal errors, Bluetooth won't work.
+You will need to remove the `.hcd` file from `/lib/firmware/brcm/`:
+
+```bash
+sudo rm `/lib/firmware/brcm/*.hcd
+```
+
 Next: [Install KAIT2EN modules and apps](03-install-kait2en-modules-and-apps.md)

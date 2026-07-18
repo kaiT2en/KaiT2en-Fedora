@@ -11,6 +11,9 @@ Internal input devices won't work during installation of Fedora,
 because the stock kernel does not contain the needed drivers.
 We will add them in a later step.
 
+If you don't have external input devices follow the [automatic installation](howto/installation/automatic/index.md)
+guide instead. It provides support for internal input devices.
+
 In effect, an external keyboard and mouse is mandatory for this step.
 Bluetooth keyboards/mice will also not work. Logitech wireless devices
 or similar, that come with their own receiver will work, as well as
@@ -95,26 +98,6 @@ https://fedoraproject.org/workstation/download/
 
 Select Fedora Workstation and write it to the installer USB drive.
 
-If you prefer the terminal, use `dd`. This destroys all data on the selected USB
-drive.
-
-Insert the Fedora installer USB drive and find its disk number:
-
-```bash
-diskutil list
-```
-
-Look for the external physical disk, for example `/dev/disk2`. Replace `X` below
-with the correct number:
-
-```bash
-sudo diskutil unmountDisk /dev/diskX
-sudo dd if=/path/to/Fedora-Workstation-Live.iso of=/dev/rdiskX bs=1m status=progress
-sync
-```
-
-Be exact. Writing to the wrong disk can destroy macOS or other data.
-
 ## Boot the Fedora installer
 
 Connect the Fedora installer USB drive.
@@ -130,7 +113,8 @@ and trackpad are not expected to work yet on a plain Fedora installer.
 T2 Mac specific devices will work after installing the modules in step 04.
 
 During Fedora installation, choose manual partitioning. Use the Linux partition
-you created in macOS. Do not use automatic partitioning. Do not erase the whole
+you created in macOS and the EFI folder as mount points.
+Do not use automatic partitioning. Do not erase the whole
 disk.
 The rest of the installation process is standard Fedora. Refer to:
 

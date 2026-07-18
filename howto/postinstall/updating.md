@@ -22,7 +22,7 @@ kait2en-install
 This updates the KAIT2EN Git checkout and runs the regular project installer.
 Review its output and reboot after it completes successfully.
 
-## Updating KAIT2EN code manually
+## Updating a manually installed system
 
 For now we presume you just git pull the latest commits to update modules, services and apps.
 We may switch to versioned releases in the near future, when the amount of everyday

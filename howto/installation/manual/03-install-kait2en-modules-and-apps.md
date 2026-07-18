@@ -157,9 +157,9 @@ scripts/fedora/kait2en-suspend.sh
 scripts/fedora/install-suspend-service.sh
 ```
 
-The service runs before `sleep.target` and again after resume. On affected
-dual-GPU MacBook Pro models it unloads `amdgpu` before suspend and loads it
-again after resume. On BCM4377 systems it unloads `brcmfmac_wcc`, `brcmfmac`
+The service runs before `sleep.target` and again after resume. On the
+MacBookPro15,1 it unloads `amdgpu` before suspend and loads it again after
+resume. On BCM4377 systems it unloads `brcmfmac_wcc`, `brcmfmac`
 and `hci_bcm4377` before suspend, then loads the modules again after
 resume.
 
