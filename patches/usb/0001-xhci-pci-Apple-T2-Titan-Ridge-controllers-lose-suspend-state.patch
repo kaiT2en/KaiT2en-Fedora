@@ -1,0 +1,96 @@
+From 502515fdefa4c89a4fecc17d2643b1f72b9ab241 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Wed, 22 Jul 2026 01:08:07 +0200
+Subject: [PATCH] xhci: pci: Apple T2 Titan Ridge controllers lose suspend
+ state
+
+The Titan Ridge xHCI path in Apple T2 Macs does not resume reliably after
+entering D3. Its upstream bridge stalls for about five seconds in
+pci_pm_resume_noirq(), while the controller reports USBSTS 0x401 and has
+to be reinitialized. The delays also coincide with very slow secondary
+CPU bring-up when the firmware follows its non-Darwin ACPI path.
+
+The endpoint and its immediate downstream port remain usable in D0 across
+S3 without increasing measured suspend power on a MacBookPro15,1. Both
+devices therefore need PCI_DEV_FLAGS_NO_D3 on T2 systems. The controller
+also needs XHCI_RESET_ON_RESUME because its context is not preserved.
+
+Together with the Thunderbolt device links, repeated S3 cycles reduced
+the two bridge resume callbacks from about 5.3 seconds each to less than
+100 microseconds. The reset quirk covers the USBSTS save/restore error
+that remains after the ordering and D-state correction.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ drivers/usb/host/xhci-pci.c | 34 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+diff --git a/drivers/usb/host/xhci-pci.c b/drivers/usb/host/xhci-pci.c
+index 039c26b241d0..b1eb7380c2e0 100644
+--- a/drivers/usb/host/xhci-pci.c
++++ b/drivers/usb/host/xhci-pci.c
+@@ -14,6 +14,7 @@
+ #include <linux/acpi.h>
+ #include <linux/reset.h>
+ #include <linux/suspend.h>
++#include <linux/platform_data/x86/apple.h>
+ 
+ #include "xhci.h"
+ #include "xhci-trace.h"
+@@ -71,6 +72,8 @@
+ #define PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_XHCI		0x15ec
+ #define PCI_DEVICE_ID_INTEL_TITAN_RIDGE_DD_XHCI		0x15f0
+ 
++#define PCI_DEVICE_ID_APPLE_T2_BRIDGE			0x1801
++
+ #define PCI_DEVICE_ID_AMD_ARIEL_TYPEC_XHCI		0x13ed
+ #define PCI_DEVICE_ID_AMD_ARIEL_TYPEA_XHCI		0x13ee
+ #define PCI_DEVICE_ID_AMD_STARSHIP_XHCI			0x148c
+@@ -248,6 +251,35 @@ static int xhci_pci_reinit(struct xhci_hcd *xhci, struct pci_dev *pdev)
+ 	return 0;
+ }
+ 
++static void xhci_pci_apple_t2_quirks(struct xhci_hcd *xhci,
++				     struct pci_dev *pdev)
++{
++	struct pci_dev *bridge;
++	struct pci_dev *t2;
++
++	if (!x86_apple_machine || pdev->vendor != PCI_VENDOR_ID_INTEL)
++		return;
++
++	if (pdev->device != PCI_DEVICE_ID_INTEL_TITAN_RIDGE_2C_XHCI &&
++	    pdev->device != PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_XHCI &&
++	    pdev->device != PCI_DEVICE_ID_INTEL_TITAN_RIDGE_DD_XHCI)
++		return;
++
++	t2 = pci_get_device(PCI_VENDOR_ID_APPLE, PCI_DEVICE_ID_APPLE_T2_BRIDGE,
++			    NULL);
++	if (!t2)
++		return;
++	pci_dev_put(t2);
++
++	/* D3 stalls platform resume, while the xHC context is not preserved. */
++	pdev->dev_flags |= PCI_DEV_FLAGS_NO_D3;
++	bridge = pci_upstream_bridge(pdev);
++	if (bridge)
++		bridge->dev_flags |= PCI_DEV_FLAGS_NO_D3;
++
++	xhci->quirks |= XHCI_RESET_ON_RESUME;
++}
++
+ static void xhci_pci_quirks(struct device *dev, struct xhci_hcd *xhci)
+ {
+ 	struct pci_dev                  *pdev = to_pci_dev(dev);
+@@ -511,6 +543,8 @@ static void xhci_pci_quirks(struct device *dev, struct xhci_hcd *xhci)
+ 	if (xhci->hci_version >= 0x120)
+ 		xhci->quirks |= XHCI_DEFAULT_PM_RUNTIME_ALLOW;
+ 
++	xhci_pci_apple_t2_quirks(xhci, pdev);
++
+ 	if (xhci->quirks & XHCI_RESET_ON_RESUME)
+ 		xhci_dbg_trace(xhci, trace_xhci_dbg_quirks,
+ 				"QUIRK: Resetting on resume");
+-- 
+2.55.0
+
