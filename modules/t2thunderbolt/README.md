@@ -20,6 +20,7 @@ power-management policy unchanged.
 
 The JHL7540 xHCI controllers still report `USBSTS 0x401` during resume. Their
 internal context is lost even though PCI keeps the controllers in D0, so the
-xHCI driver detects the failed restore and reinitializes them. A future in-tree
+xHCI driver detects the failed restore and reinitializes them. ~~A future in-tree
 xHCI quirk should mark these controllers for reset on resume instead of first
-attempting to restore a context the platform does not preserve.
+attempting to restore a context the platform does not preserve.~~ It seems like
+the failed attempt is necessary to Initalize the xHCI controller, we need to save the context like using pci_save_state, to remove the warning.
