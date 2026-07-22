@@ -2,11 +2,10 @@
 /*
  * Power-management ordering quirk for Thunderbolt controllers in Apple T2
  * Macs. The in-tree Thunderbolt driver creates equivalent links for older
- * Apple controllers, but does not cover the Titan Ridge and Ice Lake NHIs
- * used by this generation.
+ * Apple controllers, but does not cover the Titan Ridge NHIs used by this
+ * generation.
  */
 
-#include <linux/acpi.h>
 #include <linux/device.h>
 #include <linux/list.h>
 #include <linux/module.h>
@@ -16,8 +15,6 @@
 
 #define PCI_DEVICE_ID_INTEL_TITAN_RIDGE_2C_NHI 0x15e8
 #define PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_NHI 0x15eb
-#define PCI_DEVICE_ID_INTEL_ICL_NHI1 0x8a0d
-#define PCI_DEVICE_ID_INTEL_ICL_NHI0 0x8a17
 #define PCI_DEVICE_ID_APPLE_T2_BRIDGE 0x1801
 
 struct t2thunderbolt_link {
@@ -142,42 +139,6 @@ static int t2thunderbolt_add_switch_links(struct pci_dev *nhi)
 	return count ? count : -ENODEV;
 }
 
-static bool t2thunderbolt_is_trp(struct pci_dev *pdev)
-{
-	struct acpi_device *adev = ACPI_COMPANION(&pdev->dev);
-	const char *bid;
-
-	if (!adev)
-		return false;
-
-	bid = acpi_device_bid(adev);
-	return bid && !strncmp(bid, "TRP", 3);
-}
-
-static int t2thunderbolt_add_icl_links(struct pci_dev *nhi)
-{
-	struct pci_dev *pdev = NULL;
-	int count = 0;
-	int ret;
-
-	for_each_pci_dev(pdev) {
-		if (pci_domain_nr(pdev->bus) != pci_domain_nr(nhi->bus) ||
-		    pdev->bus != nhi->bus || !pci_is_pcie(pdev) ||
-		    pci_pcie_type(pdev) != PCI_EXP_TYPE_ROOT_PORT ||
-		    !t2thunderbolt_is_trp(pdev))
-			continue;
-
-		ret = t2thunderbolt_add_link(pdev, nhi);
-		if (ret) {
-			pci_dev_put(pdev);
-			return ret;
-		}
-		count++;
-	}
-
-	return count ? count : -ENODEV;
-}
-
 static void t2thunderbolt_remove_links(void)
 {
 	struct t2thunderbolt_link *entry, *tmp;
@@ -208,8 +169,6 @@ static int __init t2thunderbolt_init(void)
 	static const u16 ids[] = {
 		PCI_DEVICE_ID_INTEL_TITAN_RIDGE_2C_NHI,
 		PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_NHI,
-		PCI_DEVICE_ID_INTEL_ICL_NHI0,
-		PCI_DEVICE_ID_INTEL_ICL_NHI1,
 	};
 	struct pci_dev *nhi;
 	struct pci_dev *t2;
@@ -229,11 +188,7 @@ static int __init t2thunderbolt_init(void)
 	for (i = 0; i < ARRAY_SIZE(ids); i++) {
 		nhi = NULL;
 		while ((nhi = pci_get_device(PCI_VENDOR_ID_INTEL, ids[i], nhi))) {
-			if (ids[i] == PCI_DEVICE_ID_INTEL_ICL_NHI0 ||
-			    ids[i] == PCI_DEVICE_ID_INTEL_ICL_NHI1)
-				ret = t2thunderbolt_add_icl_links(nhi);
-			else
-				ret = t2thunderbolt_add_switch_links(nhi);
+			ret = t2thunderbolt_add_switch_links(nhi);
 
 			if (ret < 0) {
 				pci_err(nhi, "no usable Thunderbolt PM links found: %d\n",
@@ -272,5 +227,3 @@ MODULE_VERSION("0.2");
 
 MODULE_ALIAS("pci:v00008086d000015E8sv*sd*bc*sc*i*");
 MODULE_ALIAS("pci:v00008086d000015EBsv*sd*bc*sc*i*");
-MODULE_ALIAS("pci:v00008086d00008A0Dsv*sd*bc*sc*i*");
-MODULE_ALIAS("pci:v00008086d00008A17sv*sd*bc*sc*i*");

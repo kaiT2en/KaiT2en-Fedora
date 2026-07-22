@@ -1,0 +1,40 @@
+From 4af73f8a059dc25f542f3e78873f5109403eb737 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Wed, 22 Jul 2026 02:54:37 +0200
+Subject: [PATCH] thunderbolt: Apple T2 Titan Ridge systems need resume
+ ordering links
+
+Apple T2 Macs with Titan Ridge controllers lose their Thunderbolt PCIe
+tunnels during S3. The NHI must resume before the tunneled downstream
+ports so it can rebuild those tunnels before their consumers resume.
+
+The driver already establishes this ordering on older Apple Thunderbolt
+controllers. Titan Ridge uses the same discrete switch topology, but its
+NHI IDs are absent from the Apple-specific match.
+
+The missing ordering leaves bridges waiting for several seconds during
+resume and also delays secondary CPU bring-up. Repeated S3 cycles on a
+MacBookPro15,1 reduced CPU bring-up from 12-15 seconds to about one second
+once the complete T2 suspend fix was active.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ drivers/thunderbolt/tb.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/thunderbolt/tb.c b/drivers/thunderbolt/tb.c
+index 76323255439a..c5f2d151a018 100644
+--- a/drivers/thunderbolt/tb.c
++++ b/drivers/thunderbolt/tb.c
+@@ -3323,6 +3323,8 @@ static bool tb_apple_add_links(struct tb_nhi *nhi)
+ 	case PCI_DEVICE_ID_INTEL_CACTUS_RIDGE_4C:
+ 	case PCI_DEVICE_ID_INTEL_FALCON_RIDGE_2C_NHI:
+ 	case PCI_DEVICE_ID_INTEL_FALCON_RIDGE_4C_NHI:
++	case PCI_DEVICE_ID_INTEL_TITAN_RIDGE_2C_NHI:
++	case PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_NHI:
+ 		break;
+ 	default:
+ 		return false;
+-- 
+2.55.0
+
