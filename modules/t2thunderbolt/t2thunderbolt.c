@@ -18,7 +18,6 @@
 #define PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_NHI 0x15eb
 #define PCI_DEVICE_ID_INTEL_ICL_NHI1 0x8a0d
 #define PCI_DEVICE_ID_INTEL_ICL_NHI0 0x8a17
-#define PCI_DEVICE_ID_INTEL_ICL_XHCI 0x8a13
 #define PCI_DEVICE_ID_APPLE_T2_BRIDGE 0x1801
 
 struct t2thunderbolt_link {
@@ -38,12 +37,6 @@ static LIST_HEAD(t2thunderbolt_no_d3_devices);
 static int t2thunderbolt_disable_d3(struct pci_dev *pdev, const char *name)
 {
 	struct t2thunderbolt_no_d3 *entry;
-	struct t2thunderbolt_no_d3 *existing;
-
-	list_for_each_entry(existing, &t2thunderbolt_no_d3_devices, list) {
-		if (existing->pdev == pdev)
-			return 0;
-	}
 
 	entry = kzalloc(sizeof(*entry), GFP_KERNEL);
 	if (!entry)
@@ -164,32 +157,8 @@ static bool t2thunderbolt_is_trp(struct pci_dev *pdev)
 static int t2thunderbolt_add_icl_links(struct pci_dev *nhi)
 {
 	struct pci_dev *pdev = NULL;
-	bool xhci_found = false;
 	int count = 0;
 	int ret;
-
-	ret = t2thunderbolt_disable_d3(nhi, "integrated NHI");
-	if (ret)
-		return ret;
-
-	while ((pdev = pci_get_device(PCI_VENDOR_ID_INTEL,
-				      PCI_DEVICE_ID_INTEL_ICL_XHCI, pdev))) {
-		if (pci_domain_nr(pdev->bus) != pci_domain_nr(nhi->bus) ||
-		    pdev->bus != nhi->bus)
-			continue;
-
-		ret = t2thunderbolt_disable_d3(pdev, "integrated xHCI controller");
-		pci_dev_put(pdev);
-		if (ret)
-			return ret;
-		xhci_found = true;
-		break;
-	}
-
-	if (!xhci_found)
-		return -ENODEV;
-
-	pdev = NULL;
 
 	for_each_pci_dev(pdev) {
 		if (pci_domain_nr(pdev->bus) != pci_domain_nr(nhi->bus) ||
@@ -197,12 +166,6 @@ static int t2thunderbolt_add_icl_links(struct pci_dev *nhi)
 		    pci_pcie_type(pdev) != PCI_EXP_TYPE_ROOT_PORT ||
 		    !t2thunderbolt_is_trp(pdev))
 			continue;
-
-		ret = t2thunderbolt_disable_d3(pdev, "integrated root port");
-		if (ret) {
-			pci_dev_put(pdev);
-			return ret;
-		}
 
 		ret = t2thunderbolt_add_link(pdev, nhi);
 		if (ret) {
@@ -305,7 +268,7 @@ module_exit(t2thunderbolt_exit);
 MODULE_AUTHOR("Andre Eikmeyer <dev@deq.rocks>");
 MODULE_DESCRIPTION("Apple T2 Thunderbolt power-management ordering quirks");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("0.3");
+MODULE_VERSION("0.2");
 
 MODULE_ALIAS("pci:v00008086d000015E8sv*sd*bc*sc*i*");
 MODULE_ALIAS("pci:v00008086d000015EBsv*sd*bc*sc*i*");
