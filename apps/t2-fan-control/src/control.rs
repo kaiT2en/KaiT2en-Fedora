@@ -9,6 +9,9 @@ use crate::{
     sysfs::{FanEndpoint, TemperatureSnapshot, TemperatureSource},
 };
 
+const CONTROL_INTERVAL: Duration = Duration::from_secs(2);
+const SMOOTHING_SAMPLES: usize = 10;
+
 pub struct Controller {
     samples: VecDeque<u8>,
     last_applied_percent: Option<u8>,
@@ -26,9 +29,9 @@ pub struct ControlSnapshot {
 impl Controller {
     pub fn new() -> Self {
         Self {
-            samples: VecDeque::with_capacity(50),
+            samples: VecDeque::with_capacity(SMOOTHING_SAMPLES),
             last_applied_percent: None,
-            last_tick: Instant::now() - Duration::from_secs(5),
+            last_tick: Instant::now() - CONTROL_INTERVAL,
         }
     }
 
@@ -43,7 +46,7 @@ impl Controller {
 
         if let Some(temp) = effective_temp {
             self.samples.push_back(temp);
-            if self.samples.len() > 50 {
+            if self.samples.len() > SMOOTHING_SAMPLES {
                 self.samples.pop_front();
             }
         }
@@ -95,7 +98,7 @@ impl Controller {
     }
 
     pub fn should_tick(&self) -> bool {
-        self.last_tick.elapsed() >= Duration::from_millis(800)
+        self.last_tick.elapsed() >= CONTROL_INTERVAL
     }
 
     fn smoothed_temp(&self) -> Option<u8> {

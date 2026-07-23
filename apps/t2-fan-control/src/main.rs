@@ -370,6 +370,10 @@ impl DaemonRuntime {
 
     fn tick(&mut self) {
         if self.controller.should_tick() {
+            for fan in &mut self.fans {
+                let _ = fan.refresh_state();
+            }
+
             match self
                 .controller
                 .tick(&self.config, &mut self.fans, &mut self.temperatures)
@@ -381,12 +385,6 @@ impl DaemonRuntime {
                     self.status = format!("Fan control failed: {error}");
                 }
             }
-        } else {
-            for fan in &mut self.fans {
-                let _ = fan.refresh_state();
-            }
-            self.snapshot.temperatures = TemperatureSnapshot::read_from(&mut self.temperatures);
-            self.snapshot.effective_temp_c = self.snapshot.temperatures.effective_temp_c();
         }
     }
 

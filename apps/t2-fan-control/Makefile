@@ -39,7 +39,8 @@ install:
 	$(INSTALL) -o root -g root -m 0644 $(UNIT_SRC) $(UNIT_DIR)/t2-fancontrol.service
 	$(GTK_UPDATE_ICON_CACHE) --force --ignore-theme-index $(ICON_THEME_DIR)
 	systemctl daemon-reload
-	systemctl enable --now t2-fancontrol.service
+	systemctl enable t2-fancontrol.service
+	systemctl restart t2-fancontrol.service
 
 uninstall:
 	systemctl disable --now t2-fancontrol.service || true
