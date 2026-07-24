@@ -15,7 +15,10 @@
 #include <linux/slab.h>
 
 #define PCI_DEVICE_ID_INTEL_TITAN_RIDGE_2C_NHI 0x15e8
+#define PCI_DEVICE_ID_INTEL_TITAN_RIDGE_2C_XHCI 0x15e9
 #define PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_NHI 0x15eb
+#define PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_XHCI 0x15ec
+#define PCI_DEVICE_ID_INTEL_TITAN_RIDGE_DD_XHCI 0x15f0
 #define PCI_DEVICE_ID_INTEL_ICL_NHI1 0x8a0d
 #define PCI_DEVICE_ID_INTEL_ICL_NHI0 0x8a17
 #define PCI_DEVICE_ID_APPLE_T2_BRIDGE 0x1801
@@ -51,29 +54,46 @@ static int t2thunderbolt_disable_d3(struct pci_dev *pdev, const char *name)
 	return 0;
 }
 
-static int t2thunderbolt_disable_xhci_bridge_d3(struct pci_dev *bridge)
+static int t2thunderbolt_disable_titan_ridge_d3(void)
 {
-	struct pci_dev *child;
+	static const u16 ids[] = {
+		PCI_DEVICE_ID_INTEL_TITAN_RIDGE_2C_XHCI,
+		PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_XHCI,
+		PCI_DEVICE_ID_INTEL_TITAN_RIDGE_DD_XHCI,
+	};
+	struct pci_dev *xhci;
+	struct pci_dev *upstream;
+	int count = 0;
 	int ret;
+	int i;
 
-	if (!bridge->subordinate)
-		return 0;
+	for (i = 0; i < ARRAY_SIZE(ids); i++) {
+		xhci = NULL;
+		while ((xhci = pci_get_device(PCI_VENDOR_ID_INTEL, ids[i],
+					      xhci))) {
+			ret = t2thunderbolt_disable_d3(xhci,
+						      "xHCI controller");
+			if (ret) {
+				pci_dev_put(xhci);
+				return ret;
+			}
 
-	child = pci_get_slot(bridge->subordinate, PCI_DEVFN(0, 0));
-	if (!child)
-		return 0;
-
-	if (child->class != PCI_CLASS_SERIAL_USB_XHCI) {
-		pci_dev_put(child);
-		return 0;
+			upstream = pci_upstream_bridge(xhci);
+			if (upstream && pci_is_pcie(upstream) &&
+			    pci_pcie_type(upstream) ==
+				    PCI_EXP_TYPE_DOWNSTREAM) {
+				ret = t2thunderbolt_disable_d3(upstream,
+							      "xHCI port");
+				if (ret) {
+					pci_dev_put(xhci);
+					return ret;
+				}
+			}
+			count++;
+		}
 	}
 
-	ret = t2thunderbolt_disable_d3(bridge, "xHCI port");
-	if (!ret)
-		ret = t2thunderbolt_disable_d3(child, "xHCI controller");
-	pci_dev_put(child);
-
-	return ret;
+	return count;
 }
 
 static int t2thunderbolt_add_link(struct pci_dev *consumer,
@@ -125,10 +145,6 @@ static int t2thunderbolt_add_switch_links(struct pci_dev *nhi)
 		if (!pci_is_pcie(pdev) ||
 		    pci_pcie_type(pdev) != PCI_EXP_TYPE_DOWNSTREAM)
 			continue;
-
-		ret = t2thunderbolt_disable_xhci_bridge_d3(pdev);
-		if (ret)
-			return ret;
 
 		if (!pdev->is_pciehp)
 			continue;
@@ -226,6 +242,10 @@ static int __init t2thunderbolt_init(void)
 		return -ENODEV;
 	pci_dev_put(t2);
 
+	ret = t2thunderbolt_disable_titan_ridge_d3();
+	if (ret < 0)
+		return ret;
+
 	for (i = 0; i < ARRAY_SIZE(ids); i++) {
 		nhi = NULL;
 		while ((nhi = pci_get_device(PCI_VENDOR_ID_INTEL, ids[i], nhi))) {
@@ -268,7 +288,7 @@ module_exit(t2thunderbolt_exit);
 MODULE_AUTHOR("Andre Eikmeyer <dev@deq.rocks>");
 MODULE_DESCRIPTION("Apple T2 Thunderbolt power-management ordering quirks");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("0.2");
+MODULE_VERSION("0.3");
 
 MODULE_ALIAS("pci:v00008086d000015E8sv*sd*bc*sc*i*");
 MODULE_ALIAS("pci:v00008086d000015EBsv*sd*bc*sc*i*");

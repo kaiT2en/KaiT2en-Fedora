@@ -9,11 +9,11 @@ replace the in-tree `thunderbolt` driver. Titan Ridge controllers are matched
 through their PCIe switch topology. Ice Lake controllers use Apple's `TRP*`
 ACPI root-port names and are limited to the two Ice Lake NHI PCI IDs.
 
-Apple's Darwin ACPI path powers down the switch ports hosting the Thunderbolt
-xHCI controllers, but the controllers subsequently report a context
-save/restore error. The module keeps only those downstream ports out of D3.
-It also keeps their xHCI functions in D0. This avoids slow CPU bring-up and PCIe
-bridge timeouts during resume while leaving the rest of Apple's platform
+Apple's Darwin ACPI path powers down the Titan Ridge xHCI controllers, but the
+controllers subsequently report a context save/restore error. The module
+matches the JHL7540 2C and 4C and JHL7440 DD xHCI IDs and keeps each controller
+and its immediate downstream port out of D3. This avoids slow CPU bring-up and
+PCIe bridge timeouts during resume while leaving the rest of Apple's platform
 power-management policy unchanged.
 
 On Ice Lake, the module only supplies the missing PM ordering links. It does
