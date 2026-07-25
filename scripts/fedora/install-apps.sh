@@ -175,6 +175,21 @@ install_react_drm() {
 		fi
 	fi
 
+	if [[ "$desktop" == *kde* || "$desktop" == *plasma* ]]; then
+		require_command kpackagetool6 kwriteconfig6 qdbus
+		kwin_script_src="$src/touchbar_dynamicshortcuts"
+		for package in metadata.json contents/code/main.js; do
+			[[ -r "$kwin_script_src/$package" ]] ||
+				fail "react-drm KWin script file is missing: $package"
+		done
+		info "installing TouchBar Dynamic Shortcuts KWin script for react-drm"
+		run_as_target kpackagetool6 --type=KWin/Script -r touchbar_dynamicshortcuts || true
+		run_as_target kpackagetool6 --type=KWin/Script -i "$kwin_script_src"
+		run_as_target kwriteconfig6 --file kwinrc --group Plugins \
+			--key touchbar_dynamicshortcutsEnabled true
+		run_as_target qdbus org.kde.KWin /KWin reconfigure
+	fi
+
 	info "installing react-drm Fedora dependencies"
 	for package in "${REACT_DRM_FEDORA_NODE_PACKAGES[@]}"; do
 		if rpm -q "$package" >/dev/null 2>&1; then
