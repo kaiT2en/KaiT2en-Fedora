@@ -1,0 +1,17 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "yossefgamer24@yahoo.com",
+                "Name": "Yossef Osman"
+            }
+        ],
+        "Description": "Reports active window info to react-drm via D-Bus",
+        "Icon": "preferences-system-windows",
+        "Id": "touchbar_dynamicshortcuts",
+        "License": "GPL-3.0-only",
+        "Name": "TouchBar Dynamic Shortcuts"
+    },
+    "X-Plasma-API": "javascript"
+}

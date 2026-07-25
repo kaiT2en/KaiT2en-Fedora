@@ -99,7 +99,9 @@ installer deploys the required backend and react-drm selects it automatically:
 - GNOME Wayland uses
   [Window Monitor Pro](https://extensions.gnome.org/extension/8549/window-monitor-pro/),
   maintained by the react-drm developer
-- KDE Plasma Wayland uses KWin scripting
+- KDE Plasma Wayland uses
+  **TouchBar Dynamic Shortcuts**, a KWin script installed and enabled by
+  the KaiT2en installer
 - Hyprland uses its IPC socket
 - Xorg uses `xprop`
 
