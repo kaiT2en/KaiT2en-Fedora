@@ -1,12 +1,18 @@
 import dbus, { Message } from 'dbus-next';
 import type { ActiveWindowBackend } from './types';
+import { EMPTY } from './types';
 
 // KDE Plasma Wayland via the touchbar_dynamicshortcuts KWin script.
 //
-// The KWin script hooks workspace.windowActivated and pushes focus changes to
-// this backend over D-Bus (method calls on org.touchbar.DynamicShortcuts).
-// No journalctl, no dynamic script injection — the user enables the script
-// once in System Settings → Window Management → KWin Scripts.
+// The KWin script hooks workspace.windowActivated, tracks captionChanged on
+// the active window, and pushes every focus/title change to this backend
+// over D-Bus (method calls on org.touchbar.DynamicShortcuts).  It also
+// emits the initial state at load time so react-drm has a focused window
+// from the start.
+//
+// No journalctl, no dynamic script injection — the user (or the KaiT2en
+// installer) enables the script once in System Settings → Window
+// Management → KWin Scripts.
 
 const SVC    = 'org.touchbar.DynamicShortcuts';
 const PATH   = '/org/touchbar/DynamicShortcuts';
@@ -30,7 +36,8 @@ export const plasma: ActiveWindowBackend = {
         if (msg.member === 'SetActiveWindow') {
           const klass = String(msg.body?.[0] ?? '');
           const title = String(msg.body?.[1] ?? '');
-          push({ class: klass, title, pid: 0 });
+          const pid   = Number(msg.body?.[2]) || 0;
+          push(!klass && !title ? EMPTY : { class: klass, title, pid });
           bus.send(Message.newMethodReturn(msg, '', []));
           return true;
         }

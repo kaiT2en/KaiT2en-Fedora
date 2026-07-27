@@ -183,6 +183,10 @@ install_react_drm() {
 				fail "react-drm KWin script file is missing: $package"
 		done
 		info "installing TouchBar Dynamic Shortcuts KWin script for react-drm"
+		if run_as_target kpackagetool6 --type=KWin/Script --list 2>/dev/null |
+			grep -q touchbar_dynamicshortcuts; then
+			run_as_target kpackagetool6 --type=KWin/Script -r touchbar_dynamicshortcuts
+		fi
 		run_as_target kpackagetool6 --type=KWin/Script -i "$kwin_script_src"
 		run_as_target kwriteconfig6 --file kwinrc --group Plugins \
 			--key touchbar_dynamicshortcutsEnabled true

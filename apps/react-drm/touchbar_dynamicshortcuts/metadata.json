@@ -13,5 +13,6 @@
         "License": "GPL-3.0-only",
         "Name": "TouchBar Dynamic Shortcuts"
     },
-    "X-Plasma-API": "javascript"
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "contents/code/main.js"
 }
