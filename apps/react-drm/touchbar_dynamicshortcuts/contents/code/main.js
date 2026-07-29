@@ -3,19 +3,13 @@
 var active = null;
 
 function emit(window) {
-    if (window) {
-        callDBus('org.touchbar.DynamicShortcuts',
-                 '/org/touchbar/DynamicShortcuts',
-                 'org.touchbar.DynamicShortcuts',
-                 'SetActiveWindow',
-                 window.resourceClass, window.caption, window.pid);
-    } else {
-        callDBus('org.touchbar.DynamicShortcuts',
-                 '/org/touchbar/DynamicShortcuts',
-                 'org.touchbar.DynamicShortcuts',
-                 'SetActiveWindow',
-                 '', '', 0);
-    }
+    callDBus('org.touchbar.DynamicShortcuts',
+             '/org/touchbar/DynamicShortcuts',
+             'org.touchbar.DynamicShortcuts',
+             'SetActiveWindow',
+             window ? window.resourceClass : '',
+             window ? window.caption : '',
+             window ? window.pid : 0);
 }
 
 function onCaption() {
@@ -33,16 +27,5 @@ function onActivated(w) {
     emit(w);
 }
 
-function startup() {
-    callDBus('org.freedesktop.DBus', '/org/freedesktop/DBus',
-             'org.freedesktop.DBus', 'NameHasOwner',
-             'org.touchbar.DynamicShortcuts',
-             function(hasOwner, error) {
-                 if (!error && hasOwner) {
-                     emit(workspace.activeWindow);
-                 }
-             });
-}
-
 workspace.windowActivated.connect(onActivated);
-startup();
+emit(workspace.activeWindow);
