@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 var active = null;
-var TRIES = 30;
-var DELAY = 1000;
-var lastOwner = false;
 
 function emit(window) {
     if (window) {
@@ -36,22 +33,16 @@ function onActivated(w) {
     emit(w);
 }
 
-function checkService(retries) {
+function startup() {
     callDBus('org.freedesktop.DBus', '/org/freedesktop/DBus',
              'org.freedesktop.DBus', 'NameHasOwner',
              'org.touchbar.DynamicShortcuts',
              function(hasOwner, error) {
-                 var available = !error && hasOwner;
-                 if (available && !lastOwner) {
+                 if (!error && hasOwner) {
                      emit(workspace.activeWindow);
                  }
-                 lastOwner = available;
-                 var nextDelay = retries > 0 ? DELAY : 10000;
-                 setTimeout(function() {
-                     checkService(retries > 0 ? retries - 1 : 0);
-                 }, nextDelay);
              });
 }
 
 workspace.windowActivated.connect(onActivated);
-checkService(TRIES);
+startup();
