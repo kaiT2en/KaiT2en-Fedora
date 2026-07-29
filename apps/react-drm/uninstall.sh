@@ -92,7 +92,8 @@ remove_kwin_script() {
      grep -q touchbar_dynamicshortcuts; then
     info "disabling TouchBar Dynamic Shortcuts KWin script"
     kwriteconfig6 --file kwinrc --group Plugins \
-      --key touchbar_dynamicshortcutsEnabled false
+      --key touchbar_dynamicshortcutsEnabled false ||
+      warn "failed to disable KWin script in kwinrc"
     info "removing TouchBar Dynamic Shortcuts KWin script"
     kpackagetool6 --type=KWin/Script -r touchbar_dynamicshortcuts ||
       fail "failed to remove KWin script"

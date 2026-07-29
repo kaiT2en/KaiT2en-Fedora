@@ -194,7 +194,8 @@ install_react_drm() {
 		run_as_target kpackagetool6 --type=KWin/Script -i "$kwin_script_src" ||
 			fail "failed to install KWin script"
 		run_as_target kwriteconfig6 --file kwinrc --group Plugins \
-			--key touchbar_dynamicshortcutsEnabled true
+			--key touchbar_dynamicshortcutsEnabled true ||
+			warn "failed to enable KWin script in kwinrc"
 	fi
 
 	info "installing react-drm Fedora dependencies"
