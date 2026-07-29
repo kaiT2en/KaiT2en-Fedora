@@ -3,6 +3,7 @@
 var active = null;
 var TRIES = 30;
 var DELAY = 1000;
+var lastOwner = false;
 
 function emit(window) {
     if (window) {
@@ -35,24 +36,22 @@ function onActivated(w) {
     emit(w);
 }
 
-// Poll NameHasOwner via org.freedesktop.DBus (always available) so the
-// callback always fires. When react-drm is detected, emit the current
-// active window. Without this, the initial state is lost if react-drm
-// hasn't registered its D-Bus name yet.
-function initialHandshake(remaining) {
+function checkService(retries) {
     callDBus('org.freedesktop.DBus', '/org/freedesktop/DBus',
              'org.freedesktop.DBus', 'NameHasOwner',
              'org.touchbar.DynamicShortcuts',
              function(hasOwner, error) {
-                 if (!error && hasOwner) {
+                 var available = !error && hasOwner;
+                 if (available && !lastOwner) {
                      emit(workspace.activeWindow);
-                 } else if (remaining > 0) {
-                     setTimeout(function() {
-                         initialHandshake(remaining - 1);
-                     }, DELAY);
                  }
+                 lastOwner = available;
+                 var nextDelay = retries > 0 ? DELAY : 10000;
+                 setTimeout(function() {
+                     checkService(retries > 0 ? retries - 1 : 0);
+                 }, nextDelay);
              });
 }
 
 workspace.windowActivated.connect(onActivated);
-initialHandshake(TRIES);
+checkService(TRIES);
