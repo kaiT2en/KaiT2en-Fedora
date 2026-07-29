@@ -11,9 +11,13 @@ shell_files=(
 	packaging/installer/initramfs/20-kait2en-input.sh.in
 	packaging/installer/initramfs/90-kait2en-updates.sh
 	packaging/installer/macos-release-bootstrap.sh.in
+	packaging/installer/runtime/install-bt-firmware.sh
 	packaging/installer/runtime/install-wifi-firmware.sh
 	packaging/installer/runtime/kait2en-install
 	packaging/installer/runtime/kait2en-launch-terminal
+	packaging/installer/runtime/kait2en-live-bluetooth
+	packaging/installer/runtime/kait2en-live-diagnostics
+	packaging/installer/runtime/kait2en-live-wifi
 	packaging/installer/runtime/kait2en-prepare
 	scripts/fedora/build-installer.sh
 	scripts/fedora/install-dkms-modules.sh
@@ -23,6 +27,9 @@ shell_files=(
 	tests/installer/static-check.sh
 	tests/installer/prepare-install.sh
 	tests/installer/release-bootstrap.sh
+	tests/installer/bt-firmware.sh
+	tests/installer/live-bluetooth.sh
+	tests/installer/live-wifi.sh
 	tests/installer/terminal-launcher.sh
 	tests/installer/wifi-firmware.sh
 )
@@ -52,6 +59,10 @@ done < <(git ls-files 'packaging/installer/anaconda-addon/*.py' \
 	packaging/installer/runtime/kait2en-prepare
 grep -Fq '"$transition_source" "$target_kernel" "$work/rpm"' \
 	packaging/installer/runtime/kait2en-prepare
+# The transition modules only live in the initramfs, so they must be forced in.
+grep -Fq 'dracut --force --force-drivers' \
+	packaging/installer/runtime/kait2en-prepare
+! grep -Fq -- '--add-drivers' packaging/installer/runtime/kait2en-prepare
 grep -Fq '"etc", "xdg", "autostart"' \
 	packaging/installer/anaconda-addon/com_kait2en_input/service/installation.py
 ! rg -n 'find_regular_user|home\.lstrip|os\.chown' \
@@ -63,6 +74,39 @@ grep -Fq 'KAIT2EN_AUTOSTART_FILE:-/etc/xdg/autostart/kait2en-install.desktop' \
 if rg -n 'kait2en-first-boot|KAIT2EN_FIRST_BOOT' packaging/installer; then
 	exit 1
 fi
+# The live Wi-Fi helpers must ride along in the input initramfs and must stay
+# inside /run, which never reaches the installed system.
+grep -Fq 'usr/lib/kait2en/kait2en-live-wifi' packaging/installer/build-in-container.sh
+grep -Fq 'usr/lib/kait2en/kait2en-live-wifi.service' \
+	packaging/installer/build-in-container.sh
+grep -Fq 'usr/lib/kait2en/install-wifi-firmware.sh' \
+	packaging/installer/build-in-container.sh
+grep -Fq 'usr/lib/kait2en/kait2en-live-diagnostics' \
+	packaging/installer/build-in-container.sh
+grep -Fq 'runtime_units=/run/systemd/system' \
+	packaging/installer/initramfs/90-kait2en-updates.sh
+grep -Fq 'ExecStart=/run/kait2en/kait2en-live-wifi' \
+	packaging/installer/runtime/kait2en-live-wifi.service
+! rg -n 'kait2en-live-wifi' packaging/installer/anaconda-addon
+
+# Bluetooth firmware is loaded from disk by BCM4377 alone. Every entry point has
+# to check for that PCI function, and the UART .hcd path must stay out of here.
+grep -Fq '0x5fa0' packaging/installer/runtime/install-bt-firmware.sh
+grep -Fq '0x5fa0' packaging/installer/runtime/kait2en-live-bluetooth
+grep -Fq '0x5fa0' \
+	packaging/installer/anaconda-addon/com_kait2en_input/service/installation.py
+grep -Fq 'BCM4377' scripts/macos/prepare-fedora-installer.sh
+! rg -n '\.hcd' packaging/installer scripts/macos
+grep -Fq 'usr/lib/kait2en/install-bt-firmware.sh' \
+	packaging/installer/build-in-container.sh
+grep -Fq 'usr/lib/kait2en/kait2en-live-bluetooth' \
+	packaging/installer/build-in-container.sh
+grep -Fq 'usr/lib/kait2en/kait2en-live-bluetooth.service' \
+	packaging/installer/build-in-container.sh
+grep -Fq 'ExecStart=/run/kait2en/kait2en-live-bluetooth' \
+	packaging/installer/runtime/kait2en-live-bluetooth.service
+! rg -n 'kait2en-live-bluetooth' packaging/installer/anaconda-addon
+
 grep -Fq 'Do not close this window!' packaging/installer/runtime/kait2en-install
 grep -Fq 'Ensure that you are connected to Wi-Fi before continuing.' \
 	packaging/installer/runtime/kait2en-install
@@ -75,7 +119,7 @@ grep -Fq 'plist_value "$disk" WholeDisk' scripts/macos/prepare-fedora-installer.
 ! grep -Fq 'plist_value "$disk" Whole ' scripts/macos/prepare-fedora-installer.sh
 grep -Fq 'The ISO was verified OK.' scripts/macos/prepare-fedora-installer.sh
 grep -Fq 'Next steps:' scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'Keyboard and trackpad should work in the Fedora installer.' \
+grep -Fq 'Select the orange EFI Boot entry for this USB drive.' \
 	scripts/macos/prepare-fedora-installer.sh
 grep -Fq 'The KaiT2en installation will continue automatically in a terminal.' \
 	scripts/macos/prepare-fedora-installer.sh
@@ -107,6 +151,9 @@ patch_name=$(
 git apply --unidiff-zero --check "packaging/installer/patches/$patch_name"
 
 bash tests/installer/wifi-firmware.sh
+bash tests/installer/bt-firmware.sh
+bash tests/installer/live-wifi.sh
+bash tests/installer/live-bluetooth.sh
 bash tests/installer/prepare-install.sh
 bash tests/installer/install-launcher.sh
 bash tests/installer/release-bootstrap.sh

@@ -39,7 +39,7 @@ Options:
   --iso FILE         Use a supported, already downloaded Fedora ISO
   --disk /dev/diskN  Select the external target disk without the menu
   --download-dir DIR Store automatically downloaded ISOs in DIR
-  --firmware-dir DIR Use Apple Wi-Fi firmware from DIR
+  --firmware-dir DIR Use Apple Wi-Fi and Bluetooth firmware from DIR
   --reuse-media      Reuse an existing matching Fedora image
   --list-editions    List supported Fedora editions and exit
   -h, --help         Show this help
@@ -136,6 +136,17 @@ copy_firmware_candidates() {
 		[[ -f "$candidate" ]] || continue
 		copy_file_contents "$candidate" "$destination/${candidate##*/}"
 	done
+	# Only BCM4377 Macs have PCIe Bluetooth. Their firmware may sit next to the
+	# Wi-Fi files or in the bluetooth/ subdirectory of an earlier run.
+	for candidate in \
+		"$source_dir"/BCM4377*.bin \
+		"$source_dir"/BCM4377*.ptb \
+		"$source_dir"/bluetooth/BCM4377*.bin \
+		"$source_dir"/bluetooth/BCM4377*.ptb; do
+		[[ -f "$candidate" ]] || continue
+		mkdir -p "$destination/bluetooth"
+		copy_file_contents "$candidate" "$destination/bluetooth/${candidate##*/}"
+	done
 }
 
 collect_macos_firmware() {
@@ -166,6 +177,39 @@ collect_macos_firmware() {
 				;;
 		esac
 	done <"$path_list"
+}
+
+collect_macos_bluetooth_firmware() {
+	local destination=$1
+	local firmware_root=${KAIT2EN_BT_FIRMWARE_ROOT:-/usr/share/firmware/bluetooth}
+	local chipset firmware_path found=0
+
+	# T2 Macs use one of two Bluetooth architectures. Only BCM4377 talks over
+	# PCIe and needs these files; the others use the UART controller.
+	chipset=$(
+		/usr/sbin/system_profiler SPBluetoothDataType 2>/dev/null |
+			grep 'Chipset:' |
+			grep -oE 'BCM_?[0-9A-Z]+' |
+			tr -d '_' |
+			head -n 1
+	) || :
+	if [[ "$chipset" != BCM4377* ]]; then
+		printf 'No PCIe Bluetooth in this Mac (%s), skipping Bluetooth firmware.\n' \
+			"${chipset:-no chipset reported}"
+		return 0
+	fi
+
+	printf 'Looking for Apple %s Bluetooth firmware...\n' "$chipset"
+	mkdir -p "$destination"
+	# Apple can ship more than one antenna vendor. Copy every variant and let
+	# Linux pick the one the chip asks for; macOS cannot read that from the chip.
+	for firmware_path in "$firmware_root/$chipset"*.bin "$firmware_root/$chipset"*.ptb; do
+		[[ -f "$firmware_path" ]] || continue
+		copy_file_contents "$firmware_path" "$destination/${firmware_path##*/}"
+		found=1
+	done
+	((found == 1)) ||
+		printf 'macOS carries no %s firmware files, skipping Bluetooth.\n' "$chipset"
 }
 
 load_editions() {
@@ -480,6 +524,7 @@ if [[ -n "$FIRMWARE_DIR" ]]; then
 	copy_firmware_candidates "$FIRMWARE_DIR" "$firmware_stage"
 else
 	collect_macos_firmware "$firmware_stage"
+	collect_macos_bluetooth_firmware "$firmware_stage/bluetooth"
 fi
 
 trx_file=$(pick_one '.trx firmware' "$firmware_stage"/*.trx)
@@ -505,10 +550,28 @@ printf '  %s\n' "${trx_file##*/}" "${clm_file##*/}" \
 firmware_archive_dir="$archive_root/kait2en-wifi-firmware"
 install -m 0644 "$trx_file" "$clm_file" "$txcap_file" "$nvram_file" \
 	"$firmware_archive_dir/"
+
+firmware_names=("${trx_file##*/}" "${clm_file##*/}" \
+	"${txcap_file##*/}" "${nvram_file##*/}")
+bluetooth_files=("$firmware_stage"/bluetooth/BCM4377*.bin \
+	"$firmware_stage"/bluetooth/BCM4377*.ptb)
+if ((${#bluetooth_files[@]} > 0)); then
+	install -d -m 0755 "$firmware_archive_dir/bluetooth"
+	install -m 0644 "${bluetooth_files[@]}" "$firmware_archive_dir/bluetooth/"
+	printf 'Validated Apple Bluetooth firmware:\n'
+	for bluetooth_file in "${bluetooth_files[@]}"; do
+		printf '  %s\n' "${bluetooth_file##*/}"
+		firmware_names+=("bluetooth/${bluetooth_file##*/}")
+	done
+	# A blob without its PTB counterpart cannot start the controller. Say so
+	# here instead of leaving it to the Mac that boots the stick.
+	if [[ -z $(printf '%s\n' "${firmware_names[@]}" | grep '\.ptb$') ]]; then
+		printf 'Warning: no Bluetooth PTB file was found, Bluetooth may stay off.\n'
+	fi
+fi
 (
 	cd "$firmware_archive_dir"
-	shasum -a 256 "${trx_file##*/}" "${clm_file##*/}" \
-		"${txcap_file##*/}" "${nvram_file##*/}" >SHA256SUMS
+	shasum -a 256 "${firmware_names[@]}" >SHA256SUMS
 )
 firmware_image="$WORK/kait2en-wifi-initramfs.img"
 (
@@ -622,7 +685,7 @@ DISK_TOUCHED=0
 printf '\nKaiT2en Fedora installer prepared successfully.\n'
 printf 'The ISO was verified OK.\n'
 printf '\nNext steps:\n'
-printf '  - Boot your T2 Mac from this USB drive.\n'
-printf '  - Keyboard and trackpad should work in the Fedora installer. Wi-Fi is expected after the first boot.\n'
+printf '  - Reboot the Mac and hold Option during startup.\n'
+printf '  - Select the orange EFI Boot entry for this USB drive.\n'
 printf '  - Complete the Fedora installation, remove the USB drive, and boot the installed system.\n'
 printf '  - Sign in to Fedora. The KaiT2en installation will continue automatically in a terminal.\n'

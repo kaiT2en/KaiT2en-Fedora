@@ -128,6 +128,10 @@ run_prepare 0 "$old" >/dev/null
 grep -Fq 'dnf upgrade --refresh -y --setopt=installonly_limit=0' "$log"
 grep -Fq "install-dependencies $target" "$log"
 grep -Fq "build-input-kmod kernel=$target arguments=3" "$log"
+# Forced, not merely added: the modules are deleted from the disk below.
+grep -Fq \
+	'dracut --force --force-drivers t2bce_dma t2hid hid_t2magicmouse t2bce_core t2bce_vhci' \
+	"$log"
 grep -Fq 'rpm -e kmod-kait2en-input' "$log"
 [[ ! -d "$fake_modules/$target/updates/kait2en-transition" ]]
 [[ $(tail -n 1 "$log") == "grubby --set-default $fake_boot/vmlinuz-$target" ]]

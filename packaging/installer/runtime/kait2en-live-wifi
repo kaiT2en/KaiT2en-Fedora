@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+
+# Bring up Wi-Fi inside the running Fedora live session. The KaiT2en USB stick
+# already carries the Apple firmware for this Mac, but so far only the installer
+# used it. Wait until brcmfmac has looked at the wireless chip, hand the firmware
+# to the very same helper the installer uses, and reload the driver so it picks
+# the firmware up.
+
+set -Eeuo pipefail
+shopt -s nullglob
+
+source_dir=${KAIT2EN_LIVE_FIRMWARE_SOURCE:-/run/kait2en/apple-firmware}
+helper=${KAIT2EN_WIFI_HELPER:-/run/kait2en/install-wifi-firmware.sh}
+root=${KAIT2EN_LIVE_ROOT:-/}
+# brcmfmac probes the PCIe device asynchronously and reports the chip a moment
+# after the driver was loaded, so the log is polled instead of read once.
+request_timeout=${KAIT2EN_LIVE_REQUEST_TIMEOUT:-15}
+link_timeout=${KAIT2EN_LIVE_LINK_TIMEOUT:-20}
+net_root=${KAIT2EN_LIVE_NET_ROOT:-/sys/class/net}
+driver=brcmfmac
+vendor_module=brcmfmac_wcc
+
+log() {
+	printf '[kait2en] %s\n' "$*"
+}
+
+trap 'log "live Wi-Fi setup failed at line $LINENO"' ERR
+
+[[ $# -eq 0 ]] || {
+	printf 'Usage: %s\n' "${0##*/}" >&2
+	exit 2
+}
+
+if [[ ! -d "$source_dir" ]]; then
+	log "no Apple Wi-Fi firmware on this boot medium: $source_dir"
+	exit 0
+fi
+[[ -f "$helper" ]] || {
+	log "the KaiT2en Wi-Fi firmware helper is missing: $helper"
+	exit 1
+}
+
+chip_prefix() {
+	local found
+	found=$(
+		{
+			journalctl -b -k --no-pager 2>/dev/null || :
+			dmesg 2>/dev/null || :
+		} |
+			sed -n 's|.*brcmf_fw_alloc_request: using \(brcm/brcmfmac[^ ]*-pcie\) for chip .*|\1|p' |
+			head -n 1
+	) || :
+	printf '%s\n' "$found"
+}
+
+wait_for_chip_prefix() {
+	local deadline=$((SECONDS + request_timeout)) found
+	while :; do
+		found=$(chip_prefix)
+		if [[ -n "$found" ]]; then
+			printf '%s\n' "$found"
+			return 0
+		fi
+		((SECONDS < deadline)) || return 1
+		sleep 0.25
+	done
+}
+
+reload_driver() {
+	local device
+
+	# The vendor helper module keeps a reference on the driver, so it has to go
+	# first or the driver cannot be unloaded at all.
+	modprobe -r "$vendor_module" >/dev/null 2>&1 || :
+	if modprobe -r "$driver" >/dev/null 2>&1; then
+		modprobe "$driver" >/dev/null 2>&1 || :
+		return 0
+	fi
+
+	log "$driver stayed loaded, rebinding its devices instead"
+	for device in "/sys/bus/pci/drivers/$driver"/0000:*; do
+		device=${device##*/}
+		printf '%s\n' "$device" >"/sys/bus/pci/drivers/$driver/unbind" 2>/dev/null || :
+		printf '%s\n' "$device" >"/sys/bus/pci/drivers/$driver/bind" 2>/dev/null || :
+	done
+}
+
+modprobe "$driver" >/dev/null 2>&1 || :
+if ! prefix=$(wait_for_chip_prefix); then
+	log "$driver has not probed the wireless chip yet, reloading it"
+	reload_driver
+	prefix=$(wait_for_chip_prefix) || prefix=
+fi
+
+if [[ -z "$prefix" ]]; then
+	log "$driver found no wireless chip, leaving the live session unchanged"
+	exit 0
+fi
+log "$driver drives $prefix"
+
+bash "$helper" --source "$source_dir" --root "$root"
+
+log "reloading $driver with the installed firmware"
+reload_driver
+
+interface=
+deadline=$((SECONDS + link_timeout))
+while :; do
+	for candidate in "$net_root"/*/wireless; do
+		candidate=${candidate%/wireless}
+		interface=${candidate##*/}
+		break
+	done
+	[[ -z "$interface" ]] || break
+	((SECONDS < deadline)) || break
+	sleep 0.5
+done
+
+if [[ -n "$interface" ]]; then
+	# A supplicant that watched the interface disappear falls back to the wrong
+	# backend and can no longer scan, so hand it the new device cleanly.
+	if command -v systemctl >/dev/null 2>&1 &&
+		systemctl is-active --quiet wpa_supplicant; then
+		log 'restarting wpa_supplicant for the new wireless interface'
+		systemctl try-restart wpa_supplicant || :
+	fi
+	log "Wi-Fi is ready in the live session: $interface"
+else
+	log 'no wireless interface appeared'
+	log "run 'sudo $0' again to retry"
+fi

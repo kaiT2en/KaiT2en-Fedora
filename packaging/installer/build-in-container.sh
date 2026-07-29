@@ -146,6 +146,9 @@ install -m 0755 \
 	"$SOURCE_ROOT/packaging/installer/runtime/install-wifi-firmware.sh" \
 	"$UPDATES_ROOT/usr/share/kait2en-installer/"
 install -m 0755 \
+	"$SOURCE_ROOT/packaging/installer/runtime/install-bt-firmware.sh" \
+	"$UPDATES_ROOT/usr/share/kait2en-installer/"
+install -m 0755 \
 	"$SOURCE_ROOT/packaging/installer/runtime/kait2en-prepare" \
 	"$UPDATES_ROOT/usr/share/kait2en-installer/"
 install -m 0755 \
@@ -208,6 +211,32 @@ for module in t2bce_dma t2bce_core t2bce_vhci t2hid hid_t2magicmouse; do
 		"$EXTRACT_ROOT/usr/lib/modules/$ISO_KERNEL_RELEASE/updates/kait2en/$module.ko" \
 		"$MODULE_TARGET/"
 done
+# The live session installs the Apple Wi-Fi and Bluetooth firmware for itself
+# from these files. The pre-pivot hook moves them into /run, which survives the
+# switch root.
+install -m 0755 \
+	"$SOURCE_ROOT/packaging/installer/runtime/install-wifi-firmware.sh" \
+	"$INITRAMFS_ROOT/usr/lib/kait2en/"
+install -m 0755 \
+	"$SOURCE_ROOT/packaging/installer/runtime/install-bt-firmware.sh" \
+	"$INITRAMFS_ROOT/usr/lib/kait2en/"
+install -m 0755 \
+	"$SOURCE_ROOT/packaging/installer/runtime/kait2en-live-wifi" \
+	"$INITRAMFS_ROOT/usr/lib/kait2en/"
+install -m 0755 \
+	"$SOURCE_ROOT/packaging/installer/runtime/kait2en-live-bluetooth" \
+	"$INITRAMFS_ROOT/usr/lib/kait2en/"
+install -m 0644 \
+	"$SOURCE_ROOT/packaging/installer/runtime/kait2en-live-wifi.service" \
+	"$INITRAMFS_ROOT/usr/lib/kait2en/"
+install -m 0644 \
+	"$SOURCE_ROOT/packaging/installer/runtime/kait2en-live-bluetooth.service" \
+	"$INITRAMFS_ROOT/usr/lib/kait2en/"
+# Shipped on the stick so a live session without any network can still produce
+# a diagnostics archive.
+install -m 0755 \
+	"$SOURCE_ROOT/packaging/installer/runtime/kait2en-live-diagnostics" \
+	"$INITRAMFS_ROOT/usr/lib/kait2en/"
 sed "s|@KERNEL_RELEASE@|$ISO_KERNEL_RELEASE|g" \
 	"$SOURCE_ROOT/packaging/installer/initramfs/20-kait2en-input.sh.in" \
 	>"$INITRAMFS_ROOT/var/lib/dracut/hooks/pre-trigger/20-kait2en-input.sh"
@@ -235,6 +264,8 @@ gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 	grep -Fx 'usr/share/kait2en-installer/install-wifi-firmware.sh' >/dev/null
 gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
+	grep -Fx 'usr/share/kait2en-installer/install-bt-firmware.sh' >/dev/null
+gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 	grep -Fx 'usr/share/kait2en-installer/kait2en-install' >/dev/null
 gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 	grep -Fx 'usr/share/kait2en-installer/kait2en-prepare' >/dev/null
@@ -248,6 +279,20 @@ gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 	grep -F 'transition-source/packaging/installer/patches/' >/dev/null
 gzip -dc "$INITRAMFS_IMAGE" | cpio -it --quiet |
 	grep -Fx "usr/lib/modules/$ISO_KERNEL_RELEASE/updates/kait2en/t2bce_vhci.ko" >/dev/null
+gzip -dc "$INITRAMFS_IMAGE" | cpio -it --quiet |
+	grep -Fx 'usr/lib/kait2en/install-wifi-firmware.sh' >/dev/null
+gzip -dc "$INITRAMFS_IMAGE" | cpio -it --quiet |
+	grep -Fx 'usr/lib/kait2en/kait2en-live-wifi' >/dev/null
+gzip -dc "$INITRAMFS_IMAGE" | cpio -it --quiet |
+	grep -Fx 'usr/lib/kait2en/kait2en-live-wifi.service' >/dev/null
+gzip -dc "$INITRAMFS_IMAGE" | cpio -it --quiet |
+	grep -Fx 'usr/lib/kait2en/install-bt-firmware.sh' >/dev/null
+gzip -dc "$INITRAMFS_IMAGE" | cpio -it --quiet |
+	grep -Fx 'usr/lib/kait2en/kait2en-live-bluetooth' >/dev/null
+gzip -dc "$INITRAMFS_IMAGE" | cpio -it --quiet |
+	grep -Fx 'usr/lib/kait2en/kait2en-live-bluetooth.service' >/dev/null
+gzip -dc "$INITRAMFS_IMAGE" | cpio -it --quiet |
+	grep -Fx 'usr/lib/kait2en/kait2en-live-diagnostics' >/dev/null
 grep -Fq 'inst.updates=file:///run/kait2en/updates.img' "$LAYOUT/grub.cfg.in"
 grep -Fq '@ISO_VOLUME_LABEL@' "$LAYOUT/grub.cfg.in"
 ! grep -Fq 'inst.ks=' "$LAYOUT/grub.cfg.in"

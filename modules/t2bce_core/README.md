@@ -120,6 +120,7 @@ ExecStart=-/usr/bin/rmmod brcmfmac
 
 ExecStop=-/usr/bin/modprobe brcmfmac
 ExecStop=-/usr/bin/modprobe brcmfmac_wcc
+ExecStop=-/usr/bin/sleep 5
 ExecStop=-/usr/bin/modprobe hci_bcm4377
 
 

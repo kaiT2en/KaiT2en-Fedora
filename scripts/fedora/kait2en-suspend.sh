@@ -51,13 +51,24 @@ try_load() {
 }
 
 restore_unloaded_modules() {
-	local module
+	if ! try_load amdgpu; then
+		log "continuing after amdgpu could not be restored"
+	fi
 
-	for module in amdgpu hci_bcm4377 brcmfmac brcmfmac_wcc; do
-		if ! try_load "$module"; then
-			log "continuing after $module could not be restored"
-		fi
-	done
+	if ! try_load brcmfmac; then
+		log "continuing after brcmfmac could not be restored"
+	fi
+	if ! try_load brcmfmac_wcc; then
+		log "continuing after brcmfmac_wcc could not be restored"
+	fi
+
+	if [[ -e "$STATE_DIR/hci_bcm4377.unloaded" ]]; then
+		log "waiting 5 seconds before loading hci_bcm4377"
+		sleep 5
+	fi
+	if ! try_load hci_bcm4377; then
+		log "continuing after hci_bcm4377 could not be restored"
+	fi
 }
 
 current_model() {

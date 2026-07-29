@@ -60,6 +60,94 @@ class InstallWifiFirmwareTask(Task):
             )
 
 
+class InstallBluetoothFirmwareTask(Task):
+    """Install Apple's PCIe Bluetooth firmware on BCM4377 Macs.
+
+    Unlike Wi-Fi this task never fails the installation. Bluetooth is not needed
+    to finish installing, only BCM4377 Macs are affected at all, and the report
+    written into the target system says what happened.
+    """
+
+    SOURCE_DIR = "/run/kait2en/apple-firmware/bluetooth"
+
+    @property
+    def name(self):
+        return "Install T2 Mac Bluetooth firmware"
+
+    def run(self):
+        sysroot = conf.target.system_root
+        helper = os.path.join(INSTALLER_ROOT, "install-bt-firmware.sh")
+
+        if not self._has_bcm4377():
+            self._report(sysroot, "no BCM4377 Bluetooth controller in this Mac")
+            return
+        if not os.path.isdir(self.SOURCE_DIR):
+            self._report(sysroot, "no Apple Bluetooth firmware on the installer medium")
+            return
+        if not os.path.isfile(helper):
+            self._report(sysroot, "the KaiT2en Bluetooth firmware installer is missing")
+            return
+
+        status = util.execWithRedirect(
+            "bash",
+            [helper, "--source", self.SOURCE_DIR, "--root", sysroot],
+        )
+        installed = self._installed_files(sysroot)
+        if status != 0 or not installed:
+            self._report(
+                sysroot,
+                "the Bluetooth firmware was not installed, helper exit status "
+                + str(status),
+                installed,
+            )
+            return
+        self._report(sysroot, "Bluetooth firmware installed", installed)
+
+    @staticmethod
+    def _has_bcm4377():
+        """Look for the only PCIe Bluetooth function a T2 Mac can have."""
+        devices = "/sys/bus/pci/devices"
+        if not os.path.isdir(devices):
+            return False
+        for entry in os.listdir(devices):
+            try:
+                with open(os.path.join(devices, entry, "vendor")) as handle:
+                    vendor = handle.read().strip()
+                with open(os.path.join(devices, entry, "device")) as handle:
+                    identifier = handle.read().strip()
+            except OSError:
+                continue
+            if vendor == "0x14e4" and identifier == "0x5fa0":
+                return True
+        return False
+
+    @staticmethod
+    def _installed_files(sysroot):
+        firmware_root = os.path.join(sysroot, "usr", "lib", "firmware", "brcm")
+        if not os.path.isdir(firmware_root):
+            return []
+        return sorted(
+            entry
+            for entry in os.listdir(firmware_root)
+            if entry.startswith("brcmbt")
+        )
+
+    @staticmethod
+    def _report(sysroot, summary, installed=()):
+        """Leave the outcome behind, so it can be asked for after the install."""
+        log_dir = os.path.join(sysroot, "var", "log", "kait2en")
+        try:
+            os.makedirs(log_dir, mode=0o755, exist_ok=True)
+            with open(
+                os.path.join(log_dir, "bluetooth-firmware.log"), "w", encoding="utf-8"
+            ) as report:
+                report.write(summary + "\n")
+                for entry in installed:
+                    report.write("installed: /usr/lib/firmware/brcm/" + entry + "\n")
+        except OSError:
+            pass
+
+
 class InstallGuidedInstallerTask(Task):
     """Install the guided installer without an embedded Git checkout."""
 

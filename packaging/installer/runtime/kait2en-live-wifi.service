@@ -1,0 +1,13 @@
+[Unit]
+Description=Install Apple Wi-Fi firmware in the KaiT2en live session
+Documentation=https://github.com/kaiT2en/KaiT2en-Fedora
+ConditionPathIsDirectory=/run/kait2en/apple-firmware
+After=local-fs.target systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/run/kait2en/kait2en-live-wifi
+
+[Install]
+WantedBy=multi-user.target

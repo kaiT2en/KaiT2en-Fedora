@@ -22,6 +22,7 @@ __author__ = "Alexander Fischer <alexander@fischermail.me>"
 
 from collections import Counter
 import datetime as dt
+import hashlib
 import os
 import platform
 import re
@@ -1405,6 +1406,64 @@ def atomic_copy(source: Path, destination: Path, mode: int = 0o644) -> None:
     os.replace(temporary, destination)
 
 
+def ownership_marker(target: Path) -> Path:
+    return target.with_name(f".kait2en-{target.stem}.sha256")
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def read_ownership_marker(marker: Path) -> str:
+    try:
+        value = marker.read_text(encoding="ascii").strip().lower()
+    except (OSError, UnicodeError) as exc:
+        raise FixError(f"Cannot read ACPI ownership marker {marker}: {exc}") from exc
+    if not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise FixError(f"ACPI ownership marker is malformed: {marker}")
+    return value
+
+
+def verify_managed_or_absent(target: Path) -> None:
+    marker = ownership_marker(target)
+    target_exists = target.exists() or target.is_symlink()
+    marker_exists = marker.exists() or marker.is_symlink()
+
+    if not target_exists and not marker_exists:
+        return
+    if not target_exists:
+        raise FixError(
+            f"ACPI ownership marker exists without its table: {marker}. "
+            "Resolve this stale state manually before reinstalling."
+        )
+    if not marker_exists:
+        raise FixError(
+            f"Existing ACPI override is not owned by KAIT2EN: {target}. "
+            "It was left unchanged; move or remove it manually before reinstalling."
+        )
+    if target.is_symlink() or marker.is_symlink() or not target.is_file() or not marker.is_file():
+        raise FixError(
+            f"KAIT2EN refuses to manage a non-regular ACPI table or ownership marker: "
+            f"{target}, {marker}"
+        )
+
+    expected = read_ownership_marker(marker)
+    actual = sha256_file(target)
+    if actual != expected:
+        raise FixError(
+            f"KAIT2EN-owned ACPI override was modified after installation: {target}. "
+            "It was left unchanged; restore it or remove it and its ownership marker manually."
+        )
+
+
+def write_ownership_marker(target: Path) -> None:
+    write_atomic_text(ownership_marker(target), sha256_file(target) + "\n")
+
+
 def updated_dracut_conf(existing: str, enable: bool) -> str:
     retained: list[str] = []
     setting_re = re.compile(r"^\s*(acpi_override|acpi_table_dir)\s*=")
@@ -1462,21 +1521,42 @@ def check_cpussdt_duplicates(target_name: str) -> None:
         )
 
 
+def check_dsdt_duplicates(target: Path) -> None:
+    if not DEPLOY_DIR.is_dir():
+        return
+
+    duplicates: list[Path] = []
+    for path in DEPLOY_DIR.iterdir():
+        if path == target or not path.name.lower().endswith(".aml"):
+            continue
+        try:
+            if path.is_file():
+                with path.open("rb") as source:
+                    if source.read(4) == b"DSDT":
+                        duplicates.append(path)
+        except OSError as exc:
+            raise FixError(f"Cannot inspect existing ACPI override {path}: {exc}") from exc
+
+    if duplicates:
+        joined = ", ".join(str(path) for path in duplicates)
+        raise FixError(
+            "An existing differently named DSDT override could cause duplicate table loading. "
+            f"Move or remove it first: {joined}"
+        )
+
+
 # ---------------------------------------------------------------------------
 
 def deploy_tables(
     tables: Sequence[BuiltTable], timestamp: str, product_name: str
 ) -> Path:
-    backup_dir = BACKUP_ROOT / timestamp
-    backup_dir.mkdir(parents=True, exist_ok=False)
-    backup_dir.chmod(0o700)
-
-    DEPLOY_DIR.mkdir(parents=True, exist_ok=True)
-    DEPLOY_DIR.chmod(0o755)
-
     cpussdt = next((table for table in tables if table.kind == "CpuSSDT"), None)
     if cpussdt:
         check_cpussdt_duplicates(cpussdt.deploy_name)
+
+    dsdt = next((table for table in tables if table.kind == "DSDT"), None)
+    if dsdt:
+        check_dsdt_duplicates(DEPLOY_DIR / dsdt.deploy_name)
 
     targets = [DEPLOY_DIR / table.deploy_name for table in tables]
     desired_targets = set(targets)
@@ -1485,7 +1565,19 @@ def deploy_tables(
         DEPLOY_DIR / cpussdt_deploy_name(product_name),
     }
     obsolete_targets = sorted(managed_targets - desired_targets)
-    tracked = sorted(desired_targets | set(obsolete_targets)) + [DRACUT_CONF]
+    affected_targets = desired_targets | set(obsolete_targets)
+    for target in sorted(affected_targets):
+        verify_managed_or_absent(target)
+
+    backup_dir = BACKUP_ROOT / timestamp
+    backup_dir.mkdir(parents=True, exist_ok=False)
+    backup_dir.chmod(0o700)
+
+    DEPLOY_DIR.mkdir(parents=True, exist_ok=True)
+    DEPLOY_DIR.chmod(0o755)
+
+    markers = {ownership_marker(target) for target in affected_targets}
+    tracked = sorted(affected_targets | markers) + [DRACUT_CONF]
     existed_before = {path: path.exists() or path.is_symlink() for path in tracked}
     for path in tracked:
         backup_path(path, backup_dir)
@@ -1502,8 +1594,10 @@ def deploy_tables(
     try:
         for table, target in zip(tables, targets):
             atomic_copy(table.aml, target)
+            write_ownership_marker(target)
         for target in obsolete_targets:
             target.unlink(missing_ok=True)
+            ownership_marker(target).unlink(missing_ok=True)
 
         existing = (
             DRACUT_CONF.read_text(encoding="utf-8", errors="replace")

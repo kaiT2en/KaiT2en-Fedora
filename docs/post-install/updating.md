@@ -1,7 +1,5 @@
 # How to update
 
-Previous: [Hardware video decoding](hardware-video-decoding.md) | [Installation introduction](../introduction.md)
-
 KAIT2EN is meant to disappear. It's part of the concept. It serves the purpose
 of upstreaming code fixes. Every module and fix that gets upstreamed will disappear from
 the repo. Until we are left with a few T2 specific apps and other things that can't be upstreamed.
@@ -11,7 +9,7 @@ As long as this isn't the case, we need to update the Fedora kernel and our modu
 The question how to do that has kept us a bit busy. We could go COPR and offer .rpm.
 But the project is yet too small to fund itself.
 
-## Updating an automatically installed system
+## Updating KAIT2EN
 
 Open a terminal and run:
 
@@ -21,18 +19,6 @@ kait2en-install
 
 This updates the KAIT2EN Git checkout and runs the regular project installer.
 Review its output and reboot after it completes successfully.
-
-## Updating a manually installed system
-
-For now we presume you just git pull the latest commits to update modules, services and apps.
-We may switch to versioned releases in the near future, when the amount of everyday
-code changes has settled.
-It's recommended to run `install.sh` again on updates. The script will wipe obsolete code
-and install the latest versions automatically. So if you missed to update in a long time,
-be sure to run `install.sh`.
-If you always keep track with the latest changes on [Discord](https://discord.gg/AGfjRk4ydj) or [Matrix](https://matrix.to/#/%23kait2en:matrix.org) and you know what
-you're doing, you can use the single scripts. Like when you know that only kernel parameters
-changed, then you would only run `install-kernel-args.sh`.
 
 ## Updating Fedora
 
@@ -58,5 +44,3 @@ you don't have an external keyboard/mouse around. Like when you are travelling.
 But you should always be able to use GRUB to boot into an older kernel anyways.
 But be warned that when we mess up, you could loose VHCI devices or WiFi.
 And remember we are not paid. We will waste your time and we don't accept complaints.
-
-Previous: [Hardware video decoding](hardware-video-decoding.md) | [Installation introduction](../introduction.md)

@@ -1,6 +1,6 @@
 {
-    "node.description": "MacBook Pro T2 DSP Mic",
-    "media.name": "MacBook Pro T2 DSP Mic",
+    "node.description": "MacBook Air 9,1 DSP Mic",
+    "media.name": "MacBook Air 9,1 DSP Mic",
     "filter.graph": {
         "nodes": [
             {

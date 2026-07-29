@@ -13,6 +13,10 @@ package_installed() {
 	rpm -q "$1" >/dev/null 2>&1
 }
 
+package_available() {
+	[[ -n "$(dnf repoquery --quiet --cacheonly --assumeno --available "$1" 2>/dev/null)" ]]
+}
+
 # Prints the PCI vendor ID of every GPU exposed under /sys/class/drm, one per
 # line. card* covers each GPU once, unlike the renderD*/controlD* nodes.
 gpu_vendor_ids() {
@@ -41,7 +45,7 @@ install_rpmfusion() {
 	done
 }
 
-# Replaces the "from" VA-API/VDPAU driver package with the "to" one. Falls
+# Replaces the "from" VA-API driver package with the "to" one. Falls
 # back to a plain install when "from" is not installed, since dnf swap
 # requires the source package to be present.
 swap_or_install() {
@@ -49,6 +53,11 @@ swap_or_install() {
 
 	if package_installed "$to"; then
 		info "$to is already installed"
+		return 0
+	fi
+
+	if ! package_available "$to"; then
+		warn "$to is not available in the enabled repositories; skipping it"
 		return 0
 	fi
 
@@ -60,9 +69,8 @@ swap_or_install() {
 }
 
 install_amd_drivers() {
-	info "installing AMD VA-API/VDPAU drivers (mesa-*-freeworld)"
+	info "installing AMD VA-API driver (mesa-va-drivers-freeworld)"
 	swap_or_install mesa-va-drivers mesa-va-drivers-freeworld
-	swap_or_install mesa-vdpau-drivers mesa-vdpau-drivers-freeworld
 }
 
 install_intel_drivers() {

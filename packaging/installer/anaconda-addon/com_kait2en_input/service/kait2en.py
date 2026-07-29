@@ -5,6 +5,7 @@ from pyanaconda.modules.common.containers import TaskContainer
 from com_kait2en_input.service.constants import KAIT2EN
 from com_kait2en_input.service.installation import (
     ConfigureKernelArgumentsTask,
+    InstallBluetoothFirmwareTask,
     InstallGuidedInstallerTask,
     InstallTransitionDriversTask,
     InstallWifiFirmwareTask,
@@ -23,6 +24,7 @@ class KaiT2enService(KickstartService):
     def install_with_tasks(self):
         return [
             InstallWifiFirmwareTask(),
+            InstallBluetoothFirmwareTask(),
             InstallGuidedInstallerTask(),
             InstallTransitionDriversTask(),
         ]

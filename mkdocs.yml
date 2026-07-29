@@ -26,18 +26,11 @@ theme:
 
 nav:
   - Home: index.md
-  - Howtos:
-      - Introduction: howto/introduction.md
-      - Installation:
-          - Automatic installation: howto/installation/automatic/index.md
-          - Manual installation:
-              - Get Broadcom firmware: howto/installation/manual/00-get-broadcom-firmware.md
-              - Prepare macOS and Fedora USB: howto/installation/manual/01-prepare-macos-and-fedora-usb.md
-              - Install Broadcom firmware: howto/installation/manual/02-install-broadcom-firmware.md
-              - Install KAIT2EN modules and apps: howto/installation/manual/03-install-kait2en-modules-and-apps.md
-      - Migration:
-          - Revert T2 Linux Fedora: howto/migration/revert-t2linux-fedora.md
-      - Post-install:
-          - Configure GPUs: howto/postinstall/configuring-gpus.md
-          - Hardware video decoding: howto/postinstall/hardware-video-decoding.md
-          - Updating: howto/postinstall/updating.md
+  - Installation: installation.md
+  - Post-install:
+      - Audio DSP: post-install/audio-dsp.md
+      - Configure GPUs: post-install/configuring-gpus.md
+      - Hardware video decoding: post-install/hardware-video-decoding.md
+      - Updating: post-install/updating.md
+  - Reference:
+      - Installed files: reference/installed-files.md

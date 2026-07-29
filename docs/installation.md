@@ -1,14 +1,13 @@
 <p align="center">
-  <img src="../../../assets/kaiT2en-logo-tr.png" alt="KAIT2EN logo" width="220">
+  <img src="../assets/kaiT2en-logo-tr.png" alt="KAIT2EN logo" width="220">
 </p>
 
-# Automatic installation
+# Installation
 
-[Installation introduction](../../introduction.md)
-
-The automatic installer prepares one Fedora USB drive on macOS. Internal
-keyboard and trackpad work during Fedora installation. The matching Apple Wi-Fi
-firmware and the guided KAIT2EN setup are carried into the installed system.
+The installer prepares one Fedora USB drive on macOS. Internal
+keyboard, trackpad, and Wi-Fi work in the live system and during Fedora
+installation. The matching Apple Wi-Fi firmware and the guided KAIT2EN setup are
+carried into the installed system.
 
 The installer currently supports Fedora Workstation, Fedora KDE Desktop and
 Fedora COSMIC Spin.
@@ -20,6 +19,8 @@ You need:
 - a T2 Mac with macOS still installed
 - an empty USB drive
 - an internet connection in macOS
+
+Back up important data before changing partitions or boot settings.
 
 Keep macOS installed. It is the clean source for Apple firmware and can recover
 T2/bridgeOS hardware states.
@@ -58,11 +59,39 @@ Shut down or reboot the Mac. Hold `Option` during startup and select the orange
 `EFI Boot` entry for the Fedora USB drive. The KAIT2EN Fedora entry starts
 automatically.
 
-Keyboard and trackpad should work in the live system and installer. Wi-Fi is not
-expected to work in the live system; it becomes available after Fedora is
-installed.
+Keyboard, trackpad, and Wi-Fi should work in the live system and installer. The
+live system installs the Apple Wi-Fi firmware from the USB drive for itself, so
+you can connect to a network before or instead of installing Fedora. If no
+wireless network appears, open a terminal and run this command:
 
-Install Fedora normally. Use manual partitioning and select the Linux partition
+```bash
+sudo /run/kait2en/kait2en-live-wifi
+```
+
+Macs whose Bluetooth controller sits on PCIe (BCM4377) also get their Apple
+Bluetooth firmware in the live system, so a Bluetooth keyboard or mouse can be
+paired before installing. Retry that with:
+
+```bash
+sudo /run/kait2en/kait2en-live-bluetooth
+```
+
+Every other T2 Mac drives Bluetooth over UART and needs no firmware file, so
+this command reports that there is nothing to do.
+
+If that does not help, collect diagnostics for a bug report:
+
+```bash
+sudo /run/kait2en/kait2en-live-diagnostics --rerun
+```
+
+This retries the Wi-Fi and Bluetooth setup, records what happened, and writes
+one archive.
+It lands on a second USB drive when one is mounted, otherwise in `/tmp`; the
+path is printed at the end. The archive contains host names, MAC addresses, and
+the names of nearby wireless networks, so look at it before passing it on.
+
+Install Fedora normally. Use custom partitioning and select the Linux partition
 you created in macOS. Do not erase the whole disk or macOS. When reinstalling,
 format an existing Linux `/boot` partition so old kernels do not fill it.
 
@@ -87,5 +116,3 @@ kait2en-install
 
 The installer asks for administrator access when it is needed. It can also be
 started again at any later time to update KAIT2EN.
-
-[Installation introduction](../../introduction.md)

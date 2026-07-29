@@ -1,7 +1,5 @@
 # Hardware video decoding
 
-Previous: [How to configure GPUs](configuring-gpus.md) | Next: [How to update](updating.md)
-
 Fedora's GPU drivers do not expose hardware decoding for codecs such as H.264
 and H.265. This affects both AMD GPUs and Intel iGPUs. Browsers and media
 players can therefore fall back to CPU decoding even though the GPU contains a
@@ -140,5 +138,3 @@ mpv --no-config \
 
 Replace the render node and video path as required. A hardware-decoded stream
 reports `vaapi-copy` instead of `no`.
-
-Previous: [How to configure GPUs](configuring-gpus.md) | Next: [How to update](updating.md)

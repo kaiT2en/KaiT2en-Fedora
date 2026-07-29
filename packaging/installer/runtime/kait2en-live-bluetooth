@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+
+# Bring up Bluetooth inside the running Fedora live session on BCM4377 Macs. The
+# KaiT2en USB stick carries Apple's PCIe Bluetooth firmware for this Mac; wait
+# until hci_bcm4377 has told the log which file it wants, hand that to the same
+# helper the installer uses, and reload the driver so it picks the firmware up.
+
+set -Eeuo pipefail
+shopt -s nullglob
+
+source_dir=${KAIT2EN_LIVE_BT_SOURCE:-/run/kait2en/apple-firmware/bluetooth}
+helper=${KAIT2EN_BT_HELPER:-/run/kait2en/install-bt-firmware.sh}
+root=${KAIT2EN_LIVE_ROOT:-/}
+# hci_bcm4377 probes the PCIe device asynchronously, so the log is polled
+# instead of read once.
+request_timeout=${KAIT2EN_LIVE_BT_REQUEST_TIMEOUT:-15}
+link_timeout=${KAIT2EN_LIVE_BT_LINK_TIMEOUT:-20}
+pci_root=${KAIT2EN_PCI_ROOT:-/sys/bus/pci/devices}
+bluetooth_root=${KAIT2EN_LIVE_BT_ROOT:-/sys/class/bluetooth}
+driver=hci_bcm4377
+
+log() {
+	printf '[kait2en] %s\n' "$*"
+}
+
+trap 'log "live Bluetooth setup failed at line $LINENO"' ERR
+
+[[ $# -eq 0 ]] || {
+	printf 'Usage: %s\n' "${0##*/}" >&2
+	exit 2
+}
+
+# Only BCM4377 drives Bluetooth over PCIe. Every other T2 Mac uses the UART
+# controller, which needs none of this.
+bcm4377_slot() {
+	local device vendor identifier
+
+	for device in "$pci_root"/*; do
+		[[ -r "$device/vendor" && -r "$device/device" ]] || continue
+		vendor=$(<"$device/vendor")
+		identifier=$(<"$device/device")
+		[[ "$vendor" == 0x14e4 && "$identifier" == 0x5fa0 ]] || continue
+		printf '%s\n' "${device##*/}"
+		return 0
+	done
+	return 1
+}
+
+if ! slot=$(bcm4377_slot); then
+	log 'this Mac has no BCM4377 Bluetooth controller, nothing to do'
+	exit 0
+fi
+log "BCM4377 Bluetooth controller at $slot"
+
+kernel_log() {
+	journalctl -b -k --no-pager 2>/dev/null || :
+	dmesg 2>/dev/null || :
+}
+
+# The driver only stays bound once it has loaded and started the firmware.
+driver_bound() {
+	local bound
+	bound=$(readlink "$pci_root/$slot/driver" 2>/dev/null) || return 1
+	[[ "${bound##*/}" == "$driver" ]]
+}
+
+firmware_request() {
+	kernel_log |
+		sed -n "s|.*Unable to load firmware; tried '\(brcm/brcmbt[^']*\.bin\)'.*|\1|p" |
+		head -n 1
+}
+
+board_type_unknown() {
+	kernel_log | grep -Fq 'unable to determine board type'
+}
+
+wait_for_request() {
+	local deadline=$((SECONDS + request_timeout)) found
+	while :; do
+		driver_bound && return 1
+		found=$(firmware_request)
+		if [[ -n "$found" ]]; then
+			printf '%s\n' "$found"
+			return 0
+		fi
+		((SECONDS < deadline)) || return 1
+		sleep 0.25
+	done
+}
+
+reload_driver() {
+	modprobe -r "$driver" >/dev/null 2>&1 || :
+	modprobe "$driver" >/dev/null 2>&1 || :
+}
+
+modprobe "$driver" >/dev/null 2>&1 || :
+
+if driver_bound; then
+	log "$driver is already running, the firmware is in place"
+	exit 0
+fi
+
+if ! request=$(wait_for_request); then
+	log "$driver has not asked for firmware yet, reloading it"
+	reload_driver
+	request=$(wait_for_request) || request=
+fi
+
+if board_type_unknown; then
+	log "$driver does not know this Mac and stops before it asks for firmware"
+	log "model: $(cat /sys/class/dmi/id/product_name 2>/dev/null || printf unknown)"
+	log 'installing firmware cannot help here, please report this model'
+	exit 0
+fi
+
+if [[ -z "$request" ]]; then
+	if driver_bound; then
+		log "$driver came up on its own, nothing to install"
+	else
+		log "$driver asked for no firmware, leaving the live session unchanged"
+	fi
+	exit 0
+fi
+log "$driver wants $request"
+
+if [[ ! -d "$source_dir" ]]; then
+	log "no Apple Bluetooth firmware on this boot medium: $source_dir"
+	exit 0
+fi
+if [[ ! -f "$helper" ]]; then
+	log "the KaiT2en Bluetooth firmware helper is missing: $helper"
+	exit 1
+fi
+
+if ! bash "$helper" --source "$source_dir" --root "$root"; then
+	log 'the Bluetooth firmware could not be installed, see the error above'
+	exit 0
+fi
+
+log "reloading $driver with the installed firmware"
+reload_driver
+rfkill unblock bluetooth >/dev/null 2>&1 || :
+
+controller=
+deadline=$((SECONDS + link_timeout))
+while :; do
+	for candidate in "$bluetooth_root"/hci*; do
+		controller=${candidate##*/}
+		break
+	done
+	[[ -z "$controller" ]] || break
+	((SECONDS < deadline)) || break
+	sleep 0.5
+done
+
+if [[ -n "$controller" ]]; then
+	if command -v systemctl >/dev/null 2>&1 &&
+		! systemctl is-active --quiet bluetooth; then
+		log 'starting bluetooth.service for the new controller'
+		systemctl start bluetooth || :
+	fi
+	log "Bluetooth is ready in the live session: $controller"
+else
+	log 'no Bluetooth controller appeared'
+	log "run 'sudo $0' again to retry"
+fi

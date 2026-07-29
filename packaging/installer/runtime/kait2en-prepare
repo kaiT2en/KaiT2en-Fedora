@@ -231,7 +231,10 @@ done
 
 depmod -a "$target_kernel"
 initramfs="$boot_root/initramfs-$target_kernel.img"
-dracut --force --add-drivers "${input_modules[*]}" "$initramfs" "$target_kernel"
+# The modules are removed from the disk below, so the initramfs is their only
+# copy on the next boot. Their modalias only appears around the switch root, so
+# force the load before udev instead of racing it.
+dracut --force --force-drivers "${input_modules[*]}" "$initramfs" "$target_kernel"
 listing=$(lsinitrd "$initramfs")
 for module in "${input_modules[@]}"; do
 	grep -Eq "/${module}\.ko(\.[a-z0-9]+)?$" <<<"$listing" ||

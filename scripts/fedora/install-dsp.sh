@@ -26,11 +26,15 @@ DSP_PACKAGES=(
 
 model_dir_for_product() {
 	case "$1" in
+		MacBookAir8,1) printf '%s\n' "8_1" ;;
+		MacBookAir8,2) printf '%s\n' "8_2" ;;
+		MacBookAir9,1) printf '%s\n' "9_1" ;;
 		MacBookPro15,1) printf '%s\n' "15_1" ;;
+		MacBookPro15,4) printf '%s\n' "15_4" ;;
 		MacBookPro16,1) printf '%s\n' "16_1" ;;
 		MacBookPro16,2) printf '%s\n' "16_2" ;;
+		MacBookPro16,3) printf '%s\n' "16_3" ;;
 		MacBookPro16,4) printf '%s\n' "16_4" ;;
-		MacBookAir9,1) printf '%s\n' "9_1" ;;
 		*) return 1 ;;
 	esac
 }

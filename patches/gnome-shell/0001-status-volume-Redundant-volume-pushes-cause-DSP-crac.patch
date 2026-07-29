@@ -1,9 +1,7 @@
-From d45966174fcfe5bf5ab92889be3a27ad2f46fff9 Mon Sep 17 00:00:00 2001
+From 6c3eb655b4cdbc17d3692cf211ae8cfb55fdfea6 Mon Sep 17 00:00:00 2001
 From: Andre Eikmeyer <dev@deq.rocks>
 Date: Mon, 27 Jul 2026 13:57:25 +0200
 Subject: [PATCH] status/volume: Redundant volume pushes cause DSP crackling
-To: Florian Müllner <fmuellner@gnome.org>
-Cc: Georges Basile Stavracas Neto <gbsneto@gnome.org>
 
 Dragging the Quick Settings volume slider generates a dense sequence of
 value notifications. After GVC rounds a requested value and scales the
@@ -25,20 +23,21 @@ GNOME Settings does not show the problem because its volume slider calls
 gvc_mixer_stream_set_volume() directly and only pushes the volume when the
 effective channel map changed.
 
-The Quick Settings slider now follows the same behavior while its
-notification handling continues to compare the resulting stream volume.
+The Quick Settings slider now follows the same behavior and reuses the
+returned change state for notification handling.
 ---
- js/ui/status/volume.js | 10 ++++++----
- 1 file changed, 6 insertions(+), 4 deletions(-)
+ js/ui/status/volume.js | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/js/ui/status/volume.js b/js/ui/status/volume.js
-index 81bab5ac7..b5f8e3515 100644
+index 81bab5ac7..f2583eb21 100644
 --- a/js/ui/status/volume.js
 +++ b/js/ui/status/volume.js
-@@ -181,18 +181,20 @@ const StreamSlider = GObject.registerClass({
+@@ -180,19 +180,19 @@ const StreamSlider = GObject.registerClass({
+         const value = this.slider.value;
          const volume = value * this._control.get_vol_max_norm();
          const prevMuted = this._stream.is_muted;
-         const prevVolume = this._stream.volume;
+-        const prevVolume = this._stream.volume;
 +        let volumeChanged;
          if (volume < 1) {
 -            this._stream.volume = 0;
@@ -56,7 +55,9 @@ index 81bab5ac7..b5f8e3515 100644
 +            this._stream.push_volume();
  
 -        const volumeChanged = this._stream.volume !== prevVolume;
-+        volumeChanged = this._stream.volume !== prevVolume;
          if (volumeChanged && !this._notifyVolumeChangeId && !this._inDrag) {
              this._notifyVolumeChangeId = GLib.timeout_add_once(GLib.PRIORITY_DEFAULT, 30, () => {
                  this._notifyVolumeChange();
+-- 
+2.55.0
+
