@@ -6,9 +6,10 @@ import { EMPTY } from './types';
 //
 // The KWin script hooks workspace.windowActivated, tracks captionChanged on
 // the active window, and pushes every focus/title change to this backend
-// over D-Bus (method calls on org.touchbar.DynamicShortcuts).  It also
-// emits the initial state at load time so react-drm has a focused window
-// from the start.
+// over D-Bus (method calls on org.touchbar.DynamicShortcuts).  On load,
+// the script polls NameHasOwner (30x at 1s intervals) via
+// org.freedesktop.DBus and emits the current active window once the
+// org.touchbar.DynamicShortcuts name appears.
 //
 // No journalctl, no dynamic script injection — the user (or the KaiT2en
 // installer) enables the script once in System Settings → Window

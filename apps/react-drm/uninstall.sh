@@ -84,10 +84,26 @@ remove_udev_rules() {
   sudo udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput
 }
 
+# Remove the KWin script and disable it in kwinrc so it doesn't
+# re-appear after the next login.
+remove_kwin_script() {
+  command -v kpackagetool6 >/dev/null 2>&1 || return 0
+  if kpackagetool6 --type=KWin/Script --list 2>&1 |
+     grep -q touchbar_dynamicshortcuts; then
+    info "disabling TouchBar Dynamic Shortcuts KWin script"
+    kwriteconfig6 --file kwinrc --group Plugins \
+      --key touchbar_dynamicshortcutsEnabled false
+    info "removing TouchBar Dynamic Shortcuts KWin script"
+    kpackagetool6 --type=KWin/Script -r touchbar_dynamicshortcuts ||
+      fail "failed to remove KWin script"
+  fi
+}
+
 main() {
   confirm_uninstall
   remove_service
   remove_udev_rules
+  remove_kwin_script
   info "Uninstallation completed successfully"
 }
 

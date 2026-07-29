@@ -183,14 +183,18 @@ install_react_drm() {
 				fail "react-drm KWin script file is missing: $package"
 		done
 		info "installing TouchBar Dynamic Shortcuts KWin script for react-drm"
-		if run_as_target kpackagetool6 --type=KWin/Script --list 2>/dev/null |
+		if run_as_target kpackagetool6 --type=KWin/Script --list 2>&1 |
 			grep -q touchbar_dynamicshortcuts; then
-			run_as_target kpackagetool6 --type=KWin/Script -r touchbar_dynamicshortcuts
+			info "removing previous KWin script"
+			run_as_target kpackagetool6 --type=KWin/Script -r touchbar_dynamicshortcuts ||
+				fail "failed to remove previous KWin script"
+		else
+			info "no previous KWin script to remove"
 		fi
-		run_as_target kpackagetool6 --type=KWin/Script -i "$kwin_script_src"
+		run_as_target kpackagetool6 --type=KWin/Script -i "$kwin_script_src" ||
+			fail "failed to install KWin script"
 		run_as_target kwriteconfig6 --file kwinrc --group Plugins \
 			--key touchbar_dynamicshortcutsEnabled true
-		run_as_target qdbus org.kde.KWin /KWin reconfigure
 	fi
 
 	info "installing react-drm Fedora dependencies"
@@ -283,6 +287,11 @@ install_react_drm() {
 	sleep 2
 	run_as_target systemctl --user is-active --quiet react-drm.service ||
 		fail "react-drm failed to remain active; inspect it with 'journalctl --user -u react-drm.service -b'"
+
+	if [[ "$desktop" == *kde* || "$desktop" == *plasma* ]]; then
+		run_as_target qdbus org.kde.KWin /KWin reconfigure ||
+			warn "reconfigure failed — KWin may not be reachable; kwinrc change will apply on next login"
+	fi
 }
 
 if [[ "$install_mode" == all ]]; then
