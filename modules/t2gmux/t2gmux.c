@@ -22,6 +22,7 @@
 #include <linux/pci.h>
 #include <linux/vga_switcheroo.h>
 #include <linux/debugfs.h>
+#include <linux/dmi.h>
 #include <acpi/video.h>
 #include <asm/io.h>
 
@@ -84,6 +85,11 @@ struct apple_gmux_data {
 };
 
 static struct apple_gmux_data *apple_gmux_data;
+
+static bool gmux_needs_t2_dgpu_power_sequence(void)
+{
+	return dmi_match(DMI_PRODUCT_NAME, "MacBookPro15,1");
+}
 
 struct apple_gmux_config {
 	u8 (*read8)(struct apple_gmux_data *gmux_data, int port);
@@ -517,7 +523,8 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 
 	if (state == VGA_SWITCHEROO_ON) {
 		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO &&
-		    gmux_data->dgpu_pdev) {
+		    gmux_data->dgpu_pdev &&
+		    gmux_needs_t2_dgpu_power_sequence()) {
 			acpi_handle dgpu_handle =
 				ACPI_HANDLE(&gmux_data->dgpu_pdev->dev);
 			void __iomem *bar;
@@ -556,7 +563,8 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 		}
 		pr_debug("Discrete card powered up\n");
 	} else {
-		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO) {
+		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO &&
+		    gmux_needs_t2_dgpu_power_sequence()) {
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
 			msleep(10);
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
