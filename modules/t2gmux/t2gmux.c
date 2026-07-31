@@ -95,7 +95,6 @@ static int gmux_call_dgpu_pwrd(struct apple_gmux_data *gmux_data, bool power_dow
 {
 	union acpi_object arg = {
 		.type = ACPI_TYPE_INTEGER,
-		.integer.value = power_down,
 	};
 	struct acpi_object_list args = {
 		.count = 1,
@@ -112,6 +111,7 @@ static int gmux_call_dgpu_pwrd(struct apple_gmux_data *gmux_data, bool power_dow
 	if (!handle)
 		return -ENODEV;
 
+	arg.integer.value = power_down;
 	pr_info("calling DGPU.PWRD(%u)\n", power_down);
 	status = acpi_evaluate_integer(handle, "PWRD", &args, &result);
 	if (ACPI_FAILURE(status)) {
@@ -573,6 +573,8 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 2);
 			msleep(100);
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
+			if (gmux_uses_acpi_dgpu_power_sequence())
+				pr_info("DGPU power rails enabled\n");
 
 			if (gmux_uses_acpi_dgpu_power_sequence()) {
 				ret = gmux_call_dgpu_pwrd(gmux_data, false);
@@ -621,6 +623,8 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
 			msleep(10);
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
+			if (gmux_uses_acpi_dgpu_power_sequence())
+				pr_info("DGPU power rails disabled\n");
 		} else {
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
@@ -1146,6 +1150,6 @@ module_pnp_driver(gmux_pnp_driver);
 MODULE_AUTHOR("Seth Forshee <seth.forshee@canonical.com>");
 MODULE_AUTHOR("kait2en");
 MODULE_DESCRIPTION("Kait2en T2 GMUX driver");
-MODULE_VERSION("0.2");
+MODULE_VERSION("0.3");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pnp, gmux_device_ids);
