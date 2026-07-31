@@ -112,6 +112,7 @@ static int gmux_call_dgpu_pwrd(struct apple_gmux_data *gmux_data, bool power_dow
 	if (!handle)
 		return -ENODEV;
 
+	pr_info("calling DGPU.PWRD(%u)\n", power_down);
 	status = acpi_evaluate_integer(handle, "PWRD", &args, &result);
 	if (ACPI_FAILURE(status)) {
 		pr_err("Failed to evaluate DGPU.PWRD(%u): %s\n", power_down,
@@ -123,6 +124,7 @@ static int gmux_call_dgpu_pwrd(struct apple_gmux_data *gmux_data, bool power_dow
 		return -EIO;
 	}
 
+	pr_info("DGPU.PWRD(%u) completed successfully\n", power_down);
 	return 0;
 }
 
@@ -1144,5 +1146,6 @@ module_pnp_driver(gmux_pnp_driver);
 MODULE_AUTHOR("Seth Forshee <seth.forshee@canonical.com>");
 MODULE_AUTHOR("kait2en");
 MODULE_DESCRIPTION("Kait2en T2 GMUX driver");
+MODULE_VERSION("0.2");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pnp, gmux_device_ids);
