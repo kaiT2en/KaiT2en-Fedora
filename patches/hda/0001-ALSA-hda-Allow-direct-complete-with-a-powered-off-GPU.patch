@@ -1,28 +1,36 @@
-From cacef1f12b5d1f298a77b5de4626893e8a71ffd7 Mon Sep 17 00:00:00 2001
+From c5040e05d4d2c33a9a801dc0dbbee495a9e8b7e7 Mon Sep 17 00:00:00 2001
 From: Andre Eikmeyer <dev@deq.rocks>
-Date: Sat, 1 Aug 2026 13:01:48 +0200
+Date: Sat, 1 Aug 2026 16:27:42 +0200
 Subject: [PATCH] ALSA: hda: Allow direct complete with a powered-off GPU
 
 Hello everyone,
 
-The HDA controller normally needs different WAKEEN settings for runtime and
-system suspend, so azx_prepare() prevents direct complete. For a
-vga_switcheroo audio client whose bound GPU is already runtime suspended and
-switched off, the HDA controller is physically inaccessible and cannot signal
-wake events.
+The HDA controller normally needs different WAKEEN settings for runtime
+and system suspend, so azx_prepare() prevents direct complete. For a
+vga_switcheroo audio client whose bound GPU is already runtime suspended
+and switched off, the HDA controller is physically inaccessible and
+cannot signal wake events.
 
-Resuming the HDA function during system suspend also acquires its runtime-PM
-supplier. This powers the discrete GPU back on only to suspend it again and can
-expose failures while restoring an otherwise unused GPU.
+Resuming the HDA function during system suspend also acquires its
+runtime-PM supplier. This powers the discrete GPU back on only to suspend
+it again and can expose failures while restoring an otherwise unused GPU.
 
-We allow direct complete when the bound VGA device is both runtime suspended
-and reported off by vga_switcheroo. Active GPUs and HDA controllers without a
-switcheroo binding retain the existing WAKEEN transition.
+We allow direct complete when the bound VGA device is both runtime
+suspended and reported off by vga_switcheroo. Active GPUs and HDA
+controllers without a switcheroo binding retain the existing WAKEEN
+transition.
 
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+This patch has no build-time dependency. It complements the AMDGPU GMUX
+runtime-PM change by avoiding a supplier resume during system sleep.
+
+---
+ sound/hda/controllers/intel.c | 29 +++++++++++++++++++++++++++--
+ 1 file changed, 27 insertions(+), 2 deletions(-)
 
 diff --git a/sound/hda/controllers/intel.c b/sound/hda/controllers/intel.c
-index 4b03c64..47cc695 100644
+index 4b03c64e72ab..47cc695864a1 100644
 --- a/sound/hda/controllers/intel.c
 +++ b/sound/hda/controllers/intel.c
 @@ -334,6 +334,7 @@ enum {
