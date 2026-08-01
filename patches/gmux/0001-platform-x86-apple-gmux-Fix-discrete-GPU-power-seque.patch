@@ -1,0 +1,165 @@
+From c861fe1062862501a87d2cc25fce906bc0d5e0ab Mon Sep 17 00:00:00 2001
+From: Atharva Tiwari <atharvatiwarilinuxdev@gmail.com>
+Date: Tue, 7 Apr 2026 03:26:22 +0530
+Subject: [PATCH] platform/x86: apple-gmux: Fix discrete GPU power sequencing
+ on T2 Macs
+
+Hello everyone,
+
+Apple T2 MacBooks use the MMIO GMUX together with ACPI link-control
+methods to power the discrete GPU. The legacy GMUX register sequence
+alone does not restore PCI configuration access after the GPU has been
+powered off, preventing runtime PM from bringing the device back.
+
+For the MMIO GMUX, use the power-state sequence observed on these
+machines, invoke PWG1 before waiting for PCI configuration space to
+become accessible, and invoke PWG3 afterwards to complete the link
+transition. Keep the existing sequence unchanged for older GMUX types.
+
+We also check the ACPI method results and fail the transition when the
+firmware rejects it. This avoids continuing with a partially restored
+PCIe link.
+
+Co-developed-by: Andre Eikmeyer <dev@deq.rocks>
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+Signed-off-by: Atharva Tiwari <atharvatiwarilinuxdev@gmail.com>
+---
+ drivers/platform/x86/apple-gmux.c | 91 ++++++++++++++++++++++++++++---
+ 1 file changed, 83 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/platform/x86/apple-gmux.c b/drivers/platform/x86/apple-gmux.c
+index 9c728ac4e045..6d2b3acf5127 100644
+--- a/drivers/platform/x86/apple-gmux.c
++++ b/drivers/platform/x86/apple-gmux.c
+@@ -78,10 +78,44 @@ struct apple_gmux_data {
+ 	/* debugfs data */
+ 	u8 selected_port;
+ 	struct dentry *debug_dentry;
++
++	struct pci_dev *dgpu_pdev;
++	enum apple_gmux_type type;
+ };
+ 
+ static struct apple_gmux_data *apple_gmux_data;
+ 
++static int gmux_call_dgpu_link_method(struct apple_gmux_data *gmux_data,
++				      const char *method)
++{
++	acpi_handle handle;
++	unsigned long long result;
++	acpi_status status;
++
++	if (!gmux_data->dgpu_pdev)
++		return -ENODEV;
++
++	handle = ACPI_HANDLE(&gmux_data->dgpu_pdev->dev);
++	if (!handle)
++		return -ENODEV;
++
++	status = acpi_evaluate_integer(handle, (acpi_string)method, NULL,
++				       &result);
++	if (ACPI_FAILURE(status)) {
++		dev_err(&gmux_data->dgpu_pdev->dev,
++			"failed to evaluate %s: %s\n", method,
++			acpi_format_exception(status));
++		return -EIO;
++	}
++	if (result) {
++		dev_err(&gmux_data->dgpu_pdev->dev, "%s failed: %llu\n",
++			method, result);
++		return -EIO;
++	}
++
++	return 0;
++}
++
+ struct apple_gmux_config {
+ 	u8 (*read8)(struct apple_gmux_data *gmux_data, int port);
+ 	void (*write8)(struct apple_gmux_data *gmux_data, int port, u8 val);
+@@ -510,15 +544,53 @@ static int gmux_switch_ddc(enum vga_switcheroo_client_id id)
+ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
+ 				   enum vga_switcheroo_state state)
+ {
++	int ret;
++
+ 	reinit_completion(&gmux_data->powerchange_done);
+ 
+ 	if (state == VGA_SWITCHEROO_ON) {
+-		gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
+-		gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
++		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO &&
++		    gmux_data->dgpu_pdev) {
++			u16 val;
++			u16 ms;
++
++			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 2);
++			msleep(100);
++			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
++
++			ret = gmux_call_dgpu_link_method(gmux_data, "PWG1");
++			if (ret)
++				return ret;
++
++			for (ms = 0; ms < 1000; ms++) {
++				pci_read_config_word(gmux_data->dgpu_pdev,
++						     PCI_VENDOR_ID, &val);
++				if (val != 0xffff)
++					break;
++				usleep_range(1000, 2000);
++			}
++			if (val == 0xffff) {
++				pr_err("Timed out waiting for DGPU to power on\n");
++				return -ETIMEDOUT;
++			}
++
++			ret = gmux_call_dgpu_link_method(gmux_data, "PWG3");
++			if (ret)
++				return ret;
++		} else {
++			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
++			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
++		}
+ 		pr_debug("Discrete card powered up\n");
+ 	} else {
+-		gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
+-		gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
++		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO) {
++			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
++			usleep_range(10000, 11000);
++			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
++		} else {
++			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
++			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
++		}
+ 		pr_debug("Discrete card powered down\n");
+ 	}
+ 
+@@ -549,11 +621,13 @@ static enum vga_switcheroo_client_id gmux_get_client_id(struct pci_dev *pdev)
+ 	 */
+ 	if (pdev->vendor == PCI_VENDOR_ID_INTEL)
+ 		return VGA_SWITCHEROO_IGD;
+-	else if (pdev->vendor == PCI_VENDOR_ID_NVIDIA &&
+-		 pdev->device == 0x0863)
++	if (pdev->vendor == PCI_VENDOR_ID_NVIDIA && pdev->device == 0x0863)
+ 		return VGA_SWITCHEROO_IGD;
+-	else
+-		return VGA_SWITCHEROO_DIS;
++
++	if (!apple_gmux_data->dgpu_pdev)
++		apple_gmux_data->dgpu_pdev = pdev;
++
++	return VGA_SWITCHEROO_DIS;
+ }
+ 
+ static const struct vga_switcheroo_handler gmux_handler_no_ddc = {
+@@ -804,6 +878,7 @@ static int gmux_probe(struct pnp_dev *pnp, const struct pnp_device_id *id)
+ 		return -ENOMEM;
+ 	pnp_set_drvdata(pnp, gmux_data);
+ 
++	gmux_data->type = type;
+ 	switch (type) {
+ 	case APPLE_GMUX_TYPE_MMIO:
+ 		gmux_data->config = &apple_gmux_mmio;
+-- 
+2.55.0
+
