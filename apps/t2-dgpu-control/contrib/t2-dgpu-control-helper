@@ -38,10 +38,11 @@ is_supported_macbook() {
 
 write_boot_gpu() {
 	local gpu=$1
-	[[ -e "$EFI_VAR" ]] || fail "the gpu-power-prefs EFI variable is missing"
 	[[ -w /sys/firmware/efi/efivars ]] || fail "EFI variables are not writable"
 
-	chattr -i "$EFI_VAR"
+	if [[ -e "$EFI_VAR" ]]; then
+		chattr -i "$EFI_VAR"
+	fi
 	trap 'chattr +i "$EFI_VAR" 2>/dev/null || true' EXIT
 	case "$gpu" in
 		integrated) printf '\x07\x00\x00\x00\x01\x00\x00\x00' >"$EFI_VAR" ;;
