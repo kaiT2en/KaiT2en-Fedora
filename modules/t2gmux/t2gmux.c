@@ -22,7 +22,6 @@
 #include <linux/pci.h>
 #include <linux/vga_switcheroo.h>
 #include <linux/debugfs.h>
-#include <linux/dmi.h>
 #include <acpi/video.h>
 #include <asm/io.h>
 
@@ -86,20 +85,9 @@ struct apple_gmux_data {
 
 static struct apple_gmux_data *apple_gmux_data;
 
-static bool gmux_uses_acpi_dgpu_power_sequence(void)
+static int gmux_call_dgpu_link_method(struct apple_gmux_data *gmux_data,
+				      const char *method)
 {
-	return dmi_match(DMI_PRODUCT_NAME, "MacBookPro16,1");
-}
-
-static int gmux_call_dgpu_pwrd(struct apple_gmux_data *gmux_data, bool power_down)
-{
-	union acpi_object arg = {
-		.type = ACPI_TYPE_INTEGER,
-	};
-	struct acpi_object_list args = {
-		.count = 1,
-		.pointer = &arg,
-	};
 	acpi_handle handle;
 	unsigned long long result;
 	acpi_status status;
@@ -111,20 +99,20 @@ static int gmux_call_dgpu_pwrd(struct apple_gmux_data *gmux_data, bool power_dow
 	if (!handle)
 		return -ENODEV;
 
-	arg.integer.value = power_down;
-	pr_info("calling DGPU.PWRD(%u)\n", power_down);
-	status = acpi_evaluate_integer(handle, "PWRD", &args, &result);
+	pr_info("DGPU power-on: requesting %s link transition\n", method);
+	status = acpi_evaluate_integer(handle, (acpi_string)method, NULL,
+				       &result);
 	if (ACPI_FAILURE(status)) {
-		pr_err("Failed to evaluate DGPU.PWRD(%u): %s\n", power_down,
+		pr_err("Failed to evaluate DGPU.%s: %s\n", method,
 		       acpi_format_exception(status));
 		return -EIO;
 	}
 	if (result) {
-		pr_err("DGPU.PWRD(%u) failed: %llu\n", power_down, result);
+		pr_err("DGPU.%s failed: %llu\n", method, result);
 		return -EIO;
 	}
 
-	pr_info("DGPU.PWRD(%u) completed successfully\n", power_down);
+	pr_info("DGPU power-on: %s completed successfully\n", method);
 	return 0;
 }
 
@@ -556,34 +544,27 @@ static int gmux_switch_ddc(enum vga_switcheroo_client_id id)
 static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				   enum vga_switcheroo_state state)
 {
-	acpi_handle dgpu_handle;
 	int ret;
 
 	reinit_completion(&gmux_data->powerchange_done);
-	dgpu_handle = gmux_data->dgpu_pdev ?
-		ACPI_HANDLE(&gmux_data->dgpu_pdev->dev) : NULL;
 
 	if (state == VGA_SWITCHEROO_ON) {
 		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO &&
 		    gmux_data->dgpu_pdev) {
-			void __iomem *bar;
+			unsigned long start;
 			u16 val;
 			u16 ms;
 
+			pr_info("DGPU power-on: writing GMUX states 2 -> 3\n");
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 2);
 			msleep(100);
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
-			if (gmux_uses_acpi_dgpu_power_sequence())
-				pr_info("DGPU power rails enabled\n");
 
-			if (gmux_uses_acpi_dgpu_power_sequence()) {
-				ret = gmux_call_dgpu_pwrd(gmux_data, false);
-				if (ret)
-					return ret;
-			} else {
-				acpi_evaluate_object(dgpu_handle, "PWG1", NULL, NULL);
-			}
+			ret = gmux_call_dgpu_link_method(gmux_data, "PWG1");
+			if (ret)
+				return ret;
 
+			start = jiffies;
 			for (ms = 0; ms < 1000; ms++) {
 				pci_read_config_word(gmux_data->dgpu_pdev,
 						     PCI_VENDOR_ID, &val);
@@ -595,18 +576,13 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				pr_err("Timed out waiting for DGPU to power on\n");
 				return -ETIMEDOUT;
 			}
+			pr_info("DGPU power-on: PCI config accessible after %u ms\n",
+				jiffies_to_msecs(jiffies - start));
 
-			if (!gmux_uses_acpi_dgpu_power_sequence()) {
-				bar = pci_iomap(gmux_data->dgpu_pdev, 0, 0);
-				if (!bar)
-					return -ENOMEM;
+			ret = gmux_call_dgpu_link_method(gmux_data, "PWG3");
+			if (ret)
+				return ret;
 
-				iowrite32(ioread32(bar + 0x8c340) & 0x3fffffff,
-					  bar + 0x8c340);
-				pci_iounmap(gmux_data->dgpu_pdev, bar);
-
-				acpi_evaluate_object(dgpu_handle, "PWG3", NULL, NULL);
-			}
 		} else {
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
@@ -614,17 +590,10 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 		pr_debug("Discrete card powered up\n");
 	} else {
 		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO) {
-			if (gmux_uses_acpi_dgpu_power_sequence()) {
-				ret = gmux_call_dgpu_pwrd(gmux_data, true);
-				if (ret)
-					return ret;
-			}
-
+			pr_info("DGPU power-off: writing GMUX states 1 -> 0\n");
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
 			msleep(10);
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
-			if (gmux_uses_acpi_dgpu_power_sequence())
-				pr_info("DGPU power rails disabled\n");
 		} else {
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
@@ -1150,6 +1119,6 @@ module_pnp_driver(gmux_pnp_driver);
 MODULE_AUTHOR("Seth Forshee <seth.forshee@canonical.com>");
 MODULE_AUTHOR("kait2en");
 MODULE_DESCRIPTION("Kait2en T2 GMUX driver");
-MODULE_VERSION("0.3");
+MODULE_VERSION("0.8");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pnp, gmux_device_ids);
