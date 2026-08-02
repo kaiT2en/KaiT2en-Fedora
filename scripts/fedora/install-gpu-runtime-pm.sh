@@ -76,11 +76,12 @@ dnf install -y \
 	curl \
 	elfutils-libelf-devel \
 	gcc \
+	git-core \
 	make \
 	patch \
-	rpm-build \
+	tar \
 	xz
-require_command cpio curl install make patch rpm2cpio rpmbuild sed xz
+require_command cpio curl git install make nproc patch rpm2cpio sed tar xz
 
 [[ -d "/usr/src/kernels/$KVER" ]] || fail "kernel-devel is unavailable for $KVER"
 
@@ -97,9 +98,9 @@ source_url="https://kojipkgs.fedoraproject.org/packages/$source_name/$source_ver
 
 workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
-topdir="$workdir/rpmbuild"
+source_dir="$workdir/sources"
 download_dir="$workdir/download"
-mkdir -p "$topdir"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} "$download_dir"
+mkdir -p "$source_dir" "$download_dir" "$workdir/kernel"
 
 info "downloading $source_rpm"
 downloaded_srpm="$download_dir/$source_rpm"
@@ -108,23 +109,23 @@ curl --fail --location --output "$downloaded_srpm" "$source_url" ||
 
 info "extracting Fedora kernel sources"
 (
-	cd "$topdir"
+	cd "$source_dir"
 	rpm2cpio "$downloaded_srpm" | cpio -idm --quiet
 )
 
-spec=$(find "$topdir" -maxdepth 1 -type f -name 'kernel*.spec' -print -quit)
-[[ -n "$spec" ]] || fail "kernel spec file is missing from $source_rpm"
-mv "$topdir"/*.spec "$topdir/SPECS/"
-find "$topdir" -maxdepth 1 -type f -exec mv -t "$topdir/SOURCES" -- {} +
-spec="$topdir/SPECS/$(basename "$spec")"
+kernel_tarball=$(find "$source_dir" -maxdepth 1 -type f -name 'linux-*.tar.xz' -print -quit)
+redhat_patch=$(find "$source_dir" -maxdepth 1 -type f -name 'patch-*-redhat.patch' -print -quit)
+[[ -n "$kernel_tarball" ]] || fail "upstream kernel tarball is missing from $source_rpm"
+[[ -n "$redhat_patch" ]] || fail "Fedora kernel patch is missing from $source_rpm"
 
-info "preparing the Fedora kernel tree for $KVER"
-rpmbuild -bp --nodeps --define "_topdir $topdir" --target "$(uname -m)" "$spec"
-
-amdgpu_source=$(find "$topdir/BUILD" -type f \
+info "preparing the Fedora kernel sources for $KVER"
+tar -xf "$kernel_tarball" -C "$workdir/kernel"
+amdgpu_source=$(find "$workdir/kernel" -type f \
 	-path '*/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c' -print -quit)
-[[ -n "$amdgpu_source" ]] || fail "prepared Fedora kernel tree was not found"
+[[ -n "$amdgpu_source" ]] || fail "kernel source tree was not found"
 kernel_tree=${amdgpu_source%/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c}
+git -C "$kernel_tree" apply "$redhat_patch" ||
+	fail "Fedora kernel patch does not apply to its upstream source"
 
 apply_patch_if_needed "$kernel_tree" \
 	"$REPO_ROOT/patches/amdgpu/0001-drm-amdgpu-reset-VI-ASIC-on-MacBookPro15-1.patch"
@@ -140,11 +141,11 @@ sed -i 's|^#define TRACE_INCLUDE_PATH ../../drivers/gpu/drm/amd/amdgpu$|#define 
 	"$trace_header"
 
 info "building AMDGPU for $KVER"
-make -C "/usr/src/kernels/$KVER" \
+make -j "$(nproc)" -C "/usr/src/kernels/$KVER" \
 	M="$kernel_tree/drivers/gpu/drm/amd/amdgpu" modules
 
 info "building Intel HDA for $KVER"
-make -C "/usr/src/kernels/$KVER" \
+make -j "$(nproc)" -C "/usr/src/kernels/$KVER" \
 	M="$kernel_tree/sound/hda/controllers" modules
 
 amdgpu_module="$kernel_tree/drivers/gpu/drm/amd/amdgpu/amdgpu.ko"
