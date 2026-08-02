@@ -1,0 +1,91 @@
+From 1d885840dd274a0855c2671057be1023bc0d7ae6 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Sun, 2 Aug 2026 18:56:32 +0200
+Subject: [PATCH] thunderbolt: enable RTD3 on MacBookPro15,1
+
+Hello everyone,
+
+On the MacBookPro15,1, both JHL7540 Titan Ridge NHIs and their host
+routers remain active in D0 while idle. The machine uses the software
+connection manager, where runtime PM is currently only enabled for USB4
+routers. The two idle Thunderbolt domains account for approximately 3 W
+of otherwise avoidable system power consumption.
+
+Our earlier patch "xhci-pci: keep Titan Ridge active on
+MacBookPro15,1" addressed a separate problem in the same topology. The
+Titan Ridge xHCI controllers lose USB 3 connect events after entering D3
+under Apple's OSDW firmware path and therefore need to remain in D0.
+That restriction does not apply to the NHIs.
+
+So this patch enables RTD3 for the Titan Ridge 4C NHIs on this model.
+Both NHIs then runtime-suspend to D3hot while the separate xHCI
+controllers remain active in D0. USB 3 hotplug and repeated suspend and
+resume cycles continue to work.
+
+Link: https://lore.kernel.org/all/20260730210655.15514-1-dev@deq.rocks/
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ drivers/thunderbolt/nhi.c | 8 ++++++++
+ drivers/thunderbolt/nhi.h | 3 +++
+ drivers/thunderbolt/tb.c  | 5 +++--
+ 3 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/thunderbolt/nhi.c b/drivers/thunderbolt/nhi.c
+index 6d0c9d3..1790df5 100644
+--- a/drivers/thunderbolt/nhi.c
++++ b/drivers/thunderbolt/nhi.c
+@@ -13,6 +13,7 @@
+ #include <linux/slab.h>
+ #include <linux/errno.h>
+ #include <linux/pci.h>
++#include <linux/dmi.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/interrupt.h>
+ #include <linux/iommu.h>
+@@ -1186,6 +1187,13 @@ static void nhi_check_quirks(struct tb_nhi *nhi)
+ 			 */
+ 			nhi->quirks |= QUIRK_E2E;
+ 			break;
++		case PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_NHI:
++			if (dmi_match(DMI_PRODUCT_NAME, "MacBookPro15,1")) {
++				nhi->quirks |= QUIRK_FORCE_RTD3;
++				pci_info(nhi->pdev,
++					 "enabling RTD3 for Apple T2 Titan Ridge NHI\n");
++			}
++			break;
+ 		}
+ 	}
+ }
+diff --git a/drivers/thunderbolt/nhi.h b/drivers/thunderbolt/nhi.h
+index 24ac424..69bc502 100644
+--- a/drivers/thunderbolt/nhi.h
++++ b/drivers/thunderbolt/nhi.h
+@@ -50,6 +50,9 @@ struct tb_nhi_ops {
+ 
+ extern const struct tb_nhi_ops icl_nhi_ops;
+ 
++/* Host interface quirks shared with the connection manager. */
++#define QUIRK_FORCE_RTD3	BIT(2)
++
+ /*
+  * PCI IDs used in this driver from Win Ridge forward. There is no
+  * need for the PCI quirk anymore as we will use ICM also on Apple
+diff --git a/drivers/thunderbolt/tb.c b/drivers/thunderbolt/tb.c
+index 1b4ff0d..5f83de7 100644
+--- a/drivers/thunderbolt/tb.c
++++ b/drivers/thunderbolt/tb.c
+@@ -3003,8 +3003,9 @@ static int tb_start(struct tb *tb, bool reset)
+ 	 * implement the necessary router operations.
+ 	 */
+ 	tb->root_switch->no_nvm_upgrade = !tb_switch_is_usb4(tb->root_switch);
+-	/* All USB4 routers support runtime PM */
+-	tb->root_switch->rpm = tb_switch_is_usb4(tb->root_switch);
++	/* USB4 routers and quirked NHIs support runtime PM */
++	tb->root_switch->rpm = tb_switch_is_usb4(tb->root_switch) ||
++			       (tb->nhi->quirks & QUIRK_FORCE_RTD3);
+ 
+ 	ret = tb_switch_configure(tb->root_switch);
+ 	if (ret) {
+-- 
+2.55.0
+
