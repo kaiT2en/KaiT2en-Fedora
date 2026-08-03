@@ -21,6 +21,7 @@
 #include <linux/delay.h>
 #include <linux/dmi.h>
 #include <linux/pci.h>
+#include <linux/pm_runtime.h>
 #include <linux/vga_switcheroo.h>
 #include <linux/debugfs.h>
 #include <acpi/video.h>
@@ -81,6 +82,8 @@ struct apple_gmux_data {
 	struct dentry *debug_dentry;
 
 	struct pci_dev *dgpu_pdev;
+	struct pci_dev *dgpu_bridges[2];
+	unsigned int dgpu_bridge_count;
 	enum apple_gmux_type type;
 };
 
@@ -89,6 +92,37 @@ static struct apple_gmux_data *apple_gmux_data;
 static bool gmux_uses_firmware_power_sequence(void)
 {
 	return dmi_match(DMI_PRODUCT_NAME, "MacBookPro16,1");
+}
+
+static void gmux_hold_dgpu_bridges(struct apple_gmux_data *gmux_data)
+{
+	struct pci_dev *bridge;
+
+	if (!gmux_uses_firmware_power_sequence() ||
+	    gmux_data->dgpu_bridge_count || !gmux_data->dgpu_pdev)
+		return;
+
+	bridge = pci_upstream_bridge(gmux_data->dgpu_pdev);
+	while (bridge && bridge->vendor == PCI_VENDOR_ID_ATI &&
+	       gmux_data->dgpu_bridge_count < ARRAY_SIZE(gmux_data->dgpu_bridges)) {
+		pci_dev_get(bridge);
+		pm_runtime_get_noresume(&bridge->dev);
+		gmux_data->dgpu_bridges[gmux_data->dgpu_bridge_count++] = bridge;
+		pr_info("holding upstream bridge %s active for PWRD ordering\n",
+			pci_name(bridge));
+		bridge = pci_upstream_bridge(bridge);
+	}
+}
+
+static void gmux_release_dgpu_bridges(struct apple_gmux_data *gmux_data)
+{
+	while (gmux_data->dgpu_bridge_count) {
+		struct pci_dev *bridge =
+			gmux_data->dgpu_bridges[--gmux_data->dgpu_bridge_count];
+
+		pm_runtime_put_noidle(&bridge->dev);
+		pci_dev_put(bridge);
+	}
 }
 
 static int gmux_call_dgpu_power_method(struct apple_gmux_data *gmux_data,
@@ -693,8 +727,10 @@ static enum vga_switcheroo_client_id gmux_get_client_id(struct pci_dev *pdev)
 		 pdev->device == 0x0863)
 		return VGA_SWITCHEROO_IGD;
 	else {
-		if (!apple_gmux_data->dgpu_pdev)
+		if (!apple_gmux_data->dgpu_pdev) {
 			apple_gmux_data->dgpu_pdev = pdev;
+			gmux_hold_dgpu_bridges(apple_gmux_data);
+		}
 		return VGA_SWITCHEROO_DIS;
 	}
 }
@@ -1137,6 +1173,7 @@ static void gmux_remove(struct pnp_dev *pnp)
 
 	gmux_fini_debugfs(gmux_data);
 	vga_switcheroo_unregister_handler();
+	gmux_release_dgpu_bridges(gmux_data);
 	gmux_disable_interrupts(gmux_data);
 	if (gmux_data->gpe >= 0) {
 		acpi_disable_gpe(NULL, gmux_data->gpe);
@@ -1180,6 +1217,6 @@ module_pnp_driver(gmux_pnp_driver);
 MODULE_AUTHOR("Seth Forshee <seth.forshee@canonical.com>");
 MODULE_AUTHOR("kait2en");
 MODULE_DESCRIPTION("Kait2en T2 GMUX driver");
-MODULE_VERSION("0.10");
+MODULE_VERSION("0.11");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pnp, gmux_device_ids);
