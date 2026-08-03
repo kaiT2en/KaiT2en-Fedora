@@ -84,6 +84,8 @@ struct apple_gmux_data {
 	struct pci_dev *dgpu_pdev;
 	struct pci_dev *dgpu_bridges[2];
 	u32 dgpu_bridge_bus_config[2];
+	u16 dgpu_bridge_cmd[2];
+	u32 dgpu_bridge_memwin[2][6];
 	unsigned int dgpu_bridge_count;
 	struct pci_dev *dgpu_root_bridge;
 	u32 dgpu_root_bus_config;
@@ -140,7 +142,10 @@ static void gmux_release_dgpu_bridges(struct apple_gmux_data *gmux_data)
 
 static int gmux_save_dgpu_bus_config(struct apple_gmux_data *gmux_data)
 {
-	unsigned int i;
+	static const u32 memwin_offsets[] = {
+		0x20, 0x24, 0x28, 0x2c, 0x30, 0x1c,
+	};
+	unsigned int i, j;
 
 	if (!gmux_data->dgpu_root_bridge ||
 	    gmux_data->dgpu_bridge_count != ARRAY_SIZE(gmux_data->dgpu_bridges))
@@ -151,12 +156,19 @@ static int gmux_save_dgpu_bus_config(struct apple_gmux_data *gmux_data)
 	    PCIBIOS_SUCCESSFUL)
 		return -EIO;
 
-	for (i = 0; i < gmux_data->dgpu_bridge_count; i++)
+	for (i = 0; i < gmux_data->dgpu_bridge_count; i++) {
 		if (pci_read_config_dword(gmux_data->dgpu_bridges[i],
 					  PCI_PRIMARY_BUS,
 					  &gmux_data->dgpu_bridge_bus_config[i]) !=
 		    PCIBIOS_SUCCESSFUL)
 			return -EIO;
+		pci_read_config_word(gmux_data->dgpu_bridges[i], PCI_COMMAND,
+				     &gmux_data->dgpu_bridge_cmd[i]);
+		for (j = 0; j < ARRAY_SIZE(memwin_offsets); j++)
+			pci_read_config_dword(gmux_data->dgpu_bridges[i],
+					      memwin_offsets[j],
+					      &gmux_data->dgpu_bridge_memwin[i][j]);
+	}
 
 	gmux_data->dgpu_bus_config_valid = true;
 	pr_info("DGPU power-off: saved bridge bus numbers root=%#010x amd-up=%#010x amd-down=%#010x\n",
@@ -187,6 +199,24 @@ static int gmux_restore_dgpu_bus_config(struct apple_gmux_data *gmux_data)
 
 	pr_info("DGPU power-on: restored root and AMD bridge bus numbers\n");
 	return 0;
+}
+
+static void gmux_restore_dgpu_mem_windows(struct apple_gmux_data *gmux_data)
+{
+	static const u32 memwin_offsets[] = {
+		0x20, 0x24, 0x28, 0x2c, 0x30, 0x1c,
+	};
+	unsigned int i, j;
+
+	for (i = 0; i < gmux_data->dgpu_bridge_count; i++) {
+		pci_write_config_word(gmux_data->dgpu_bridges[i], PCI_COMMAND,
+				      gmux_data->dgpu_bridge_cmd[i]);
+		for (j = 0; j < ARRAY_SIZE(memwin_offsets); j++)
+			pci_write_config_dword(gmux_data->dgpu_bridges[i],
+					       memwin_offsets[j],
+					       gmux_data->dgpu_bridge_memwin[i][j]);
+	}
+	pr_info("DGPU power-on: restored AMD bridge memory windows\n");
 }
 
 static int gmux_call_dgpu_power_method(struct apple_gmux_data *gmux_data,
@@ -748,6 +778,8 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 			pr_info("DGPU power-on: PCI config accessible after %u ms\n",
 				jiffies_to_msecs(jiffies - start));
 
+			gmux_restore_dgpu_mem_windows(gmux_data);
+
 			ret = gmux_call_dgpu_link_method(gmux_data, "PWG3");
 			if (ret)
 				return ret;
@@ -1297,6 +1329,6 @@ module_pnp_driver(gmux_pnp_driver);
 MODULE_AUTHOR("Seth Forshee <seth.forshee@canonical.com>");
 MODULE_AUTHOR("kait2en");
 MODULE_DESCRIPTION("Kait2en T2 GMUX driver");
-MODULE_VERSION("0.16");
+MODULE_VERSION("0.23");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pnp, gmux_device_ids);
