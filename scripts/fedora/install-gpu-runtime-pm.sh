@@ -132,6 +132,8 @@ apply_patch_if_needed "$kernel_tree" \
 apply_patch_if_needed "$kernel_tree" \
 	"$REPO_ROOT/patches/amdgpu/0002-drm-amdgpu-Add-Apple-GMUX-runtime-PM-support.patch"
 apply_patch_if_needed "$kernel_tree" \
+	"$REPO_ROOT/patches/amdgpu/0003-drm-amdgpu-Init-PSP-ring-on-runtime-resume.patch"
+apply_patch_if_needed "$kernel_tree" \
 apply_patch_if_needed "$kernel_tree" \
 	"$REPO_ROOT/patches/hda/0001-ALSA-hda-Allow-direct-complete-with-a-powered-off-GPU.patch"
 
