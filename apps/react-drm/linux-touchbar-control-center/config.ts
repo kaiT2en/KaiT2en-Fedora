@@ -31,11 +31,11 @@ export const ESC_KEY: {
   width: number;
   gap: number;
 } = {
-  // Always show ESC on all MacBooks without a physical Escape key.
-  // The on-screen key is only visible in the Fn layer ('fn' mode), sized
-  // like the surrounding F-keys so it scales to all Touch Bar sizes.
-  // Set minWidth to 0 to always show, Infinity to never.
-  minWidth: 0,
+  // Show ESC on Touch Bar MacBooks without a physical Escape key.
+  // Standard 13-inch panel is 2008 px, wide 15/16-inch is 2170 px;
+  // 2020+ models with a physical Esc key report a narrower display.
+  // Set to 0 to always show, Infinity to never.
+  minWidth: 2008,
   // Where the Esc key shows:
   //   'all' — a fixed Esc button at the far left of every layer
   //   'fn'  — Esc shows only in the Fn-key layer, sized like the F-keys
