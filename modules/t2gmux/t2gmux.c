@@ -141,8 +141,10 @@ static int gmux_call_dgpu_power_method(struct apple_gmux_data *gmux_data,
 				       unsigned long long power_down)
 {
 	union acpi_object argument = {
-		.type = ACPI_TYPE_INTEGER,
-		.integer.value = power_down,
+		.integer = {
+			.type = ACPI_TYPE_INTEGER,
+			.value = power_down,
+		},
 	};
 	struct acpi_object_list arguments = {
 		.count = 1,
@@ -1249,6 +1251,6 @@ module_pnp_driver(gmux_pnp_driver);
 MODULE_AUTHOR("Seth Forshee <seth.forshee@canonical.com>");
 MODULE_AUTHOR("kait2en");
 MODULE_DESCRIPTION("Kait2en T2 GMUX driver");
-MODULE_VERSION("0.12");
+MODULE_VERSION("0.13");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pnp, gmux_device_ids);
