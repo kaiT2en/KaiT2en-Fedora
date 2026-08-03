@@ -16,9 +16,10 @@ GPU power. A runtime-suspended GMUX GPU can remain powered off across
 system sleep, following the smart-suspend handling already used by BOCO
 devices.
 
-On muxed systems, the inactive GPU may still report the panel connector as
-connected even though it has no active CRTC. Do not let that stale connector
-state prevent GMUX runtime suspend; the active-CRTC check remains in place.
+On muxed systems, the inactive GPU cannot access the panel AUX channel. Skip
+probing its internal eDP link instead of retaining a fail-safe sink after the
+EDID read fails. The connector remains available when the discrete GPU is the
+boot display device.
 
 This enables the discrete GPU to enter D3cold while the integrated GPU is
 primary and allows PRIME workloads to wake it on demand.
@@ -33,9 +34,10 @@ runtime resume on T2 MacBooks requires:
 ---
  drivers/gpu/drm/amd/amdgpu/amdgpu.h        |  1 +
  drivers/gpu/drm/amd/amdgpu/amdgpu_device.c | 52 +++++++++++++++++++---
- drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c    | 34 ++++++++++-----
+ drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c    | 30 ++++++++-----
+ drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c | 9 ++++
  drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h    |  1 +
- 4 files changed, 70 insertions(+), 19 deletions(-)
+ 5 files changed, 75 insertions(+), 18 deletions(-)
 
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 index 7b09410d6d8f..cc2e2e25bfd0 100644
@@ -193,18 +195,6 @@ index 4c0c77eafbd1..603ff39aada4 100644
  		return 1;
  
  	/* if we will not support s3 or s2i for the device
-@@ -2747,7 +2750,10 @@ static int amdgpu_runtime_idle_check_display(struct device *dev)
- 			mutex_lock(&drm_dev->mode_config.mutex);
- 			drm_connector_list_iter_begin(drm_dev, &iter);
- 			drm_for_each_connector_iter(list_connector, &iter) {
--				if (list_connector->status == connector_status_connected) {
-+				if (list_connector->status == connector_status_connected &&
-+				    !(adev->pm.rpm_mode == AMDGPU_RUNPM_GMUX &&
-+				      list_connector->connector_type ==
-+				      DRM_MODE_CONNECTOR_eDP)) {
- 					ret = -EBUSY;
- 					break;
- 				}
 @@ -2860,7 +2863,8 @@ static int amdgpu_pmops_runtime_suspend(struct device *dev)
  	}
  
@@ -258,6 +248,32 @@ index 4c0c77eafbd1..603ff39aada4 100644
  		drm_dev->switch_power_state = DRM_SWITCH_POWER_ON;
  	adev->in_runpm = false;
  	return 0;
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -75,6 +75,7 @@
+ #include <linux/moduleparam.h>
+ #include <linux/types.h>
+ #include <linux/pm_runtime.h>
++#include <linux/vgaarb.h>
+ #include <linux/pci.h>
+ #include <linux/power_supply.h>
+ #include <linux/firmware.h>
+@@ -5718,6 +5719,14 @@ static int amdgpu_dm_initialize_drm_device(struct amdgpu_device *adev)
+ 		if (dm->hpd_rx_offload_wq)
+ 			dm->hpd_rx_offload_wq[aconnector->base.index].aconnector =
+ 				aconnector;
++
++		if (link->connector_signal == SIGNAL_TYPE_EDP &&
++		    amdgpu_device_supports_gmux(adev) &&
++		    adev->pdev != vga_default_device()) {
++			drm_info(adev_to_drm(adev), "Skipping inactive GMUX eDP connector %s\n",
++				 aconnector->base.name);
++			continue;
++		}
+ 
+ 		if (!dc_link_detect_connection_type(link, &new_connection_type))
+ 			drm_err(adev_to_drm(adev), "KMS: Failed to detect connector\n");
 diff --git a/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h b/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h
 index aa3f427819a0..d76968f98659 100644
 --- a/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h
