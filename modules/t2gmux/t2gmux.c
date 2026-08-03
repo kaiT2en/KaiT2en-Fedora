@@ -714,6 +714,11 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 			u16 ms;
 
 			if (firmware_sequence) {
+				pr_info("DGPU power-on: writing GMUX states 2 -> 3\n");
+				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 2);
+				msleep(100);
+				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
+
 				ret = gmux_call_dgpu_power_method(gmux_data, 0);
 				if (ret)
 					return ret;
@@ -1294,6 +1299,6 @@ module_pnp_driver(gmux_pnp_driver);
 MODULE_AUTHOR("Seth Forshee <seth.forshee@canonical.com>");
 MODULE_AUTHOR("kait2en");
 MODULE_DESCRIPTION("Kait2en T2 GMUX driver");
-MODULE_VERSION("0.14");
+MODULE_VERSION("0.15");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pnp, gmux_device_ids);
