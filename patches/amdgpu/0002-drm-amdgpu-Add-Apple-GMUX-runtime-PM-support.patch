@@ -16,6 +16,10 @@ GPU power. A runtime-suspended GMUX GPU can remain powered off across
 system sleep, following the smart-suspend handling already used by BOCO
 devices.
 
+On muxed systems, the inactive GPU may still report the panel connector as
+connected even though it has no active CRTC. Do not let that stale connector
+state prevent GMUX runtime suspend; the active-CRTC check remains in place.
+
 This enables the discrete GPU to enter D3cold while the integrated GPU is
 primary and allows PRIME workloads to wake it on demand.
 
@@ -29,9 +33,9 @@ runtime resume on T2 MacBooks requires:
 ---
  drivers/gpu/drm/amd/amdgpu/amdgpu.h        |  1 +
  drivers/gpu/drm/amd/amdgpu/amdgpu_device.c | 52 +++++++++++++++++++---
- drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c    | 30 ++++++++-----
+ drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c    | 34 ++++++++++-----
  drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h    |  1 +
- 4 files changed, 66 insertions(+), 18 deletions(-)
+ 4 files changed, 70 insertions(+), 19 deletions(-)
 
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 index 7b09410d6d8f..cc2e2e25bfd0 100644
@@ -189,6 +193,18 @@ index 4c0c77eafbd1..603ff39aada4 100644
  		return 1;
  
  	/* if we will not support s3 or s2i for the device
+@@ -2747,7 +2750,10 @@ static int amdgpu_runtime_idle_check_display(struct device *dev)
+ 			mutex_lock(&drm_dev->mode_config.mutex);
+ 			drm_connector_list_iter_begin(drm_dev, &iter);
+ 			drm_for_each_connector_iter(list_connector, &iter) {
+-				if (list_connector->status == connector_status_connected) {
++				if (list_connector->status == connector_status_connected &&
++				    !(adev->pm.rpm_mode == AMDGPU_RUNPM_GMUX &&
++				      list_connector->connector_type ==
++				      DRM_MODE_CONNECTOR_eDP)) {
+ 					ret = -EBUSY;
+ 					break;
+ 				}
 @@ -2860,7 +2863,8 @@ static int amdgpu_pmops_runtime_suspend(struct device *dev)
  	}
  

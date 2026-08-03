@@ -590,6 +590,7 @@ static int gmux_switch_ddc(enum vga_switcheroo_client_id id)
 static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				   enum vga_switcheroo_state state)
 {
+	bool firmware_sequence = gmux_uses_firmware_power_sequence();
 	int ret;
 
 	reinit_completion(&gmux_data->powerchange_done);
@@ -601,16 +602,16 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 			u16 val;
 			u16 ms;
 
-			pr_info("DGPU power-on: writing GMUX states 2 -> 3\n");
-			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 2);
-			msleep(100);
-			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
-
-			if (gmux_uses_firmware_power_sequence()) {
+			if (firmware_sequence) {
 				ret = gmux_call_dgpu_power_method(gmux_data, 0);
 				if (ret)
 					return ret;
 			} else {
+				pr_info("DGPU power-on: writing GMUX states 2 -> 3\n");
+				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 2);
+				msleep(100);
+				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
+
 				ret = gmux_call_dgpu_link_method(gmux_data, "PWG1");
 				if (ret)
 					return ret;
@@ -631,7 +632,7 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 			pr_info("DGPU power-on: PCI config accessible after %u ms\n",
 				jiffies_to_msecs(jiffies - start));
 
-			if (!gmux_uses_firmware_power_sequence()) {
+			if (!firmware_sequence) {
 				ret = gmux_call_dgpu_link_method(gmux_data, "PWG3");
 				if (ret)
 					return ret;
@@ -644,16 +645,16 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 		pr_debug("Discrete card powered up\n");
 	} else {
 		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO) {
-			if (gmux_uses_firmware_power_sequence()) {
+			if (firmware_sequence) {
 				ret = gmux_call_dgpu_power_method(gmux_data, 1);
 				if (ret)
 					return ret;
+			} else {
+				pr_info("DGPU power-off: writing GMUX states 1 -> 0\n");
+				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
+				msleep(10);
+				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
 			}
-
-			pr_info("DGPU power-off: writing GMUX states 1 -> 0\n");
-			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
-			msleep(10);
-			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
 		} else {
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
@@ -663,7 +664,7 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 
 	gmux_data->power_state = state;
 
-	if (gmux_data->gpe >= 0 &&
+	if (!firmware_sequence && gmux_data->gpe >= 0 &&
 	    !wait_for_completion_interruptible_timeout(&gmux_data->powerchange_done,
 						       msecs_to_jiffies(200)))
 		pr_warn("Timeout waiting for gmux switch to complete\n");
@@ -1179,6 +1180,6 @@ module_pnp_driver(gmux_pnp_driver);
 MODULE_AUTHOR("Seth Forshee <seth.forshee@canonical.com>");
 MODULE_AUTHOR("kait2en");
 MODULE_DESCRIPTION("Kait2en T2 GMUX driver");
-MODULE_VERSION("0.9");
+MODULE_VERSION("0.10");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pnp, gmux_device_ids);
