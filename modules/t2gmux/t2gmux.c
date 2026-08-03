@@ -748,11 +748,9 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 			pr_info("DGPU power-on: PCI config accessible after %u ms\n",
 				jiffies_to_msecs(jiffies - start));
 
-			if (!firmware_sequence) {
-				ret = gmux_call_dgpu_link_method(gmux_data, "PWG3");
-				if (ret)
-					return ret;
-			}
+			ret = gmux_call_dgpu_link_method(gmux_data, "PWG3");
+			if (ret)
+				return ret;
 
 		} else {
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
@@ -1299,6 +1297,6 @@ module_pnp_driver(gmux_pnp_driver);
 MODULE_AUTHOR("Seth Forshee <seth.forshee@canonical.com>");
 MODULE_AUTHOR("kait2en");
 MODULE_DESCRIPTION("Kait2en T2 GMUX driver");
-MODULE_VERSION("0.15");
+MODULE_VERSION("0.16");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pnp, gmux_device_ids);
