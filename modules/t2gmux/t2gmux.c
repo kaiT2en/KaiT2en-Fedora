@@ -19,6 +19,7 @@
 #include <linux/apple-gmux.h>
 #include <linux/slab.h>
 #include <linux/delay.h>
+#include <linux/dmi.h>
 #include <linux/pci.h>
 #include <linux/vga_switcheroo.h>
 #include <linux/debugfs.h>
@@ -84,6 +85,51 @@ struct apple_gmux_data {
 };
 
 static struct apple_gmux_data *apple_gmux_data;
+
+static bool gmux_uses_firmware_power_sequence(void)
+{
+	return dmi_match(DMI_PRODUCT_NAME, "MacBookPro16,1");
+}
+
+static int gmux_call_dgpu_power_method(struct apple_gmux_data *gmux_data,
+				       unsigned long long power_down)
+{
+	union acpi_object argument = {
+		.type = ACPI_TYPE_INTEGER,
+		.integer.value = power_down,
+	};
+	struct acpi_object_list arguments = {
+		.count = 1,
+		.pointer = &argument,
+	};
+	acpi_handle handle;
+	unsigned long long result;
+	acpi_status status;
+
+	if (!gmux_data->dgpu_pdev)
+		return -ENODEV;
+
+	handle = ACPI_HANDLE(&gmux_data->dgpu_pdev->dev);
+	if (!handle)
+		return -ENODEV;
+
+	pr_info("DGPU power-%s: requesting PWRD(%llu) firmware sequence\n",
+		power_down ? "off" : "on", power_down);
+	status = acpi_evaluate_integer(handle, "PWRD", &arguments, &result);
+	if (ACPI_FAILURE(status)) {
+		pr_err("Failed to evaluate DGPU.PWRD(%llu): %s\n", power_down,
+		       acpi_format_exception(status));
+		return -EIO;
+	}
+	if (result) {
+		pr_err("DGPU.PWRD(%llu) failed: %llu\n", power_down, result);
+		return -EIO;
+	}
+
+	pr_info("DGPU power-%s: PWRD(%llu) completed successfully\n",
+		power_down ? "off" : "on", power_down);
+	return 0;
+}
 
 static int gmux_call_dgpu_link_method(struct apple_gmux_data *gmux_data,
 				      const char *method)
@@ -560,9 +606,15 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 			msleep(100);
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
 
-			ret = gmux_call_dgpu_link_method(gmux_data, "PWG1");
-			if (ret)
-				return ret;
+			if (gmux_uses_firmware_power_sequence()) {
+				ret = gmux_call_dgpu_power_method(gmux_data, 0);
+				if (ret)
+					return ret;
+			} else {
+				ret = gmux_call_dgpu_link_method(gmux_data, "PWG1");
+				if (ret)
+					return ret;
+			}
 
 			start = jiffies;
 			for (ms = 0; ms < 1000; ms++) {
@@ -579,9 +631,11 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 			pr_info("DGPU power-on: PCI config accessible after %u ms\n",
 				jiffies_to_msecs(jiffies - start));
 
-			ret = gmux_call_dgpu_link_method(gmux_data, "PWG3");
-			if (ret)
-				return ret;
+			if (!gmux_uses_firmware_power_sequence()) {
+				ret = gmux_call_dgpu_link_method(gmux_data, "PWG3");
+				if (ret)
+					return ret;
+			}
 
 		} else {
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
@@ -590,6 +644,12 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 		pr_debug("Discrete card powered up\n");
 	} else {
 		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO) {
+			if (gmux_uses_firmware_power_sequence()) {
+				ret = gmux_call_dgpu_power_method(gmux_data, 1);
+				if (ret)
+					return ret;
+			}
+
 			pr_info("DGPU power-off: writing GMUX states 1 -> 0\n");
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
 			msleep(10);
@@ -1119,6 +1179,6 @@ module_pnp_driver(gmux_pnp_driver);
 MODULE_AUTHOR("Seth Forshee <seth.forshee@canonical.com>");
 MODULE_AUTHOR("kait2en");
 MODULE_DESCRIPTION("Kait2en T2 GMUX driver");
-MODULE_VERSION("0.8");
+MODULE_VERSION("0.9");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pnp, gmux_device_ids);
