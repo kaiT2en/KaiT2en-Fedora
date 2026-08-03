@@ -36,10 +36,10 @@ export const ESC_KEY: {
   // like the surrounding F-keys so it scales to all Touch Bar sizes.
   // Set minWidth to 0 to always show, Infinity to never.
   minWidth: 0,
-  // Where the Esc key shows on wide displays:
+  // Where the Esc key shows:
   //   'all' — a fixed Esc button at the far left of every layer
   //   'fn'  — Esc shows only in the Fn-key layer, sized like the F-keys
-  onLayers: 'fn',
+  onLayers: 'all',
   // Only used by 'all' mode (the fixed left button); 'fn' mode sizes Esc
   // like the surrounding F-keys.
   width:    110,  // px reserved on the left for the Esc button
