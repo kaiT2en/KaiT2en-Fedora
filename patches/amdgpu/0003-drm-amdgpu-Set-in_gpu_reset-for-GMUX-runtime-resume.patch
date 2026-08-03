@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Sun, 3 Aug 2026 22:00:00 +0200
+Subject: [PATCH] drm/amdgpu: Set in_gpu_reset for GMUX runtime resume
+
+The GMUX power-off is a hard D3cold with complete VRAM loss.  The
+default runtime-resume path (from_suspend=false) assumes PSP firmware
+is still present in VRAM, causing "PSP load kdb failed" after resume.
+
+Set in_gpu_reset=true for the GMUX runtime mode so amdgpu performs a
+full GPU init including PSP firmware reload.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+index 603ff39aada4..a72c0a9b3e4f 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -2951,6 +2951,8 @@ static int amdgpu_pmops_runtime_resume(struct device *dev)
+ 			pci_disable_device(pdev);
+ 		return ret;
+ 	}
++	if (adev->pm.rpm_mode == AMDGPU_RUNPM_GMUX)
++		adev->in_gpu_reset = true;
+ 	ret = amdgpu_device_resume(drm_dev, false);
+ 	if (ret) {
+ 		if (adev->pm.rpm_mode == AMDGPU_RUNPM_PX ||
+-- 
+2.55.0
