@@ -83,10 +83,11 @@ struct apple_gmux_data {
 
 	struct pci_dev *dgpu_pdev;
 	struct pci_dev *dgpu_bridges[2];
+	u32 dgpu_bridge_bus_config[2];
 	unsigned int dgpu_bridge_count;
 	struct pci_dev *dgpu_root_bridge;
 	u32 dgpu_root_bus_config;
-	bool dgpu_root_bus_config_valid;
+	bool dgpu_bus_config_valid;
 	enum apple_gmux_type type;
 };
 
@@ -137,6 +138,57 @@ static void gmux_release_dgpu_bridges(struct apple_gmux_data *gmux_data)
 	gmux_data->dgpu_root_bridge = NULL;
 }
 
+static int gmux_save_dgpu_bus_config(struct apple_gmux_data *gmux_data)
+{
+	unsigned int i;
+
+	if (!gmux_data->dgpu_root_bridge ||
+	    gmux_data->dgpu_bridge_count != ARRAY_SIZE(gmux_data->dgpu_bridges))
+		return -ENODEV;
+
+	if (pci_read_config_dword(gmux_data->dgpu_root_bridge, PCI_PRIMARY_BUS,
+				  &gmux_data->dgpu_root_bus_config) !=
+	    PCIBIOS_SUCCESSFUL)
+		return -EIO;
+
+	for (i = 0; i < gmux_data->dgpu_bridge_count; i++)
+		if (pci_read_config_dword(gmux_data->dgpu_bridges[i],
+					  PCI_PRIMARY_BUS,
+					  &gmux_data->dgpu_bridge_bus_config[i]) !=
+		    PCIBIOS_SUCCESSFUL)
+			return -EIO;
+
+	gmux_data->dgpu_bus_config_valid = true;
+	pr_info("DGPU power-off: saved bridge bus numbers root=%#010x amd-up=%#010x amd-down=%#010x\n",
+		gmux_data->dgpu_root_bus_config,
+		gmux_data->dgpu_bridge_bus_config[1],
+		gmux_data->dgpu_bridge_bus_config[0]);
+	return 0;
+}
+
+static int gmux_restore_dgpu_bus_config(struct apple_gmux_data *gmux_data)
+{
+	unsigned int i;
+
+	if (!gmux_data->dgpu_bus_config_valid)
+		return -EINVAL;
+
+	if (pci_write_config_dword(gmux_data->dgpu_root_bridge, PCI_PRIMARY_BUS,
+				   gmux_data->dgpu_root_bus_config) !=
+	    PCIBIOS_SUCCESSFUL)
+		return -EIO;
+
+	for (i = gmux_data->dgpu_bridge_count; i-- > 0;)
+		if (pci_write_config_dword(gmux_data->dgpu_bridges[i],
+					   PCI_PRIMARY_BUS,
+					   gmux_data->dgpu_bridge_bus_config[i]) !=
+		    PCIBIOS_SUCCESSFUL)
+			return -EIO;
+
+	pr_info("DGPU power-on: restored root and AMD bridge bus numbers\n");
+	return 0;
+}
+
 static int gmux_call_dgpu_power_method(struct apple_gmux_data *gmux_data,
 				       unsigned long long power_down)
 {
@@ -153,6 +205,7 @@ static int gmux_call_dgpu_power_method(struct apple_gmux_data *gmux_data,
 	acpi_handle handle;
 	unsigned long long result;
 	acpi_status status;
+	int ret;
 
 	if (!gmux_data->dgpu_pdev)
 		return -ENODEV;
@@ -161,16 +214,9 @@ static int gmux_call_dgpu_power_method(struct apple_gmux_data *gmux_data,
 	if (!handle)
 		return -ENODEV;
 
-	if (power_down && gmux_data->dgpu_root_bridge) {
-		if (pci_read_config_dword(gmux_data->dgpu_root_bridge,
-					  PCI_PRIMARY_BUS,
-					  &gmux_data->dgpu_root_bus_config) !=
-		    PCIBIOS_SUCCESSFUL)
-			return -EIO;
-		gmux_data->dgpu_root_bus_config_valid = true;
-		pr_info("DGPU power-off: saved root bridge bus numbers %#010x\n",
-			gmux_data->dgpu_root_bus_config);
-	}
+	if (power_down && gmux_data->dgpu_root_bridge &&
+	    gmux_save_dgpu_bus_config(gmux_data))
+		return -EIO;
 
 	pr_info("DGPU power-%s: requesting PWRD(%llu) firmware sequence\n",
 		power_down ? "off" : "on", power_down);
@@ -185,13 +231,10 @@ static int gmux_call_dgpu_power_method(struct apple_gmux_data *gmux_data,
 		return -EIO;
 	}
 
-	if (!power_down && gmux_data->dgpu_root_bridge &&
-	    gmux_data->dgpu_root_bus_config_valid) {
-		pci_write_config_dword(gmux_data->dgpu_root_bridge,
-				       PCI_PRIMARY_BUS,
-				       gmux_data->dgpu_root_bus_config);
-		pr_info("DGPU power-on: restored root bridge bus numbers %#010x\n",
-			gmux_data->dgpu_root_bus_config);
+	if (!power_down && gmux_data->dgpu_root_bridge) {
+		ret = gmux_restore_dgpu_bus_config(gmux_data);
+		if (ret)
+			return ret;
 	}
 
 	pr_info("DGPU power-%s: PWRD(%llu) completed successfully\n",
@@ -1251,6 +1294,6 @@ module_pnp_driver(gmux_pnp_driver);
 MODULE_AUTHOR("Seth Forshee <seth.forshee@canonical.com>");
 MODULE_AUTHOR("kait2en");
 MODULE_DESCRIPTION("Kait2en T2 GMUX driver");
-MODULE_VERSION("0.13");
+MODULE_VERSION("0.14");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pnp, gmux_device_ids);
