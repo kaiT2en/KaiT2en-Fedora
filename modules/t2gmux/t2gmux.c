@@ -91,43 +91,6 @@ static bool gmux_uses_acpi_dgpu_power_sequence(void)
 	return dmi_match(DMI_PRODUCT_NAME, "MacBookPro16,1");
 }
 
-static int gmux_call_dgpu_pwrd(struct apple_gmux_data *gmux_data, bool power_down)
-{
-	union acpi_object arg = {
-		.type = ACPI_TYPE_INTEGER,
-	};
-	struct acpi_object_list args = {
-		.count = 1,
-		.pointer = &arg,
-	};
-	acpi_handle handle;
-	unsigned long long result;
-	acpi_status status;
-
-	if (!gmux_data->dgpu_pdev)
-		return -ENODEV;
-
-	handle = ACPI_HANDLE(&gmux_data->dgpu_pdev->dev);
-	if (!handle)
-		return -ENODEV;
-
-	arg.integer.value = power_down;
-	pr_info("calling DGPU.PWRD(%u)\n", power_down);
-	status = acpi_evaluate_integer(handle, "PWRD", &args, &result);
-	if (ACPI_FAILURE(status)) {
-		pr_err("Failed to evaluate DGPU.PWRD(%u): %s\n", power_down,
-		       acpi_format_exception(status));
-		return -EIO;
-	}
-	if (result) {
-		pr_err("DGPU.PWRD(%u) failed: %llu\n", power_down, result);
-		return -EIO;
-	}
-
-	pr_info("DGPU.PWRD(%u) completed successfully\n", power_down);
-	return 0;
-}
-
 struct apple_gmux_config {
 	u8 (*read8)(struct apple_gmux_data *gmux_data, int port);
 	void (*write8)(struct apple_gmux_data *gmux_data, int port, u8 val);
@@ -557,7 +520,6 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				   enum vga_switcheroo_state state)
 {
 	acpi_handle dgpu_handle;
-	int ret;
 
 	reinit_completion(&gmux_data->powerchange_done);
 	dgpu_handle = gmux_data->dgpu_pdev ?
@@ -576,13 +538,10 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 			if (gmux_uses_acpi_dgpu_power_sequence())
 				pr_info("DGPU power rails enabled\n");
 
-			if (gmux_uses_acpi_dgpu_power_sequence()) {
-				ret = gmux_call_dgpu_pwrd(gmux_data, false);
-				if (ret)
-					return ret;
-			} else {
+			if (gmux_uses_acpi_dgpu_power_sequence())
+				acpi_execute_simple_method(dgpu_handle, "PWRD", 0);
+			else
 				acpi_evaluate_object(dgpu_handle, "PWG1", NULL, NULL);
-			}
 
 			for (ms = 0; ms < 1000; ms++) {
 				pci_read_config_word(gmux_data->dgpu_pdev,
@@ -615,9 +574,23 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 	} else {
 		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO) {
 			if (gmux_uses_acpi_dgpu_power_sequence()) {
-				ret = gmux_call_dgpu_pwrd(gmux_data, true);
-				if (ret)
-					return ret;
+				union acpi_object params[2] = {
+					{
+						.type = ACPI_TYPE_INTEGER,
+						.integer.value = 0,
+					},
+					{
+						.type = ACPI_TYPE_INTEGER,
+						.integer.value = 4,
+					},
+				};
+
+				struct acpi_object_list args = {
+					.count = 2,
+					.pointer = params,
+				};
+
+				acpi_evaluate_object(dgpu_handle, "PUPD", &args, NULL);
 			}
 
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
