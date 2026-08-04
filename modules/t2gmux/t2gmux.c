@@ -576,15 +576,18 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 			if (gmux_uses_acpi_dgpu_power_sequence()) {
 				union acpi_object params[2] = {
 					{
-						.type = ACPI_TYPE_INTEGER,
-						.integer.value = 0,
+						.integer = {
+							.type = ACPI_TYPE_INTEGER,
+							.value = 0,
+						},
 					},
 					{
-						.type = ACPI_TYPE_INTEGER,
-						.integer.value = 4,
+						.integer = {
+							.type = ACPI_TYPE_INTEGER,
+							.value = 4,
+						},
 					},
 				};
-
 				struct acpi_object_list args = {
 					.count = 2,
 					.pointer = params,
