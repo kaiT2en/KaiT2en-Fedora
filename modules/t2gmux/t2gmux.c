@@ -19,11 +19,10 @@
 #include <linux/apple-gmux.h>
 #include <linux/slab.h>
 #include <linux/delay.h>
-#include <linux/dmi.h>
 #include <linux/pci.h>
-#include <linux/pm_runtime.h>
 #include <linux/vga_switcheroo.h>
 #include <linux/debugfs.h>
+#include <linux/dmi.h>
 #include <acpi/video.h>
 #include <asm/io.h>
 
@@ -82,225 +81,14 @@ struct apple_gmux_data {
 	struct dentry *debug_dentry;
 
 	struct pci_dev *dgpu_pdev;
-	struct pci_dev *dgpu_bridges[2];
-	u32 dgpu_bridge_bus_config[2];
-	u16 dgpu_bridge_cmd[2];
-	u32 dgpu_bridge_memwin[2][6];
-	unsigned int dgpu_bridge_count;
-	struct pci_dev *dgpu_root_bridge;
-	u32 dgpu_root_bus_config;
-	bool dgpu_bus_config_valid;
 	enum apple_gmux_type type;
 };
 
 static struct apple_gmux_data *apple_gmux_data;
 
-static bool gmux_uses_firmware_power_sequence(void)
+static bool gmux_uses_acpi_dgpu_power_sequence(void)
 {
 	return dmi_match(DMI_PRODUCT_NAME, "MacBookPro16,1");
-}
-
-static void gmux_hold_dgpu_bridges(struct apple_gmux_data *gmux_data)
-{
-	struct pci_dev *bridge;
-
-	if (!gmux_uses_firmware_power_sequence() ||
-	    gmux_data->dgpu_bridge_count || !gmux_data->dgpu_pdev)
-		return;
-
-	bridge = pci_upstream_bridge(gmux_data->dgpu_pdev);
-	while (bridge && bridge->vendor == PCI_VENDOR_ID_ATI &&
-	       gmux_data->dgpu_bridge_count < ARRAY_SIZE(gmux_data->dgpu_bridges)) {
-		pci_dev_get(bridge);
-		pm_runtime_get_noresume(&bridge->dev);
-		gmux_data->dgpu_bridges[gmux_data->dgpu_bridge_count++] = bridge;
-		pr_info("holding upstream bridge %s active for PWRD ordering\n",
-			pci_name(bridge));
-		bridge = pci_upstream_bridge(bridge);
-	}
-
-	if (bridge) {
-		gmux_data->dgpu_root_bridge = pci_dev_get(bridge);
-		pr_info("using root bridge %s for PWRD bus-number restore\n",
-			pci_name(bridge));
-	}
-}
-
-static void gmux_release_dgpu_bridges(struct apple_gmux_data *gmux_data)
-{
-	while (gmux_data->dgpu_bridge_count) {
-		struct pci_dev *bridge =
-			gmux_data->dgpu_bridges[--gmux_data->dgpu_bridge_count];
-
-		pm_runtime_put_noidle(&bridge->dev);
-		pci_dev_put(bridge);
-	}
-
-	pci_dev_put(gmux_data->dgpu_root_bridge);
-	gmux_data->dgpu_root_bridge = NULL;
-}
-
-static int gmux_save_dgpu_bus_config(struct apple_gmux_data *gmux_data)
-{
-	static const u32 memwin_offsets[] = {
-		0x20, 0x24, 0x28, 0x2c, 0x30, 0x1c,
-	};
-	unsigned int i, j;
-
-	if (!gmux_data->dgpu_root_bridge ||
-	    gmux_data->dgpu_bridge_count != ARRAY_SIZE(gmux_data->dgpu_bridges))
-		return -ENODEV;
-
-	if (pci_read_config_dword(gmux_data->dgpu_root_bridge, PCI_PRIMARY_BUS,
-				  &gmux_data->dgpu_root_bus_config) !=
-	    PCIBIOS_SUCCESSFUL)
-		return -EIO;
-
-	for (i = 0; i < gmux_data->dgpu_bridge_count; i++) {
-		if (pci_read_config_dword(gmux_data->dgpu_bridges[i],
-					  PCI_PRIMARY_BUS,
-					  &gmux_data->dgpu_bridge_bus_config[i]) !=
-		    PCIBIOS_SUCCESSFUL)
-			return -EIO;
-		pci_read_config_word(gmux_data->dgpu_bridges[i], PCI_COMMAND,
-				     &gmux_data->dgpu_bridge_cmd[i]);
-		for (j = 0; j < ARRAY_SIZE(memwin_offsets); j++)
-			pci_read_config_dword(gmux_data->dgpu_bridges[i],
-					      memwin_offsets[j],
-					      &gmux_data->dgpu_bridge_memwin[i][j]);
-	}
-
-	gmux_data->dgpu_bus_config_valid = true;
-	pr_info("DGPU power-off: saved bridge bus numbers root=%#010x amd-up=%#010x amd-down=%#010x\n",
-		gmux_data->dgpu_root_bus_config,
-		gmux_data->dgpu_bridge_bus_config[1],
-		gmux_data->dgpu_bridge_bus_config[0]);
-	return 0;
-}
-
-static int gmux_restore_dgpu_bus_config(struct apple_gmux_data *gmux_data)
-{
-	unsigned int i;
-
-	if (!gmux_data->dgpu_bus_config_valid)
-		return -EINVAL;
-
-	if (pci_write_config_dword(gmux_data->dgpu_root_bridge, PCI_PRIMARY_BUS,
-				   gmux_data->dgpu_root_bus_config) !=
-	    PCIBIOS_SUCCESSFUL)
-		return -EIO;
-
-	for (i = gmux_data->dgpu_bridge_count; i-- > 0;)
-		if (pci_write_config_dword(gmux_data->dgpu_bridges[i],
-					   PCI_PRIMARY_BUS,
-					   gmux_data->dgpu_bridge_bus_config[i]) !=
-		    PCIBIOS_SUCCESSFUL)
-			return -EIO;
-
-	pr_info("DGPU power-on: restored root and AMD bridge bus numbers\n");
-	return 0;
-}
-
-static void gmux_restore_dgpu_mem_windows(struct apple_gmux_data *gmux_data)
-{
-	static const u32 memwin_offsets[] = {
-		0x20, 0x24, 0x28, 0x2c, 0x30, 0x1c,
-	};
-	unsigned int i, j;
-
-	for (i = 0; i < gmux_data->dgpu_bridge_count; i++) {
-		pci_write_config_word(gmux_data->dgpu_bridges[i], PCI_COMMAND,
-				      gmux_data->dgpu_bridge_cmd[i]);
-		for (j = 0; j < ARRAY_SIZE(memwin_offsets); j++)
-			pci_write_config_dword(gmux_data->dgpu_bridges[i],
-					       memwin_offsets[j],
-					       gmux_data->dgpu_bridge_memwin[i][j]);
-	}
-	pr_info("DGPU power-on: restored AMD bridge memory windows\n");
-}
-
-static int gmux_call_dgpu_power_method(struct apple_gmux_data *gmux_data,
-				       unsigned long long power_down)
-{
-	union acpi_object argument = {
-		.integer = {
-			.type = ACPI_TYPE_INTEGER,
-			.value = power_down,
-		},
-	};
-	struct acpi_object_list arguments = {
-		.count = 1,
-		.pointer = &argument,
-	};
-	acpi_handle handle;
-	unsigned long long result;
-	acpi_status status;
-	int ret;
-
-	if (!gmux_data->dgpu_pdev)
-		return -ENODEV;
-
-	handle = ACPI_HANDLE(&gmux_data->dgpu_pdev->dev);
-	if (!handle)
-		return -ENODEV;
-
-	if (power_down && gmux_data->dgpu_root_bridge &&
-	    gmux_save_dgpu_bus_config(gmux_data))
-		return -EIO;
-
-	pr_info("DGPU power-%s: requesting PWRD(%llu) firmware sequence\n",
-		power_down ? "off" : "on", power_down);
-	status = acpi_evaluate_integer(handle, "PWRD", &arguments, &result);
-	if (ACPI_FAILURE(status)) {
-		pr_err("Failed to evaluate DGPU.PWRD(%llu): %s\n", power_down,
-		       acpi_format_exception(status));
-		return -EIO;
-	}
-	if (result) {
-		pr_err("DGPU.PWRD(%llu) failed: %llu\n", power_down, result);
-		return -EIO;
-	}
-
-	if (!power_down && gmux_data->dgpu_root_bridge) {
-		ret = gmux_restore_dgpu_bus_config(gmux_data);
-		if (ret)
-			return ret;
-	}
-
-	pr_info("DGPU power-%s: PWRD(%llu) completed successfully\n",
-		power_down ? "off" : "on", power_down);
-	return 0;
-}
-
-static int gmux_call_dgpu_link_method(struct apple_gmux_data *gmux_data,
-				      const char *method)
-{
-	acpi_handle handle;
-	unsigned long long result;
-	acpi_status status;
-
-	if (!gmux_data->dgpu_pdev)
-		return -ENODEV;
-
-	handle = ACPI_HANDLE(&gmux_data->dgpu_pdev->dev);
-	if (!handle)
-		return -ENODEV;
-
-	pr_info("DGPU power-on: requesting %s link transition\n", method);
-	status = acpi_evaluate_integer(handle, (acpi_string)method, NULL,
-				       &result);
-	if (ACPI_FAILURE(status)) {
-		pr_err("Failed to evaluate DGPU.%s: %s\n", method,
-		       acpi_format_exception(status));
-		return -EIO;
-	}
-	if (result) {
-		pr_err("DGPU.%s failed: %llu\n", method, result);
-		return -EIO;
-	}
-
-	pr_info("DGPU power-on: %s completed successfully\n", method);
-	return 0;
 }
 
 struct apple_gmux_config {
@@ -731,39 +519,30 @@ static int gmux_switch_ddc(enum vga_switcheroo_client_id id)
 static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				   enum vga_switcheroo_state state)
 {
-	bool firmware_sequence = gmux_uses_firmware_power_sequence();
-	int ret;
+	acpi_handle dgpu_handle;
 
 	reinit_completion(&gmux_data->powerchange_done);
+	dgpu_handle = gmux_data->dgpu_pdev ?
+		ACPI_HANDLE(&gmux_data->dgpu_pdev->dev) : NULL;
 
 	if (state == VGA_SWITCHEROO_ON) {
 		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO &&
 		    gmux_data->dgpu_pdev) {
-			unsigned long start;
+			void __iomem *bar;
 			u16 val;
 			u16 ms;
 
-			if (firmware_sequence) {
-				pr_info("DGPU power-on: writing GMUX states 2 -> 3\n");
-				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 2);
-				msleep(100);
-				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
+			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 2);
+			msleep(100);
+			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
+			if (gmux_uses_acpi_dgpu_power_sequence())
+				pr_info("DGPU power rails enabled\n");
 
-				ret = gmux_call_dgpu_power_method(gmux_data, 0);
-				if (ret)
-					return ret;
-			} else {
-				pr_info("DGPU power-on: writing GMUX states 2 -> 3\n");
-				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 2);
-				msleep(100);
-				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
+			if (gmux_uses_acpi_dgpu_power_sequence())
+				acpi_execute_simple_method(dgpu_handle, "PWRD", 0);
+			else
+				acpi_evaluate_object(dgpu_handle, "PWG1", NULL, NULL);
 
-				ret = gmux_call_dgpu_link_method(gmux_data, "PWG1");
-				if (ret)
-					return ret;
-			}
-
-			start = jiffies;
 			for (ms = 0; ms < 1000; ms++) {
 				pci_read_config_word(gmux_data->dgpu_pdev,
 						     PCI_VENDOR_ID, &val);
@@ -775,15 +554,18 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				pr_err("Timed out waiting for DGPU to power on\n");
 				return -ETIMEDOUT;
 			}
-			pr_info("DGPU power-on: PCI config accessible after %u ms\n",
-				jiffies_to_msecs(jiffies - start));
 
-			gmux_restore_dgpu_mem_windows(gmux_data);
+			if (!gmux_uses_acpi_dgpu_power_sequence()) {
+				bar = pci_iomap(gmux_data->dgpu_pdev, 0, 0);
+				if (!bar)
+					return -ENOMEM;
 
-			ret = gmux_call_dgpu_link_method(gmux_data, "PWG3");
-			if (ret)
-				return ret;
+				iowrite32(ioread32(bar + 0x8c340) & 0x3fffffff,
+					  bar + 0x8c340);
+				pci_iounmap(gmux_data->dgpu_pdev, bar);
 
+				acpi_evaluate_object(dgpu_handle, "PWG3", NULL, NULL);
+			}
 		} else {
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
@@ -791,16 +573,31 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 		pr_debug("Discrete card powered up\n");
 	} else {
 		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO) {
-			if (firmware_sequence) {
-				ret = gmux_call_dgpu_power_method(gmux_data, 1);
-				if (ret)
-					return ret;
-			} else {
-				pr_info("DGPU power-off: writing GMUX states 1 -> 0\n");
-				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
-				msleep(10);
-				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
+			if (gmux_uses_acpi_dgpu_power_sequence()) {
+				union acpi_object params[2] = {
+					{
+						.type = ACPI_TYPE_INTEGER,
+						.integer.value = 0,
+					},
+					{
+						.type = ACPI_TYPE_INTEGER,
+						.integer.value = 4,
+					},
+				};
+
+				struct acpi_object_list args = {
+					.count = 2,
+					.pointer = params,
+				};
+
+				acpi_evaluate_object(dgpu_handle, "PUPD", &args, NULL);
 			}
+
+			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
+			msleep(10);
+			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
+			if (gmux_uses_acpi_dgpu_power_sequence())
+				pr_info("DGPU power rails disabled\n");
 		} else {
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
@@ -810,7 +607,7 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 
 	gmux_data->power_state = state;
 
-	if (!firmware_sequence && gmux_data->gpe >= 0 &&
+	if (gmux_data->gpe >= 0 &&
 	    !wait_for_completion_interruptible_timeout(&gmux_data->powerchange_done,
 						       msecs_to_jiffies(200)))
 		pr_warn("Timeout waiting for gmux switch to complete\n");
@@ -839,10 +636,8 @@ static enum vga_switcheroo_client_id gmux_get_client_id(struct pci_dev *pdev)
 		 pdev->device == 0x0863)
 		return VGA_SWITCHEROO_IGD;
 	else {
-		if (!apple_gmux_data->dgpu_pdev) {
+		if (!apple_gmux_data->dgpu_pdev)
 			apple_gmux_data->dgpu_pdev = pdev;
-			gmux_hold_dgpu_bridges(apple_gmux_data);
-		}
 		return VGA_SWITCHEROO_DIS;
 	}
 }
@@ -1285,7 +1080,6 @@ static void gmux_remove(struct pnp_dev *pnp)
 
 	gmux_fini_debugfs(gmux_data);
 	vga_switcheroo_unregister_handler();
-	gmux_release_dgpu_bridges(gmux_data);
 	gmux_disable_interrupts(gmux_data);
 	if (gmux_data->gpe >= 0) {
 		acpi_disable_gpe(NULL, gmux_data->gpe);
@@ -1329,6 +1123,6 @@ module_pnp_driver(gmux_pnp_driver);
 MODULE_AUTHOR("Seth Forshee <seth.forshee@canonical.com>");
 MODULE_AUTHOR("kait2en");
 MODULE_DESCRIPTION("Kait2en T2 GMUX driver");
-MODULE_VERSION("0.23");
+MODULE_VERSION("0.3");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pnp, gmux_device_ids);
