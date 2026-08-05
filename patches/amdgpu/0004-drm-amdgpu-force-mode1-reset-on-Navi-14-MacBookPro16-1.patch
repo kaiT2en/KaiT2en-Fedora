@@ -1,0 +1,59 @@
+From b3c8d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Tue, 5 Aug 2026 21:00:00 +0200
+Subject: [PATCH] drm/amdgpu: force mode-1 reset on Navi 14 MacBookPro16,1
+ runtime resume
+
+MacBookPro16,1 (Navi 14, 0x7340) signals BACO support through SMU11,
+but the Apple GMUX hard-cuts power in D3cold which destroys the BACO
+state.  nv_need_reset_on_init() reads mmMP0_SMN_C2PMSG_81 which
+incorrectly reports the GPU is still alive after resume, skipping
+the mode-1 reset and leaving the GPU inaccessible.
+
+Add a quirk for the exact PCI device (0x7340), Apple subsystem
+vendor (0x106B) and device (0x020F), revision (0x40) to force
+nv_need_reset_on_init() to return true during runtime resume only
+(adev->in_runpm), when BACO state is known to be destroyed.
+Cold boot is unaffected.
+
+Suggested-by: Frederick Morlock <me@freddy.us>
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ drivers/gpu/drm/amd/amdgpu/nv.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+--- a/drivers/gpu/drm/amd/amdgpu/nv.c	2026-08-05 23:05:37.447654185 +0200
++++ b/drivers/gpu/drm/amd/amdgpu/nv.c	2026-08-05 23:51:36.010039087 +0200
+@@ -539,10 +539,30 @@
+ 	return true;
+ }
+ 
++struct nv_reset_quirk {
++	u16 device;
++	u16 subsystem_vendor;
++	u16 subsystem_device;
++	u8 revision;
++};
++
++static const struct nv_reset_quirk nv_reset_quirks[] = {
++	{ 0x7340, PCI_VENDOR_ID_APPLE, 0x020F, 0x40 }, /* Navi 14 / MBP16,1 */
++};
++
+ static bool nv_need_reset_on_init(struct amdgpu_device *adev)
+ {
++	unsigned int i;
+ 	u32 sol_reg;
+ 
++	for (i = 0; i < ARRAY_SIZE(nv_reset_quirks); i++)
++		if (adev->pdev->device == nv_reset_quirks[i].device &&
++		    adev->pdev->subsystem_vendor == nv_reset_quirks[i].subsystem_vendor &&
++		    adev->pdev->subsystem_device == nv_reset_quirks[i].subsystem_device &&
++		    adev->pdev->revision == nv_reset_quirks[i].revision &&
++		    adev->in_runpm)
++			return true;
++
+ 	if (adev->flags & AMD_IS_APU)
+ 		return false;
+ 
+-- 
+2.55.0
