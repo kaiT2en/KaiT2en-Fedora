@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Wed, 5 Aug 2026 14:30:00 +0200
+Subject: [PATCH] drm/amdgpu: Force full PSP hw_init on runtime resume
+
+During D3cold runtime power-cycling (e.g. via Apple GMUX PWRD(1)), VRAM
+power is completely cut, causing the PSP to lose its internal state,
+loaded firmware (SOS), and Trusted Memory Region (TMR)[cite: 1, 2].
+
+Standard psp_resume() only executes psp_hw_start(), assuming the PSP
+state and TMR remained intact during suspend[cite: 1]. This results in command
+timeouts ("PSP load kdb failed!", error -62) when waking up from D3cold.
+
+Reset psp->initialized to false and invoke psp_hw_init() during runtime
+PM (adev->in_runpm) to force a full firmware reload, TMR reconstruction,
+and ring initialization [Quelle: drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c].
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
+index 9bd6b2a8d4e2..f0a41d9c12b1 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
+@@ -3351,6 +3351,9 @@ static int psp_resume(struct amdgpu_ip_block *ip_block)
+ 	struct amdgpu_device *adev = ip_block->adev;
+ 	struct psp_context *psp = &adev->psp;
+
++	if (adev->in_runpm)
++		return psp_hw_init(ip_block);
++
+ 	ret = psp_hw_start(psp);
+ 	if (ret)
+ 		goto failed;
+-- 
+2.55.0
