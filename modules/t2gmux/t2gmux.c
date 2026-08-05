@@ -821,6 +821,8 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				ret = gmux_call_dgpu_power_method(gmux_data, 1);
 				if (ret)
 					return ret;
+				/* SMU/memory-clock settling delay after gen3 link-transition */
+                msleep(50);
 			} else {
 				pr_info("DGPU power-off: writing GMUX states 1 -> 0\n");
 				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
