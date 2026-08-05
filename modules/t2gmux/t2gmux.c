@@ -262,10 +262,36 @@ static int gmux_call_dgpu_power_method(struct apple_gmux_data *gmux_data,
 	}
 
 	if (!power_down && gmux_data->dgpu_root_bridge) {
-		ret = gmux_restore_dgpu_bus_config(gmux_data);
-		if (ret)
-			return ret;
-	}
+        unsigned long start = jiffies;
+        unsigned long csts_deadline = start + msecs_to_jiffies(200);
+        unsigned long long csts_result = 0;
+
+        /* CSTS returns 1 when the GMUX status register (STSR)
+         * signals the GPU internal MMIO / PSP domain has left
+         * power-down and is ready for PCI config.
+         */
+        do {
+            status = acpi_evaluate_integer(handle, "CSTS", NULL,
+                               &csts_result);
+            if (ACPI_SUCCESS(status) && csts_result == 1)
+                break;
+
+            usleep_range(1000, 2000); /* Relax CPU and ACPI bus */
+        } while (time_before(jiffies, csts_deadline));
+
+        if (ACPI_FAILURE(status) || csts_result != 1) {
+            pr_err("DGPU power-on: CSTS timeout or error (status=0x%x, CSTS=%llu)\n",
+                   status, csts_result);
+            return -ETIMEDOUT;
+        }
+
+        pr_info("DGPU power-on: CSTS=%llu after %ums\n",
+            csts_result, jiffies_to_msecs(jiffies - start));
+
+        ret = gmux_restore_dgpu_bus_config(gmux_data);
+        if (ret)
+            return ret;
+    }
 
 	pr_info("DGPU power-%s: PWRD(%llu) completed successfully\n",
 		power_down ? "off" : "on", power_down);
