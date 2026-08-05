@@ -83,7 +83,7 @@ struct apple_gmux_data {
 	struct pci_dev *dgpu_pdev;
 	enum apple_gmux_type type;
 
-	void __iomem *gbar;
+	void __iomem *gbar, *mailbox;
 	u32 bnir;
 };
 
@@ -543,6 +543,15 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 
 			if (gmux_uses_acpi_dgpu_power_sequence()) {
 				iowrite32(gmux_data->bnir, gmux_data->gbar + 0x18);
+				for (ms = 0; ms < 150; ms++) {
+					val = ioread8(gmux_data->mailbox + 0x0F);
+					if (val == 0)
+						break;
+
+					msleep(1);
+				}
+				if (val != 0)
+					pr_err("Timed out STSR, but will still continue\n");
 				acpi_execute_simple_method(dgpu_handle, "PWRD", 0);
 			} else
 				acpi_evaluate_object(dgpu_handle, "PWG1", NULL, NULL);
@@ -1019,6 +1028,12 @@ get_version:
 	if (gmux_uses_acpi_dgpu_power_sequence()) {
 		gmux_data->gbar = ioremap(0xE0008000, 0x100);
 		if (!gmux_data->gbar) {
+			ret = -ENOMEM;
+			goto err_enable_gpe;
+		}
+
+		gmux_data->mailbox = ioremap(0xFE0B0200, 0x10);
+		if (!gmux_data->mailbox) {
 			ret = -ENOMEM;
 			goto err_enable_gpe;
 		}
