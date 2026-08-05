@@ -546,17 +546,6 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				acpi_execute_simple_method(dgpu_handle, "PWRD", 0);
 				iowrite32(gmux_data->bnir, gmux_data->gbar + 0x18);
 				pci_write_config_dword(gmux_data->dgpu_pdev, 0x24, gmux_data->bar5);
-				u32 val;
-				struct pci_dev *bridge = pci_upstream_bridge(gmux_data->dgpu_pdev);
-
-				while (bridge) {
-					if (pci_read_config_dword(bridge,
-								 PCI_PRIMARY_BUS,
-								 &val) == PCIBIOS_SUCCESSFUL)
-						pr_info("after: power on: bus_num: %X\n", val);
-
-					bridge = pci_upstream_bridge(bridge);
-				}
 			} else
 				acpi_evaluate_object(dgpu_handle, "PWG1", NULL, NULL);
 
@@ -602,6 +591,13 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 					if (pci_read_config_dword(bridge, PCI_PRIMARY_BUS, &val) == PCIBIOS_SUCCESSFUL)
 						pr_info("after power_off: bus_num: %X\n", val);
 
+					if (bridge->vendor == PCI_VENDOR_ID_ATI) {
+						unsigned long long val2;
+						acpi_handle handle = ACPI_HANDLE(&bridge->dev);
+						acpi_status status = acpi_evaluate_integer(handle, "SBN0", NULL, &val2);
+						if (ACPI_SUCCESS(status))
+							pr_info("SBN0 = 0x%llX\n", val2);
+					}
 					bridge = pci_upstream_bridge(bridge);
 				}
 				msleep(50);
