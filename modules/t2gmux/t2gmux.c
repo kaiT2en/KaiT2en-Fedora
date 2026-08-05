@@ -84,7 +84,7 @@ struct apple_gmux_data {
 	enum apple_gmux_type type;
 
 	void __iomem *gbar;
-	u32 bnir;
+	u32 bnir, bar5;
 };
 
 static struct apple_gmux_data *apple_gmux_data;
@@ -543,8 +543,9 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				pr_info("DGPU power rails enabled\n");
 
 			if (gmux_uses_acpi_dgpu_power_sequence()) {
-				iowrite32(gmux_data->bnir, gmux_data->gbar + 0x18);
 				acpi_execute_simple_method(dgpu_handle, "PWRD", 0);
+				iowrite32(gmux_data->bnir, gmux_data->gbar + 0x18);
+				pci_write_config_dword(gmux_data->dgpu_pdev, 0x24, gmux_data->bar5);
 			} else
 				acpi_evaluate_object(dgpu_handle, "PWG1", NULL, NULL);
 
@@ -580,7 +581,11 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO) {
 			if (gmux_uses_acpi_dgpu_power_sequence()) {
 				gmux_data->bnir = ioread32(gmux_data->gbar + 0x18);
+				pci_read_config_dword(gmux_data->dgpu_pdev, 0x24, &gmux_data->bar5);
+				pr_info("BAR5: 0x%X, BNIR: %X\n", gmux_data->bar5, gmux_data->bnir);
 				acpi_execute_simple_method(dgpu_handle, "PWRD", 1);
+
+				msleep(50);
 			}
 
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
