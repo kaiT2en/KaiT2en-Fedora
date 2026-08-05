@@ -537,9 +537,9 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 2);
 			msleep(100);
-			if (gmux_uses_acpi_dgpu_power_sequence())
+			if (!gmux_uses_acpi_dgpu_power_sequence())
 				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
-			if (gmux_uses_acpi_dgpu_power_sequence())
+			else
 				pr_info("DGPU power rails enabled\n");
 
 			if (gmux_uses_acpi_dgpu_power_sequence()) {
