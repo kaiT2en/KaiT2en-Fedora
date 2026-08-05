@@ -585,6 +585,14 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				pr_info("BAR5: 0x%X, BNIR: %X\n", gmux_data->bar5, gmux_data->bnir);
 				acpi_execute_simple_method(dgpu_handle, "PWRD", 1);
 
+				u32 val;
+				struct pci_dev *bridge = pci_upstream_bridge(gmux_data->dgpu_pdev);
+				while (bridge) {
+					if (pci_read_config_dword(bridge, PCI_PRIMARY_BUS, &val) == PCIBIOS_SUCCESSFUL)
+						pr_info("bus_num: %X\n", val);
+
+					bridge = pci_upstream_bridge(bridge);
+				}
 				msleep(50);
 			}
 
