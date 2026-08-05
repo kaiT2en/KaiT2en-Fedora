@@ -546,6 +546,17 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				acpi_execute_simple_method(dgpu_handle, "PWRD", 0);
 				iowrite32(gmux_data->bnir, gmux_data->gbar + 0x18);
 				pci_write_config_dword(gmux_data->dgpu_pdev, 0x24, gmux_data->bar5);
+				u32 val;
+				struct pci_dev *bridge = pci_upstream_bridge(gmux_data->dgpu_pdev);
+
+				while (bridge) {
+					if (pci_read_config_dword(bridge,
+								 PCI_PRIMARY_BUS,
+								 &val) == PCIBIOS_SUCCESSFUL)
+						pr_info("after: power on: bus_num: %X\n", val);
+
+					bridge = pci_upstream_bridge(bridge);
+				}
 			} else
 				acpi_evaluate_object(dgpu_handle, "PWG1", NULL, NULL);
 
@@ -589,7 +600,7 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				struct pci_dev *bridge = pci_upstream_bridge(gmux_data->dgpu_pdev);
 				while (bridge) {
 					if (pci_read_config_dword(bridge, PCI_PRIMARY_BUS, &val) == PCIBIOS_SUCCESSFUL)
-						pr_info("bus_num: %X\n", val);
+						pr_info("after power_off: bus_num: %X\n", val);
 
 					bridge = pci_upstream_bridge(bridge);
 				}
