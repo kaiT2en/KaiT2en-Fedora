@@ -569,8 +569,10 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 
 					acpi_handle_info(parent_handle, "t2gmux: pci->dev: 0x%X, pci->vendor: 0x%X\n", pdev->device, pdev->vendor);
 					if (pdev->vendor == PCI_VENDOR_ID_ATI) {
+						acpi_status status = acpi_evaluate_integer(parent_handle, "SBN0", NULL, &val);
 						acpi_handle_info(parent_handle, "t2gmux: trying to write SBN0 value\n");
-						if (ACPI_SUCCESS(acpi_evaluate_integer(parent_handle, "SBN0", NULL, &val))) {
+						acpi_handle_info(parent_handle, "t2gmux: SBN0 status: %s\n", acpi_format_exception(status));
+						if (ACPI_SUCCESS(status)) {
 							acpi_handle_info(parent_handle, "SBN0: 0x%X\n", (u32)val);
 							pci_write_config_dword(pdev, PCI_PRIMARY_BUS, (u32)val);
 						}
@@ -580,7 +582,7 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 			} else
 				acpi_evaluate_object(dgpu_handle, "PWG1", NULL, NULL);
 
-			for (ms = 0; ms < 1000; ms++) {
+			for (ms = 0; ms < 5000; ms++) {
 				pci_read_config_word(gmux_data->dgpu_pdev,
 						     PCI_VENDOR_ID, &val);
 				if (val != 0xffff)
