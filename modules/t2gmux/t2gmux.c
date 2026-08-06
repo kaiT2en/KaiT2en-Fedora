@@ -23,6 +23,7 @@
 #include <linux/vga_switcheroo.h>
 #include <linux/debugfs.h>
 #include <linux/dmi.h>
+#include <linux/pm_runtime.h>
 #include <acpi/video.h>
 #include <asm/io.h>
 
@@ -550,10 +551,15 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				acpi_handle parent_handle = dgpu_handle;
 				unsigned long long val;
 				while (ACPI_SUCCESS(acpi_get_parent(parent_handle, &parent_handle))) {
+					struct acpi_device *adev;
 					struct device *dev;
 					struct pci_dev *pdev;
 
-					dev = acpi_get_first_physical_node(parent_handle);
+					adev = acpi_get_acpi_dev(parent_handle);
+					if (!adev)
+						break;
+
+					dev = acpi_get_first_physical_node(adev);
 					if (!dev || !dev_is_pci(dev))
 						break;
 
@@ -564,6 +570,8 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 							pci_write_config_dword(pdev, PCI_PRIMARY_BUS, (u32)val);
 					} else
 						pci_write_config_dword(pdev, PCI_PRIMARY_BUS, gmux_data->bnir);
+
+					acpi_dev_put(adev);
 				}
 			} else
 				acpi_evaluate_object(dgpu_handle, "PWG1", NULL, NULL);
@@ -649,8 +657,14 @@ static enum vga_switcheroo_client_id gmux_get_client_id(struct pci_dev *pdev)
 		 pdev->device == 0x0863)
 		return VGA_SWITCHEROO_IGD;
 	else {
-		if (!apple_gmux_data->dgpu_pdev)
+		if (!apple_gmux_data->dgpu_pdev) {
 			apple_gmux_data->dgpu_pdev = pdev;
+			struct pci_dev *bridge = pci_upstream_bridge(apple_gmux_data->dgpu_pdev);
+			while (bridge && bridge->vendor == PCI_VENDOR_ID_ATI) {
+				pm_runtime_get_noresume(&bridge->dev);
+				bridge = pci_upstream_bridge(bridge);
+			}
+		}
 		return VGA_SWITCHEROO_DIS;
 	}
 }
