@@ -555,23 +555,24 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 					struct device *dev;
 					struct pci_dev *pdev;
 
-					adev = acpi_get_acpi_dev(parent_handle);
+					acpi_handle_info(parent_handle, "t2gmux: trying to create adev\n");
+					adev = acpi_fetch_acpi_dev(parent_handle);
 					if (!adev)
 						break;
 
+					acpi_handle_info(parent_handle, "t2gmux: trying to create pdev\n");
 					dev = acpi_get_first_physical_node(adev);
 					if (!dev || !dev_is_pci(dev))
 						break;
 
 					pdev = to_pci_dev(dev);
 
+					acpi_handle_info(parent_handle, "t2gmux: pci->dev: 0x%X, pci->vendor: 0x%X\n", pdev->device, pdev->vendor);
 					if (pdev->vendor == PCI_VENDOR_ID_ATI) {
 						if (ACPI_SUCCESS(acpi_evaluate_integer(parent_handle, "SBN0", NULL, &val)))
 							pci_write_config_dword(pdev, PCI_PRIMARY_BUS, (u32)val);
 					} else
 						pci_write_config_dword(pdev, PCI_PRIMARY_BUS, gmux_data->bnir);
-
-					acpi_dev_put(adev);
 				}
 			} else
 				acpi_evaluate_object(dgpu_handle, "PWG1", NULL, NULL);
