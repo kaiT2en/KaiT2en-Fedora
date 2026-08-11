@@ -2,21 +2,33 @@
 set -euo pipefail
 
 readonly EFI_VAR=/sys/firmware/efi/efivars/gpu-power-prefs-fa4ce28d-b62f-4c99-9cc3-6815686e30f9
-readonly DGPU_OFF_SERVICE=kait2en-dgpu-off.service
-readonly DGPU_SUSPEND_SERVICE=kait2en-dgpu-suspend.service
-readonly POWER_PROFILE_SERVICE=kait2en-amdgpu-profile.service
-readonly POWER_PROFILE_RESUME_SERVICE=kait2en-amdgpu-profile-resume.service
 readonly SWITCH_PATH=/sys/kernel/debug/vgaswitcheroo/switch
-readonly STATE_DIR=/run/t2-dgpu-control
-readonly SUSPEND_STATE="$STATE_DIR/dgpu-was-off"
 
 fail() {
 	printf 't2-dgpu-control: %s\n' "$*" >&2
 	exit 1
 }
 
+find_amd_gpu() {
+	local class dev driver vendor
+
+	for dev in /sys/bus/pci/devices/*; do
+		[[ -r "$dev/vendor" && -r "$dev/class" ]] || continue
+		read -r vendor <"$dev/vendor"
+		read -r class <"$dev/class"
+		[[ "$vendor" == 0x1002 && "$class" == 0x03* ]] || continue
+		[[ -L "$dev/driver" ]] || continue
+		driver=$(basename "$(readlink -f "$dev/driver")")
+		[[ "$driver" == amdgpu ]] || continue
+		printf '%s\n' "$dev"
+		return 0
+	done
+
+	return 1
+}
+
 is_supported_macbook() {
-	local dev model vendor class has_intel=0 has_amd=0
+	local class dev model vendor has_intel=0 has_amd=0
 
 	[[ -r /sys/class/dmi/id/product_name ]] || return 1
 	read -r model </sys/class/dmi/id/product_name
@@ -36,12 +48,21 @@ is_supported_macbook() {
 	((has_intel && has_amd))
 }
 
+runtime_pm_supported() {
+	local state
+
+	[[ -r "$SWITCH_PATH" ]] || return 1
+	state=$(awk -F: '$2 == "DIS" { print $4; exit }' "$SWITCH_PATH")
+	[[ "$state" == DynPwr || "$state" == DynOff ]]
+}
+
 write_boot_gpu() {
 	local gpu=$1
-	[[ -e "$EFI_VAR" ]] || fail "the gpu-power-prefs EFI variable is missing"
-	[[ -w /sys/firmware/efi/efivars ]] || fail "EFI variables are not writable"
 
-	chattr -i "$EFI_VAR"
+	[[ -w /sys/firmware/efi/efivars ]] || fail "EFI variables are not writable"
+	if [[ -e "$EFI_VAR" ]]; then
+		chattr -i "$EFI_VAR"
+	fi
 	trap 'chattr +i "$EFI_VAR" 2>/dev/null || true' EXIT
 	case "$gpu" in
 		integrated) printf '\x07\x00\x00\x00\x01\x00\x00\x00' >"$EFI_VAR" ;;
@@ -52,132 +73,34 @@ write_boot_gpu() {
 	trap - EXIT
 }
 
-apply_configuration() {
-	local gpu=${1:-} power=${2:-} profile=${3:-}
-	case "$gpu:$power" in
-		integrated:power-off)
-			write_boot_gpu integrated
-			systemctl enable "$DGPU_OFF_SERVICE" "$DGPU_SUSPEND_SERVICE"
-			;;
-		integrated:keep-powered)
-			systemctl disable "$DGPU_OFF_SERVICE" "$DGPU_SUSPEND_SERVICE"
-			write_boot_gpu integrated
-			;;
-		discrete:keep-powered)
-			systemctl disable "$DGPU_OFF_SERVICE" "$DGPU_SUSPEND_SERVICE"
-			write_boot_gpu discrete
-			;;
-		*)
-			fail "invalid GPU configuration"
-			;;
-	esac
+enable_hybrid_graphics() {
+	local amd
 
-	case "$profile" in
-		power-saving)
-			[[ "$power" != power-off ]] ||
-				fail "the AMDGPU power-saving profile requires the discrete GPU to remain powered"
-			systemctl enable "$POWER_PROFILE_SERVICE" "$POWER_PROFILE_RESUME_SERVICE"
-			set_power_profile power-saving
-			;;
-		default-profile)
-			systemctl disable "$POWER_PROFILE_SERVICE" "$POWER_PROFILE_RESUME_SERVICE"
-			;;
-		*)
-			fail "invalid AMDGPU power profile"
-			;;
-	esac
+	runtime_pm_supported ||
+		fail "required Apple GMUX runtime-PM kernel support is not available"
+	amd=$(find_amd_gpu) || fail "no AMDGPU device was found"
+	[[ -w "$amd/power/control" ]] ||
+		fail "runtime power control is unavailable on ${amd##*/}"
+
+	printf 'auto\n' >"$amd/power/control"
+	write_boot_gpu integrated
 }
 
-set_power_profile() {
-	local mode=$1 class dev driver found=0 vendor
-	local dgpu_state
-
-	if [[ -r "$SWITCH_PATH" ]]; then
-		dgpu_state=$(awk -F: '$2 == "DIS" { print $4; exit }' "$SWITCH_PATH")
-		if [[ "$dgpu_state" == Off ]]; then
-			printf 't2-dgpu-control: dGPU is powered off; the runtime AMDGPU profile was not changed\n'
-			return 0
-		fi
-	fi
-
-	for dev in /sys/bus/pci/devices/*; do
-		[[ -r "$dev/vendor" && -r "$dev/class" ]] || continue
-		read -r vendor <"$dev/vendor"
-		read -r class <"$dev/class"
-		[[ "$vendor" == 0x1002 && "$class" == 0x03* ]] || continue
-		[[ -L "$dev/driver" ]] || continue
-		driver=$(basename "$(readlink -f "$dev/driver")")
-		[[ "$driver" == amdgpu ]] || continue
-		[[ -w "$dev/power_dpm_force_performance_level" && -w "$dev/pp_power_profile_mode" ]] ||
-			fail "AMDGPU power-profile controls are unavailable on ${dev##*/}"
-		found=1
-
-		[[ "$mode" == power-saving ]] || fail "invalid AMDGPU power profile"
-		grep -Eq '^[[:space:]]*2[[:space:]]+POWER_SAVING' "$dev/pp_power_profile_mode" ||
-			fail "AMDGPU device ${dev##*/} does not expose POWER_SAVING as profile 2"
-		printf 'manual\n' >"$dev/power_dpm_force_performance_level"
-		printf '2\n' >"$dev/pp_power_profile_mode"
-	done
-
-	((found)) || fail "no supported AMDGPU device was found"
-}
-
-power_off_dgpu() {
-	local active
-	[[ -w "$SWITCH_PATH" ]] || fail "vgaswitcheroo is not available"
-	active=$(awk -F: '$3 == "+" { print $2; exit }' "$SWITCH_PATH")
-	[[ "$active" == IGD ]] || fail "refusing to power off the dGPU while $active is active"
-	printf 'OFF\n' >"$SWITCH_PATH"
-}
-
-prepare_dgpu_suspend() {
-	local active state
-	[[ -w "$SWITCH_PATH" ]] || fail "vgaswitcheroo is not available"
-	active=$(awk -F: '$3 == "+" { print $2; exit }' "$SWITCH_PATH")
-	[[ "$active" == IGD ]] || fail "refusing to alter dGPU power while $active is active"
-	state=$(awk -F: '$2 == "DIS" { print $4; exit }' "$SWITCH_PATH")
-
-	rm -f "$SUSPEND_STATE"
-	if [[ "$state" == Off ]]; then
-		install -d -m 0755 "$STATE_DIR"
-		printf 'ON\n' >"$SWITCH_PATH"
-		printf '1\n' >"$SUSPEND_STATE"
-	fi
-}
-
-restore_dgpu_after_resume() {
-	local active
-	[[ -e "$SUSPEND_STATE" ]] || return 0
-	[[ -w "$SWITCH_PATH" ]] || fail "vgaswitcheroo is not available after resume"
-	active=$(awk -F: '$3 == "+" { print $2; exit }' "$SWITCH_PATH")
-	[[ "$active" == IGD ]] || fail "refusing to power off the dGPU while $active is active"
-	printf 'OFF\n' >"$SWITCH_PATH"
-	rm -f "$SUSPEND_STATE"
+use_discrete_gpu() {
+	write_boot_gpu discrete
 }
 
 ((EUID == 0)) || fail "root privileges are required"
 is_supported_macbook || fail "this Mac does not have the supported Intel/AMD hybrid GPU layout"
 
 case "${1:-}" in
-	apply)
-		[[ $# -eq 4 ]] || fail "usage: $0 apply <integrated|discrete> <power-off|keep-powered> <power-saving|default-profile>"
-		apply_configuration "$2" "$3" "$4"
+	enable-hybrid)
+		[[ $# -eq 1 ]] || fail "usage: $0 enable-hybrid"
+		enable_hybrid_graphics
 		;;
-	apply-power-saving)
-		[[ $# -eq 1 ]] || fail "usage: $0 apply-power-saving"
-		set_power_profile power-saving
-		;;
-	power-off)
-		[[ $# -eq 1 ]] || fail "usage: $0 power-off"
-		power_off_dgpu
-		;;
-	prepare-suspend)
-		[[ $# -eq 1 ]] || fail "usage: $0 prepare-suspend"
-		prepare_dgpu_suspend
-		;;
-	restore-after-resume)
-		[[ $# -eq 1 ]] || fail "usage: $0 restore-after-resume"
-		restore_dgpu_after_resume
+	use-discrete)
+		[[ $# -eq 1 ]] || fail "usage: $0 use-discrete"
+		use_discrete_gpu
 		;;
 	reboot)
 		[[ $# -eq 1 ]] || fail "usage: $0 reboot"

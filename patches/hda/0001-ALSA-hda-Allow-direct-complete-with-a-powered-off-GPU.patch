@@ -1,0 +1,94 @@
+From c5040e05d4d2c33a9a801dc0dbbee495a9e8b7e7 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Sat, 1 Aug 2026 16:27:42 +0200
+Subject: [PATCH] ALSA: hda: Allow direct complete with a powered-off GPU
+
+Hello everyone,
+
+The HDA controller normally needs different WAKEEN settings for runtime
+and system suspend, so azx_prepare() prevents direct complete. For a
+vga_switcheroo audio client whose bound GPU is already runtime suspended
+and switched off, the HDA controller is physically inaccessible and
+cannot signal wake events.
+
+Resuming the HDA function during system suspend also acquires its
+runtime-PM supplier. This powers the discrete GPU back on only to suspend
+it again and can expose failures while restoring an otherwise unused GPU.
+
+We allow direct complete when the bound VGA device is both runtime
+suspended and reported off by vga_switcheroo. Active GPUs and HDA
+controllers without a switcheroo binding retain the existing WAKEEN
+transition.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+This patch has no build-time dependency. It complements the AMDGPU GMUX
+runtime-PM change by avoiding a supplier resume during system sleep.
+
+---
+ sound/hda/controllers/intel.c | 29 +++++++++++++++++++++++++++--
+ 1 file changed, 27 insertions(+), 2 deletions(-)
+
+diff --git a/sound/hda/controllers/intel.c b/sound/hda/controllers/intel.c
+index 4b03c64e72ab..47cc695864a1 100644
+--- a/sound/hda/controllers/intel.c
++++ b/sound/hda/controllers/intel.c
+@@ -334,6 +334,7 @@ enum {
+ #ifdef SUPPORT_VGA_SWITCHEROO
+ #define use_vga_switcheroo(chip)	((chip)->use_vga_switcheroo)
+ #define needs_eld_notify_link(chip)	((chip)->bus.keep_power)
++static struct pci_dev *get_bound_vga(struct pci_dev *pci);
+ #else
+ #define use_vga_switcheroo(chip)	0
+ #define needs_eld_notify_link(chip)	false
+@@ -1016,6 +1017,28 @@ static void __azx_runtime_resume(struct azx *chip)
+ 		display_power(chip, false);
+ }
+ 
++static bool azx_vga_is_powered_off(struct azx *chip)
++{
++#ifdef SUPPORT_VGA_SWITCHEROO
++	struct pci_dev *pci;
++	bool powered_off = false;
++
++	if (!use_vga_switcheroo(container_of(chip, struct hda_intel, chip)))
++		return false;
++
++	pci = get_bound_vga(chip->pci);
++	if (pci) {
++		powered_off = pm_runtime_suspended(&pci->dev) &&
++			vga_switcheroo_get_client_state(pci) == VGA_SWITCHEROO_OFF;
++		pci_dev_put(pci);
++	}
++
++	return powered_off;
++#else
++	return false;
++#endif
++}
++
+ static int azx_prepare(struct device *dev)
+ {
+ 	struct snd_card *card = dev_get_drvdata(dev);
+@@ -1025,6 +1048,10 @@ static int azx_prepare(struct device *dev)
+ 		return 0;
+ 
+ 	chip = card->private_data;
++	/* A powered-off dGPU cannot signal HDA wake events. */
++	if (azx_vga_is_powered_off(chip))
++		return 1;
++
+ 	chip->pm_prepared = 1;
+ 	snd_power_change_state(card, SNDRV_CTL_POWER_D3hot);
+ 
+@@ -1183,8 +1210,6 @@ static const struct dev_pm_ops azx_pm = {
+ static int azx_probe_continue(struct azx *chip);
+ 
+ #ifdef SUPPORT_VGA_SWITCHEROO
+-static struct pci_dev *get_bound_vga(struct pci_dev *pci);
+-
+ static void azx_vs_set_state(struct pci_dev *pci,
+ 			     enum vga_switcheroo_state state)
+ {
+-- 
+2.55.0
