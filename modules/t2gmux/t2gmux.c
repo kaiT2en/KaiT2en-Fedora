@@ -616,11 +616,11 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 				pr_info("BAR5: 0x%X, BNIR: %X\n", gmux_data->bar5, gmux_data->bnir);
 				acpi_execute_simple_method(dgpu_handle, "PWRD", 1);
 				msleep(50);
+			} else {
+				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
+				msleep(10);
+				gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
 			}
-
-			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
-			msleep(10);
-			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
 			if (gmux_uses_acpi_dgpu_power_sequence())
 				pr_info("DGPU power rails disabled\n");
 		} else {
