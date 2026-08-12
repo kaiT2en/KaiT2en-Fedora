@@ -115,8 +115,10 @@ struct t2smc_device {
 	unsigned int key_count;
 	unsigned int fan_count;
 	unsigned int temp_count;
+	unsigned int power_count;
 	struct t2smc_entry *cache;
 	char (*temp_keys)[5]; /* [temp_count] dynamically allocated */
+	char (*power_keys)[5]; /* [power_count] dynamically allocated */
 	struct rtc_device *rtc_dev;
 	struct device *hwmon_dev;
 	bool has_chls;
@@ -444,6 +446,17 @@ static int t2smc_read_be16_signed(struct t2smc_device *t2, const char *key,
 	return ret;
 }
 
+static int t2smc_hex_digit(char digit)
+{
+	if (digit >= '0' && digit <= '9')
+		return digit - '0';
+	if (digit >= 'a' && digit <= 'f')
+		return digit - 'a' + 10;
+	if (digit >= 'A' && digit <= 'F')
+		return digit - 'A' + 10;
+	return -EINVAL;
+}
+
 static int t2smc_read_scaled(struct t2smc_device *t2, const char *key,
 			     long scale, long *val)
 {
@@ -485,26 +498,16 @@ static int t2smc_read_scaled(struct t2smc_device *t2, const char *key,
 
 	if (entry->len == 2) {
 		u16 fixed;
-		unsigned int fractional_bits;
+		int integer_bits, fractional_bits;
 		bool signed_type = entry->type[0] == 's';
 
-		if (!strcmp(entry->type, "fp3d"))
-			fractional_bits = 13;
-		else if (!strcmp(entry->type, "fp5b"))
-			fractional_bits = 11;
-		else if (!strcmp(entry->type, "fp88"))
-			fractional_bits = 8;
-		else if (!strcmp(entry->type, "sp3c"))
-			fractional_bits = 12;
-		else if (!strcmp(entry->type, "sp4b"))
-			fractional_bits = 11;
-		else if (!strcmp(entry->type, "sp5a"))
-			fractional_bits = 10;
-		else if (!strcmp(entry->type, "sp69"))
-			fractional_bits = 9;
-		else if (!strcmp(entry->type, "sp78"))
-			fractional_bits = 8;
-		else
+		if ((strncmp(entry->type, "sp", 2) &&
+		     strncmp(entry->type, "fp", 2)))
+			return -EOPNOTSUPP;
+		integer_bits = t2smc_hex_digit(entry->type[2]);
+		fractional_bits = t2smc_hex_digit(entry->type[3]);
+		if (integer_bits < 0 || fractional_bits < 0 ||
+		    integer_bits + fractional_bits != (signed_type ? 15 : 16))
 			return -EOPNOTSUPP;
 
 		ret = t2smc_read_be16(t2, key, &fixed);
@@ -590,6 +593,41 @@ static int t2smc_init_keycache(struct t2smc_device *t2)
 	if (t2->fan_count > 10)
 		t2->fan_count = 10;
 
+	/* Discover all power keys in the sorted P..Q range. */
+	{
+		unsigned int p, power_begin, power_end;
+
+		ret = t2smc_get_lower_bound(t2, &power_begin, "P");
+		if (ret)
+			return ret;
+		ret = t2smc_get_lower_bound(t2, &power_end, "Q");
+		if (ret)
+			return ret;
+
+		t2->power_count = power_end - power_begin;
+		if (t2->power_count) {
+			t2->power_keys = kcalloc(t2->power_count,
+						 sizeof(t2->power_keys[0]),
+						 GFP_KERNEL);
+			if (!t2->power_keys) {
+				t2->power_count = 0;
+			} else {
+				for (p = power_begin; p < power_end; p++) {
+					struct t2smc_entry *entry;
+
+					entry = t2smc_get_entry_by_index(t2, p);
+					if (IS_ERR(entry)) {
+						t2->power_count = p - power_begin;
+						break;
+					}
+					memcpy(t2->power_keys[p - power_begin],
+					       entry->key, 4);
+					t2->power_keys[p - power_begin][4] = '\0';
+				}
+			}
+		}
+	}
+
 	/* Discover temperature sensors (keys in T..U range, type sp78) */
 	{
 		unsigned int t, temp_begin, temp_end;
@@ -655,8 +693,9 @@ static int t2smc_init_keycache(struct t2smc_device *t2)
 	if (ret)
 		return ret;
 
-	dev_info(t2->dev, "initialized: keys=%u fans=%u temps=%u\n",
-		 t2->key_count, t2->fan_count, t2->temp_count);
+	dev_info(t2->dev, "initialized: keys=%u fans=%u temps=%u power=%u\n",
+		 t2->key_count, t2->fan_count, t2->temp_count,
+		 t2->power_count);
 	dev_info(t2->dev,
 		 "charge keys: CHLS=%d CHWA=%d\n", t2->has_chls,
 		 t2->has_chwa);
@@ -838,6 +877,14 @@ static int t2smc_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 			return -EINVAL;
 		return t2smc_read_temp(t2, t2->temp_keys[channel], val);
 
+	case hwmon_power:
+		if (attr != hwmon_power_input)
+			return -EOPNOTSUPP;
+		if (channel >= t2->power_count)
+			return -EINVAL;
+		return t2smc_read_scaled(t2, t2->power_keys[channel],
+					 1000000, val);
+
 	case hwmon_fan:
 		switch (attr) {
 		case hwmon_fan_input:
@@ -905,6 +952,8 @@ static umode_t t2smc_hwmon_is_visible(const void *drvdata,
 	switch (type) {
 	case hwmon_temp:
 		return 0444;
+	case hwmon_power:
+		return 0444;
 	case hwmon_fan:
 		switch (attr) {
 		case hwmon_fan_min:
@@ -929,6 +978,12 @@ static int t2smc_hwmon_read_string(struct device *dev,
 		if (channel >= t2->temp_count)
 			return -EINVAL;
 		*str = t2->temp_keys[channel];
+		return 0;
+	}
+	if (type == hwmon_power && attr == hwmon_power_label) {
+		if (channel >= t2->power_count)
+			return -EINVAL;
+		*str = t2->power_keys[channel];
 		return 0;
 	}
 	return -EOPNOTSUPP;
@@ -1313,11 +1368,13 @@ static int t2smc_register_hwmon(struct t2smc_device *t2)
 	fan_info->type   = hwmon_fan;
 	fan_info->config = fan_config;
 
-	/* Build info array: fan + optional temp, terminated by NULL */
+	/* Build info array: fan + optional temp/power, terminated by NULL */
 	{
 		struct hwmon_channel_info *temp_info = NULL;
+		struct hwmon_channel_info *power_info = NULL;
 		const struct hwmon_channel_info **info;
 		u32 *temp_config;
+		u32 *power_config;
 		int nchans = 2; /* fan + sentinel */
 		int idx = 0;
 
@@ -1335,12 +1392,28 @@ static int t2smc_register_hwmon(struct t2smc_device *t2)
 			temp_info->config = temp_config;
 		}
 
+		if (t2->power_count) {
+			nchans++;
+			power_config = devm_kcalloc(dev, t2->power_count + 1,
+						    sizeof(u32), GFP_KERNEL);
+			power_info = devm_kzalloc(dev, sizeof(*power_info),
+						   GFP_KERNEL);
+			if (!power_config || !power_info)
+				return -ENOMEM;
+			for (i = 0; i < t2->power_count; i++)
+				power_config[i] = HWMON_P_INPUT | HWMON_P_LABEL;
+			power_info->type = hwmon_power;
+			power_info->config = power_config;
+		}
+
 		info = devm_kcalloc(dev, nchans, sizeof(*info), GFP_KERNEL);
 		if (!info)
 			return -ENOMEM;
 		info[idx++] = fan_info;
 		if (temp_info)
 			info[idx++] = temp_info;
+		if (power_info)
+			info[idx++] = power_info;
 		info[idx] = NULL;
 		chip_info->info = info;
 	}
@@ -1367,6 +1440,7 @@ static void t2smc_devm_cleanup(void *data)
 	mutex_destroy(&t2->mutex);
 	kfree(t2->cache);
 	kfree(t2->temp_keys);
+	kfree(t2->power_keys);
 }
 
 static void t2smc_unregister_power_notifier(void *data)
@@ -1429,7 +1503,10 @@ static int t2smc_add(struct acpi_device *adev)
 			t2->cache = NULL;
 			kfree(t2->temp_keys);
 			t2->temp_keys = NULL;
+			kfree(t2->power_keys);
+			t2->power_keys = NULL;
 			t2->key_count = 0;
+			t2->power_count = 0;
 
 			ret = t2smc_init_keycache(t2);
 			if (!ret) {

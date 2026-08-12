@@ -1,7 +1,7 @@
 # t2smc
 
 Minimal SMC driver for T2 Macs. Provides fan control, battery charge limit,
-temperature sensor and RTC access. Hardware monitoring is exposed via
+temperature, power sensor and RTC access. Hardware monitoring is exposed via
 the standard Linux hwmon interface. Requires no other SMC driver.
 
 This is based on applesmc with macsmc patches but rebuilt from scratch.
@@ -76,6 +76,14 @@ HWMON="$(dirname "$(grep -l '^t2smc$' /sys/class/hwmon/hwmon*/name)")"
 ```
 
 ## Power telemetry
+
+Every SMC key whose name starts with `P` is discovered dynamically and exposed
+through standard hwmon `powerN_label` and `powerN_input` files. The label is the
+four-character SMC key and the input value is in microwatts:
+
+```sh
+paste "$HWMON"/power*_label "$HWMON"/power*_input
+```
 
 `t2smc` leaves the system battery and charger under the control of the
 mainline ACPI SBS drivers. It exposes additional SMC telemetry on its hwmon

@@ -326,6 +326,74 @@ fn scaled_value(value: i64, unit: &str) -> String {
     format!("{:.2} {unit}", value as f64 / 1_000_000.0)
 }
 
+fn power_label(key: &str) -> String {
+    match key {
+        "PCPT" => "CPU package total (PECI)".into(),
+        "PCTR" => "CPU total".into(),
+        "PC0C" => "CPU cores".into(),
+        "PC0c" => "CPU raw package".into(),
+        "PC0G" => "CPU integrated GPU".into(),
+        "PC0I" => "CPU I/O high-side".into(),
+        "PC0M" => "CPU I/O high-side 2".into(),
+        "PC0R" => "CPU high-side average".into(),
+        "PC0S" => "CPU system agent".into(),
+        "PC1C" => "CPU VCCIO".into(),
+        "PC2C" => "CPU VCCSA (PC2C)".into(),
+        "PC3C" => "CPU DDR".into(),
+        "PCAC" => "CPU core".into(),
+        "PCAM" => "CPU core (IMON)".into(),
+        "PCEC" => "CPU VccEDRAM".into(),
+        "PCGC" => "Intel GPU (IMON)".into(),
+        "PCGM" => "Intel GPU (IMON) 2".into(),
+        "PCPC" => "CPU package cores (PECI)".into(),
+        "PCPG" => "CPU package graphics (PECI)".into(),
+        "PCSC" => "CPU VCCSA (PCSC)".into(),
+        "PD0R" => "DC-In MLB S0 rail".into(),
+        "PD5R" => "DC-In MLB S5 rail".into(),
+        "PDMR" => "DC-In MLB total".into(),
+        "PDTR" => "DC-In total".into(),
+        "PG0R" => "GPU 0 rail".into(),
+        "PSTR" => "System total (1 s delayed)".into(),
+        "PZ0E" => "Zone 0 average target".into(),
+        "PZ0G" => "Zone 0 average".into(),
+        "PZAP" => "Power zone AP".into(),
+        "PZBL" => "Power zone backlight".into(),
+        "PZHD" => "Power zone storage".into(),
+        _ => format!("unknown ({key})"),
+    }
+}
+
+fn read_smc_power_stats(hwmon: &Path) -> Vec<(String, String)> {
+    let pattern = format!("{}/power*_label", hwmon.display());
+    let Ok(entries) = glob::glob(&pattern) else {
+        return vec![];
+    };
+    let mut stats = Vec::new();
+
+    for label_path in entries.flatten() {
+        let Some(key) = fs::read_to_string(&label_path)
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|key| key.starts_with('P'))
+        else {
+            continue;
+        };
+        let input_path = label_path.with_file_name(
+            label_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .replace("_label", "_input"),
+        );
+        if let Some(value) = read_i64(&input_path) {
+            stats.push((power_label(&key), scaled_value(value, "W")));
+        }
+    }
+
+    stats.sort_by(|a, b| a.0.cmp(&b.0));
+    stats
+}
+
 fn read_power_telemetry(hwmon: &Path) -> Vec<(String, String)> {
     let mut values = Vec::new();
     let mut add = |name: &str, file: &str, format: fn(i64) -> String| {
@@ -371,6 +439,8 @@ fn read_power_telemetry(hwmon: &Path) -> Vec<(String, String)> {
     add("Adapter power", "smc_adapter_power_uw", |v| {
         scaled_value(v, "W")
     });
+
+    values.extend(read_smc_power_stats(hwmon));
 
     values
 }
@@ -836,7 +906,7 @@ fn main() {
 
         let window = adw::ApplicationWindow::new(app);
         window.set_title(Some("SMC Control"));
-        window.set_default_size(460, 760);
+        window.set_default_size(460, 900);
         window.set_content(Some(&root));
 
         let updating_slider = Rc::new(RefCell::new(false));
@@ -1077,5 +1147,38 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(hwmon);
+    }
+
+    #[test]
+    fn reads_all_p_prefixed_hwmon_power_channels() {
+        let hwmon = temp_path("power-keys");
+        fs::create_dir_all(&hwmon).unwrap();
+        fs::write(hwmon.join("power1_label"), "PC0C\n").unwrap();
+        fs::write(hwmon.join("power1_input"), "12345000\n").unwrap();
+        fs::write(hwmon.join("power2_label"), "PG0R\n").unwrap();
+        fs::write(hwmon.join("power2_input"), "2500000\n").unwrap();
+        fs::write(hwmon.join("power3_label"), "not-power\n").unwrap();
+        fs::write(hwmon.join("power3_input"), "1\n").unwrap();
+
+        assert_eq!(
+            read_smc_power_stats(&hwmon),
+            vec![
+                ("CPU cores".into(), "12.35 W".into()),
+                ("GPU 0 rail".into(), "2.50 W".into()),
+            ]
+        );
+
+        let _ = fs::remove_dir_all(hwmon);
+    }
+
+    #[test]
+    fn labels_known_power_keys() {
+        assert_eq!(power_label("PCPT"), "CPU package total (PECI)");
+        assert_eq!(power_label("PD0R"), "DC-In MLB S0 rail");
+        assert_eq!(power_label("PG0R"), "GPU 0 rail");
+        assert_eq!(power_label("PZ0G"), "Zone 0 average");
+        assert_eq!(power_label("PDTR"), "DC-In total");
+        assert_eq!(power_label("PSTR"), "System total (1 s delayed)");
+        assert_eq!(power_label("PXYZ"), "unknown (PXYZ)");
     }
 }
