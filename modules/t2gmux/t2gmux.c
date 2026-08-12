@@ -589,15 +589,8 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 		}
 		pr_debug("Discrete card powered up\n");
 	} else {
-		if (gmux_data->type == APPLE_GMUX_TYPE_MMIO) {
-			pr_info("DGPU power-off: writing GMUX states 1 -> 0\n");
-			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
-			msleep(10);
-			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
-		} else {
-			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
-			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
-		}
+		gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
+		gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
 		pr_debug("Discrete card powered down\n");
 	}
 
