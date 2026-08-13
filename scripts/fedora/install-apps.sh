@@ -16,8 +16,8 @@ require_root
 require_repo_root
 require_fedora
 require_command \
-	awk chown cut dnf env getent grep id install mktemp modinfo npm rm rpm \
-	sleep sudo systemctl tar tr udevadm usermod
+	awk chown cut dnf env getent grep id install mktemp modinfo modprobe npm \
+	rm rpm sleep stat sudo systemctl tar tr udevadm usermod
 if [[ "$install_mode" == all ]]; then
 	require_command cargo make
 fi
@@ -138,6 +138,7 @@ install_react_drm() {
 	local missing_groups=()
 	local service_dir service_file temporary_file workdir_q start_q detach_q
 	local desktop extension_uuid extension_src extension_dst
+	local uinput_conf uinput_group
 	if ! has_t2_touchbar_model; then
 		return
 	fi
@@ -244,9 +245,27 @@ install_react_drm() {
 	info "installing react-drm udev rules"
 	install -d -o root -g root -m 0755 /etc/udev/rules.d
 	install -o root -g root -m 0644 "$src/system/99-react-drm.rules" /etc/udev/rules.d/99-react-drm.rules
+
+	# Until the module is loaded, /dev/uinput is a kmod static node: root owned,
+	# mode 0600, and with no sysfs device for udev to match. The trigger below
+	# would then apply the rule to nothing, react-drm could not open the device,
+	# and systemd would restart it every two seconds.
+	info "loading the uinput module for react-drm"
+	uinput_conf="$(mktemp)"
+	printf 'uinput\n' >"$uinput_conf"
+	install -d -o root -g root -m 0755 /etc/modules-load.d
+	install -o root -g root -m 0644 "$uinput_conf" /etc/modules-load.d/kait2en-uinput.conf
+	rm -f "$uinput_conf"
+	modprobe uinput || fail "unable to load the uinput module, which react-drm requires"
+
 	udevadm control --reload
 	udevadm trigger --action=add --subsystem-match=usb --subsystem-match=backlight
 	udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput
+	udevadm settle
+
+	uinput_group="$(stat -c %G /dev/uinput 2>/dev/null || printf 'missing')"
+	[[ "$uinput_group" == input ]] ||
+		fail "/dev/uinput belongs to group $uinput_group, not input, so react-drm cannot open it. Check /etc/udev/rules.d/99-react-drm.rules."
 
 	info "copying react-drm source to $dst"
 	rm -rf "$dst"

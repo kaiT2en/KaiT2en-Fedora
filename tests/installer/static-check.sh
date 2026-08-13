@@ -82,6 +82,14 @@ grep -Fq 'dracut --force --force-drivers' \
 # without headers has to be refused before anything is removed.
 grep -Fq 'require_kernel_headers' scripts/fedora/install-dkms-modules.sh
 grep -Fq 'require_kernel_headers()' scripts/fedora/lib.sh
+
+# /dev/uinput is a kmod static node until the module is loaded, so the udev
+# trigger matches nothing and the input group never gets access. react-drm then
+# cannot open it and systemd restarts it every two seconds.
+grep -Fq 'modprobe uinput' scripts/fedora/install-apps.sh
+grep -Fq '/etc/modules-load.d/kait2en-uinput.conf' scripts/fedora/install-apps.sh
+grep -Fq 'stat -c %G /dev/uinput' scripts/fedora/install-apps.sh
+
 grep -Fq '"etc", "xdg", "autostart"' \
 	packaging/installer/anaconda-addon/com_kait2en_input/service/installation.py
 ! grep -InE 'find_regular_user|home\.lstrip|os\.chown' \
