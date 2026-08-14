@@ -146,6 +146,7 @@ audio behavior and diagnostics.
 | `/etc/systemd/system/kait2en-t2-ncm-down.service` | Starts when `t2_ncm` appears |
 | `/usr/local/libexec/kait2en/kait2en-t2-ncm-down.sh` | Keeps the internal debug interface down |
 | `/usr/share/plymouth/themes/kait2en/` | Fedora's spinner theme with the KAIT2EN watermark |
+| `/etc/dracut.conf.d/90-kait2en-input.conf` | Keeps the internal keyboard drivers in initramfs images built during kernel updates |
 | `/boot/initramfs-<running-kernel>.img` | Rebuilt by Dracut after modules and ACPI handling are complete |
 
 `kait2en-suspend.service` is enabled on every installation. Before suspend, it
