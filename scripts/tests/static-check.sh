@@ -22,6 +22,7 @@ shell_files=(
 	scripts/fedora/build-installer.sh
 	scripts/fedora/install-dkms-modules.sh
 	scripts/fedora/lib.sh
+	scripts/fedora/rebuild-initramfs.sh
 	scripts/macos/download-fedora-iso.sh
 	scripts/macos/prepare-fedora-installer.sh
 	scripts/tests/edition-catalog.sh
@@ -77,6 +78,8 @@ grep -Fq '"$transition_source" "$target_kernel" "$work/rpm"' \
 grep -Fq 'dracut --force --force-drivers' \
 	packaging/installer/runtime/kait2en-prepare
 ! grep -Fq -- '--add-drivers' packaging/installer/runtime/kait2en-prepare
+
+grep -Fq 'force_drivers' scripts/fedora/rebuild-initramfs.sh
 
 # DKMS drops every kernel's build before rebuilding any of them, so a kernel
 # without headers has to be refused before anything is removed.
