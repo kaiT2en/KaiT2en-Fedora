@@ -8,10 +8,10 @@ This is the known-good baseline to keep system suspend/resume correctness.
 
 - Fedora kernel: `7.1.7-200.fc44.x86_64`
 - In-tree `thunderbolt` driver, without the experimental NHI RTD3 quirk
-- `t2thunderbolt` 0.4 from commit `c160ac4`
+- `t2thunderbolt` 0.5
 - Native PCIe port services enabled with `pcie_ports=native`
-- Titan Ridge xHCI controllers and their immediate downstream ports kept out
-  of D3 by `t2thunderbolt`
+- Immediate Titan Ridge xHCI downstream ports kept out of D3 by
+  `t2thunderbolt`; the xHCI controllers may enter D3hot
 - Thunderbolt PM ordering links created by `t2thunderbolt`
 
 ## Observed result
@@ -34,10 +34,11 @@ The two Thunderbolt trees on this model are:
                                       7b:02.0 -> 7d:00.0 xHCI
 ```
 
-With the known-good workaround, the Titan Ridge xHCI controllers and their
-ports stay active in D0. The NHIs also stay active in D0 because the in-tree
-driver does not enable RTD3 for this pre-USB4 root switch. Their upstream
-Titan Ridge, Alpine Ridge and CPU root ports consequently remain active.
+With the known-good workaround, the direct Titan Ridge xHCI ports stay in D0
+while the xHCI controllers runtime suspend into D3hot. The NHIs also stay
+active in D0 because the in-tree driver does not enable RTD3 for this pre-USB4
+root switch. Their upstream Titan Ridge, Alpine Ridge and CPU root ports
+consequently remain active.
 
 ## Reproduced resume regression
 
@@ -46,10 +47,33 @@ then runtime-suspended successfully and USB 3 hotplug continued to work with
 native PCIe port services, but system resume regressed: the interval from
 `ACPI: PM: Waking up from system sleep state S3` to
 `ACPI: EC: interrupt unblocked` increased from about one second to about 20
-seconds. Reinstating the restriction restored fast resume.
+seconds. A subsequent isolation test allowed both xHCI controllers to enter
+D3hot while keeping only their immediate downstream ports in D0. Resume
+remained fast, UAS continued to work and the package remained in PC3. The
+resume regression is therefore tied to D3 on the downstream ports, not D3hot
+on the xHCI controllers.
 
 This means USB hotplug and system resume are separate requirements. Successful
 runtime suspend and hotplug do not prove that the system-suspend path is safe.
+
+## Failed RTPC experiment
+
+The direct xHCI ports are `DSB2` below `PEG1` and `PEG2` in the Apple ACPI
+tables. Linux identifies itself through `_OSI("Darwin")`, so their `_PS3`
+methods call `PCDA()`. That method only performs the platform link and GPIO
+power-down sequence when `RUSB` is zero. Apple exposes `RTPC()` on each xHCI
+device to update `RUSB`, but the standard xHCI PCI driver does not call it.
+
+A test version set `RTPC(0)` for both Titan Ridge xHCI functions while the
+quirk module was loaded. After resume, sysfs briefly reported both xHCI
+functions and both direct ports as suspended in D3hot, but the ports later
+returned to D0. This post-resume observation does not prove their state during
+S3 or that `PCDA()` completed successfully.
+
+The test failed all practical gates: EC interrupt unblocking took about 21
+seconds, both xHCI controllers reported `USBSTS 0x401` and reinitialized, UAS
+stopped working, and the package remained in PC3. Setting `RUSB` alone is
+therefore not a usable replacement for keeping the direct xHCI ports in D0.
 
 ## Failed RTD3 experiment
 
@@ -68,7 +92,7 @@ NHI's initial autosuspend.
 | Work | Repository state | Upstream state | Baseline relevance |
 | --- | --- | --- | --- |
 | Apple T2 Thunderbolt PM ordering links | `t2thunderbolt` | v7 not accepted; v8 preparing and untested | Required downstream until a revised series is merged and present in the supported kernel |
-| Keep MacBookPro15,1 Titan Ridge xHCI active | Archived patch plus `t2thunderbolt` implementation | Withdrawn | Still required for fast resume; the current downstream implementation also covers the immediate xHCI ports |
+| Keep MacBookPro15,1 Titan Ridge xHCI port active | `t2thunderbolt` implementation | Withdrawn xHCI patch no longer matches the isolated requirement | Still required for fast resume; the xHCI controller itself may enter D3hot |
 | Enable Titan Ridge NHI RTD3 | Removed experimental patch | Revoked / not viable | Not part of the baseline |
 | Native PCIe port services | Kernel argument | Configuration, not an upstream patch | Required for tested USB 3 hotplug and UAS behavior |
 

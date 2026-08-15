@@ -33,14 +33,12 @@ struct t2thunderbolt_no_d3 {
 	struct list_head list;
 	struct pci_dev *pdev;
 	bool already_set;
-	bool runtime_pm_forbidden;
 };
 
 static LIST_HEAD(t2thunderbolt_links);
 static LIST_HEAD(t2thunderbolt_no_d3_devices);
 
-static int t2thunderbolt_disable_d3(struct pci_dev *pdev, const char *name,
-				    bool forbid_runtime_pm)
+static int t2thunderbolt_disable_d3(struct pci_dev *pdev, const char *name)
 {
 	struct t2thunderbolt_no_d3 *entry;
 	int ret;
@@ -66,10 +64,6 @@ static int t2thunderbolt_disable_d3(struct pci_dev *pdev, const char *name,
 		kfree(entry);
 		return ret;
 	}
-	if (forbid_runtime_pm) {
-		pm_runtime_forbid(&pdev->dev);
-		entry->runtime_pm_forbidden = true;
-	}
 	pm_runtime_put(&pdev->dev);
 
 	list_add_tail(&entry->list, &t2thunderbolt_no_d3_devices);
@@ -78,7 +72,7 @@ static int t2thunderbolt_disable_d3(struct pci_dev *pdev, const char *name,
 	return 0;
 }
 
-static int t2thunderbolt_disable_titan_ridge_d3(void)
+static int t2thunderbolt_disable_titan_ridge_xhci_port_d3(void)
 {
 	static const u16 ids[] = {
 		PCI_DEVICE_ID_INTEL_TITAN_RIDGE_2C_XHCI,
@@ -95,21 +89,12 @@ static int t2thunderbolt_disable_titan_ridge_d3(void)
 		xhci = NULL;
 		while ((xhci = pci_get_device(PCI_VENDOR_ID_INTEL, ids[i],
 					      xhci))) {
-			ret = t2thunderbolt_disable_d3(xhci,
-							      "xHCI controller",
-							      true);
-			if (ret) {
-				pci_dev_put(xhci);
-				return ret;
-			}
-
 			upstream = pci_upstream_bridge(xhci);
 			if (upstream && pci_is_pcie(upstream) &&
 			    pci_pcie_type(upstream) ==
 				    PCI_EXP_TYPE_DOWNSTREAM) {
 				ret = t2thunderbolt_disable_d3(upstream,
-								      "xHCI port",
-								      false);
+								      "xHCI port");
 				if (ret) {
 					pci_dev_put(xhci);
 					return ret;
@@ -237,8 +222,6 @@ static void t2thunderbolt_restore_d3(void)
 
 	list_for_each_entry_safe(entry, tmp, &t2thunderbolt_no_d3_devices,
 				 list) {
-		if (entry->runtime_pm_forbidden)
-			pm_runtime_allow(&entry->pdev->dev);
 		if (!entry->already_set)
 			entry->pdev->dev_flags &= ~PCI_DEV_FLAGS_NO_D3;
 		pci_dev_put(entry->pdev);
@@ -270,7 +253,7 @@ static int __init t2thunderbolt_init(void)
 		return -ENODEV;
 	pci_dev_put(t2);
 
-	ret = t2thunderbolt_disable_titan_ridge_d3();
+	ret = t2thunderbolt_disable_titan_ridge_xhci_port_d3();
 	if (ret < 0)
 		return ret;
 
@@ -316,7 +299,7 @@ module_exit(t2thunderbolt_exit);
 MODULE_AUTHOR("Andre Eikmeyer <dev@deq.rocks>");
 MODULE_DESCRIPTION("Apple T2 Thunderbolt power-management ordering quirks");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("0.4");
+MODULE_VERSION("0.5");
 
 MODULE_ALIAS("pci:v00008086d000015E8sv*sd*bc*sc*i*");
 MODULE_ALIAS("pci:v00008086d000015EBsv*sd*bc*sc*i*");
