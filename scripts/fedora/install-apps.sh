@@ -122,8 +122,9 @@ install_gpu_control() {
 			"$REPO_ROOT/apps/t2-hybrid-gpu-control/install.sh"
 			;;
 		MacBookPro15,3|MacBookPro16,1|MacBookPro16,4)
-			make -C "$REPO_ROOT/apps/t2-hybrid-gpu-control" uninstall
-			"$REPO_ROOT/apps/t2-dgpu-control/install.sh"
+			info "installing experimental hybrid graphics support for $model"
+			make -C "$REPO_ROOT/apps/t2-dgpu-control" uninstall
+			"$REPO_ROOT/apps/t2-hybrid-gpu-control/install.sh"
 			;;
 		*)
 			info "Model $model has no supported switchable AMD dGPU"

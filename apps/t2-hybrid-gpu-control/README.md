@@ -1,6 +1,7 @@
 # T2 Hybrid GPU Control
 
-T2 Hybrid GPU Control configures hybrid graphics on the MacBookPro15,1. The
+T2 Hybrid GPU Control configures hybrid graphics on the MacBookPro15,1 and,
+experimentally, the MacBookPro15,3, MacBookPro16,1, and MacBookPro16,4. The
 integrated GPU drives the display while PRIME offload wakes the AMD GPU on
 demand. Runtime PM returns the AMD GPU to D3cold when it is no longer in use.
 

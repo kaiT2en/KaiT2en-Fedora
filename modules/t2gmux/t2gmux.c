@@ -878,7 +878,10 @@ static int gmux_probe(struct pnp_dev *pnp, const struct pnp_device_id *id)
 		return -ENOMEM;
 	pnp_set_drvdata(pnp, gmux_data);
 	gmux_data->use_pwg_power_sequence = type == APPLE_GMUX_TYPE_MMIO &&
-		dmi_match(DMI_PRODUCT_NAME, "MacBookPro15,1");
+		(dmi_match(DMI_PRODUCT_NAME, "MacBookPro15,1") ||
+		 dmi_match(DMI_PRODUCT_NAME, "MacBookPro15,3") ||
+		 dmi_match(DMI_PRODUCT_NAME, "MacBookPro16,1") ||
+		 dmi_match(DMI_PRODUCT_NAME, "MacBookPro16,4"));
 
 	switch (type) {
 	case APPLE_GMUX_TYPE_MMIO:

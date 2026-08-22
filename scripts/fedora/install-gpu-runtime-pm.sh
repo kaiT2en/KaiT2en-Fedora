@@ -41,7 +41,10 @@ is_supported_model() {
 
 	[[ -r /sys/class/dmi/id/product_name ]] || return 1
 	read -r model </sys/class/dmi/id/product_name
-	[[ "$model" == MacBookPro15,1 ]]
+	case "$model" in
+		MacBookPro15,1|MacBookPro15,3|MacBookPro16,1|MacBookPro16,4) return 0 ;;
+		*) return 1 ;;
+	esac
 }
 
 remove_modules() {

@@ -1,39 +1,40 @@
-From 02435cf25926e640b09100da013bd6162604c5a3 Mon Sep 17 00:00:00 2001
+From 167beca9d8b3c48c5bfc71778a53940e92e76e4b Mon Sep 17 00:00:00 2001
 From: Andre Eikmeyer <dev@deq.rocks>
 Date: Sat, 1 Aug 2026 16:27:05 +0200
-Subject: [PATCH] drm/amdgpu: add Apple GMUX runtime PM support
+Subject: [PATCH] drm/amdgpu: Add Apple GMUX runtime PM support
 
 Hello everyone,
 
-The MacBookPro15,1 uses Apple GMUX to control power to the discrete GPU,
-but it does not expose the ATPX or ACPI power-resource interfaces currently
-recognized by amdgpu. The driver therefore leaves runtime PM disabled even
-though vga_switcheroo can switch the GPU reliably.
+T2 MacBook Pro systems with discrete AMD graphics use Apple GMUX to control
+power to the GPU, but they do not expose the ATPX or ACPI power-resource
+interfaces currently recognized by amdgpu. The driver therefore leaves
+runtime PM disabled even though vga_switcheroo can switch the GPU reliably.
 
-A dedicated GMUX runtime PM mode uses the existing vga_switcheroo PM domain
-to sequence GPU power. A runtime-suspended GMUX GPU can remain powered off
-across system sleep, following the smart-suspend handling already used by
-BOCO devices.
+We add a dedicated GMUX runtime PM mode for the T2 models with discrete
+AMD graphics and use the existing vga_switcheroo PM domain to sequence
+GPU power. A runtime-suspended GMUX GPU can remain powered off across
+system sleep, following the smart-suspend handling already used by BOCO
+devices.
 
-This allows the discrete GPU to enter D3cold while the integrated GPU is
-primary and allows PRIME workloads and external displays to wake it on
-demand. The model enablement is limited to the tested MacBookPro15,1.
-
-This was tested on both the 2018 and 2019 MacBookPro15,1 revisions together
-with the apple-gmux and HDA changes in this series.
-
-Thank you for your time and consideration.
+This enables the discrete GPU to enter D3cold while the integrated GPU is
+primary and allows PRIME workloads to wake it on demand.
 
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
+This patch has no build-time dependency on the apple-gmux change, but
+runtime resume on T2 MacBooks requires:
+
+  platform/x86: apple-gmux: Fix discrete GPU power sequencing on T2 Macs
+
+---
  drivers/gpu/drm/amd/amdgpu/amdgpu.h        |  1 +
- drivers/gpu/drm/amd/amdgpu/amdgpu_device.c | 34 ++++++++++++++++++----
- drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c    | 30 ++++++++++++-------
+ drivers/gpu/drm/amd/amdgpu/amdgpu_device.c | 52 +++++++++++++++++++---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c    | 30 ++++++++-----
  drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h    |  1 +
- 4 files changed, 49 insertions(+), 17 deletions(-)
+ 4 files changed, 66 insertions(+), 18 deletions(-)
 
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-index 7b09410..cc2e2e2 100644
+index 7b09410d6d8f..cc2e2e25bfd0 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 @@ -1402,6 +1402,7 @@ int amdgpu_device_mode1_reset(struct amdgpu_device *adev);
@@ -45,7 +46,7 @@ index 7b09410..cc2e2e2 100644
  bool amdgpu_device_supports_smart_shift(struct amdgpu_device *adev);
  int amdgpu_device_supports_baco(struct amdgpu_device *adev);
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
-index e5f26e5..2175743 100644
+index e5f26e5892ba..4f672897b86d 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
 @@ -34,6 +34,7 @@
@@ -56,7 +57,7 @@ index e5f26e5..2175743 100644
  #include <linux/pci-p2pdma.h>
  #include <linux/apple-gmux.h>
  #include <linux/nospec.h>
-@@ -568,6 +569,22 @@ bool amdgpu_device_supports_px(struct amdgpu_device *adev)
+@@ -568,6 +569,37 @@ bool amdgpu_device_supports_px(struct amdgpu_device *adev)
  	return false;
  }
  
@@ -64,6 +65,21 @@ index e5f26e5..2175743 100644
 +	{
 +		.matches = {
 +			DMI_MATCH(DMI_PRODUCT_NAME, "MacBookPro15,1"),
++		},
++	},
++	{
++		.matches = {
++			DMI_MATCH(DMI_PRODUCT_NAME, "MacBookPro15,3"),
++		},
++	},
++	{
++		.matches = {
++			DMI_MATCH(DMI_PRODUCT_NAME, "MacBookPro16,1"),
++		},
++	},
++	{
++		.matches = {
++			DMI_MATCH(DMI_PRODUCT_NAME, "MacBookPro16,4"),
 +		},
 +	},
 +	{ }
@@ -79,7 +95,7 @@ index e5f26e5..2175743 100644
  /**
   * amdgpu_device_supports_boco - Is the device a dGPU with ACPI power resources
   *
-@@ -631,6 +648,9 @@ void amdgpu_device_detect_runtime_pm_mode(struct amdgpu_device *adev)
+@@ -631,6 +663,9 @@ void amdgpu_device_detect_runtime_pm_mode(struct amdgpu_device *adev)
  			/* enable PX as runtime mode */
  			adev->pm.rpm_mode = AMDGPU_RUNPM_PX;
  			dev_info(adev->dev, "Using ATPX for runtime pm\n");
@@ -89,7 +105,7 @@ index e5f26e5..2175743 100644
  		} else if (amdgpu_device_supports_boco(adev)) {
  			/* enable boco as runtime mode */
  			adev->pm.rpm_mode = AMDGPU_RUNPM_BOCO;
-@@ -3711,7 +3731,7 @@ int amdgpu_device_init(struct amdgpu_device *adev,
+@@ -3711,7 +3746,7 @@ int amdgpu_device_init(struct amdgpu_device *adev,
  {
  	struct pci_dev *pdev = adev->pdev;
  	int r, i;
@@ -98,15 +114,17 @@ index e5f26e5..2175743 100644
  	u32 max_MBps;
  	int tmp;
  
-@@ -4144,13 +4164,14 @@ fence_driver_init:
+@@ -4144,13 +4179,15 @@ int amdgpu_device_init(struct amdgpu_device *adev,
  		vga_client_register(adev->pdev, amdgpu_device_vga_set_decode);
  
  	px = amdgpu_device_supports_px(adev);
 +	gmux = amdgpu_device_supports_gmux(adev);
  
- 	if (px || (!dev_is_removable(&adev->pdev->dev) &&
+-	if (px || (!dev_is_removable(&adev->pdev->dev) &&
 -				apple_gmux_detect(NULL, NULL)))
-+		   apple_gmux_detect(NULL, NULL)))
++	if (px || gmux ||
++	    (!dev_is_removable(&adev->pdev->dev) &&
++	     apple_gmux_detect(NULL, NULL)))
  		vga_switcheroo_register_client(adev->pdev,
 -					       &amdgpu_switcheroo_ops, px);
 +					       &amdgpu_switcheroo_ops, px || gmux);
@@ -116,7 +134,7 @@ index e5f26e5..2175743 100644
  		vga_switcheroo_init_domain_pm_ops(adev->dev, &adev->vga_pm_domain);
  
  	adev->pm_nb.notifier_call = amdgpu_device_pm_notifier;
-@@ -4276,7 +4297,7 @@ void amdgpu_device_fini_hw(struct amdgpu_device *adev)
+@@ -4276,7 +4313,7 @@ void amdgpu_device_fini_hw(struct amdgpu_device *adev)
  void amdgpu_device_fini_sw(struct amdgpu_device *adev)
  {
  	int i, idx;
@@ -125,7 +143,7 @@ index e5f26e5..2175743 100644
  
  	amdgpu_device_ip_fini(adev);
  	amdgpu_fence_driver_sw_fini(adev);
-@@ -4307,12 +4328,13 @@ void amdgpu_device_fini_sw(struct amdgpu_device *adev)
+@@ -4307,12 +4344,13 @@ void amdgpu_device_fini_sw(struct amdgpu_device *adev)
  	adev->xcp_mgr = NULL;
  
  	px = amdgpu_device_supports_px(adev);
@@ -141,10 +159,10 @@ index e5f26e5..2175743 100644
  
  	if ((adev->pdev->class >> 8) == PCI_CLASS_DISPLAY_VGA)
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-index 4c0c77e..603ff39 100644
+index 4c0c77eafbd1..603ff39aada4 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-@@ -2485,11 +2485,12 @@ retry_init:
+@@ -2485,11 +2485,12 @@ static int amdgpu_pci_probe(struct pci_dev *pdev,
  		DRM_ERROR("Creating debugfs files failed (%d).\n", ret);
  
  	if (adev->pm.rpm_mode != AMDGPU_RUNPM_NONE) {
@@ -225,7 +243,7 @@ index 4c0c77e..603ff39 100644
  	adev->in_runpm = false;
  	return 0;
 diff --git a/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h b/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h
-index aa3f427..d76968f 100644
+index aa3f427819a0..d76968f98659 100644
 --- a/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h
 +++ b/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h
 @@ -48,6 +48,7 @@ enum amdgpu_int_thermal_type {
@@ -238,4 +256,3 @@ index aa3f427..d76968f 100644
  	AMDGPU_RUNPM_BAMACO,
 -- 
 2.55.0
-
