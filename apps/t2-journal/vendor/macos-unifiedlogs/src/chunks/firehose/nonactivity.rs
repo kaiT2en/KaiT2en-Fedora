@@ -1,0 +1,270 @@
+// Copyright 2022 Mandiant, Inc. All Rights Reserved
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under the License
+// is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and limitations under the License.
+
+use crate::catalog::CatalogChunk;
+use crate::chunks::firehose::firehose_log::MessageFlags;
+use crate::chunks::firehose::flags::FirehoseFormatters;
+use crate::chunks::firehose::message::{MessageData, MessageParams};
+use crate::traits::{FileProvider, StringCache};
+use log::debug;
+use nom::number::complete::{le_u8, le_u16, le_u32};
+
+#[derive(Debug, Clone, Default)]
+pub struct FirehoseNonActivity {
+    pub activity_id: u32, // if flag 0x0001
+    pub sentinel: u32,    // always 0x80000000? if flag 0x0001
+    pub persona_id: u32,
+    pub private_strings_offset: u16, // if flag 0x0100
+    pub private_strings_size: u16,   // if flag 0x0100
+    pub message_string_ref: u32,     // if flag 0x0008
+    pub subsystem_value: u16,        // if flag 0x200, has_subsystem
+    pub ttl_value: u8,               // if flag 0x0400, has_rules
+    pub data_ref_value: u32,         // if flag 0x0800, has_oversize
+    pub pc_id: u32, // Appears to be used to calculate string offset for firehose events with Absolute flag
+    pub firehose_formatters: FirehoseFormatters,
+    pub flags: Vec<MessageFlags>,
+}
+
+impl FirehoseNonActivity {
+    /// Parse Non-Activity Type Firehose log entry.
+    // Ex: tp 728 + 202: log debug (has_current_aid, main_exe, has_subsystem, has_rules)
+    pub fn parse_non_activity(
+        data: &[u8],
+        firehose_flags: u16,
+    ) -> nom::IResult<&[u8], FirehoseNonActivity> {
+        let mut non_activity = FirehoseNonActivity::default();
+
+        let mut input = data;
+        let activity_id_current = 0x1; // has_current_aid flag
+
+        if (firehose_flags & activity_id_current) != 0 {
+            debug!("[macos-unifiedlogs] Non-Activity Firehose log chunk has has_current_aid flag");
+            let (firehose_input, firehose_activity_id) = le_u32(input)?;
+            let (firehose_input, firehose_unknown_sentinel) = le_u32(firehose_input)?;
+            non_activity.activity_id = firehose_activity_id;
+            non_activity.sentinel = firehose_unknown_sentinel;
+            non_activity.flags.push(MessageFlags::HasCurrentAid);
+            input = firehose_input;
+        }
+
+        let has_persona = 0x40;
+        if (firehose_flags & has_persona) != 0 {
+            debug!("[macos-unifiedlogs] Non-Activity Firehose log chunk has has_persona flag");
+            let (firehose_input, persona_id) = le_u32(input)?;
+
+            non_activity.persona_id = persona_id;
+            non_activity.flags.push(MessageFlags::HasPersona);
+
+            input = firehose_input;
+        }
+
+        let private_string_range = 0x100; // has_private_data flag
+        // Entry has private string data. The private data is found after parsing all the public data first
+        if (firehose_flags & private_string_range) != 0 {
+            debug!("[macos-unifiedlogs] Non-Activity Firehose log chunk has has_private_data flag");
+            let (firehose_input, firehose_private_strings_offset) = le_u16(input)?;
+            let (firehose_input, firehose_private_strings_size) = le_u16(firehose_input)?;
+            non_activity.flags.push(MessageFlags::HasPrivateData);
+
+            // Offset points to private string values found after parsing the public data. Size is the data size
+            non_activity.private_strings_offset = firehose_private_strings_offset;
+            non_activity.private_strings_size = firehose_private_strings_size;
+            input = firehose_input;
+        }
+
+        let (input, firehose_pc_id) = le_u32(input)?;
+        non_activity.pc_id = firehose_pc_id;
+
+        // Check for flags related to base string format location (shared string file (dsc) or UUID file)
+        let (mut input, formatters) = FirehoseFormatters::firehose_formatter_flags(
+            input,
+            firehose_flags,
+            &mut non_activity.flags,
+        )?;
+        non_activity.firehose_formatters = formatters;
+
+        let subsystem = 0x200; // has_subsystem flag. In Non-Activity log entries this is the subsystem flag
+        if (firehose_flags & subsystem) != 0 {
+            debug!("[macos-unifiedlogs] Non-Activity Firehose log chunk has has_subsystem flag");
+            let (firehose_input, firehose_subsystem) = le_u16(input)?;
+            non_activity.subsystem_value = firehose_subsystem;
+            input = firehose_input;
+            non_activity.flags.push(MessageFlags::HasSubsystem);
+        }
+
+        let ttl = 0x400; // has_rules flag
+        if (firehose_flags & ttl) != 0 {
+            debug!("[macos-unifiedlogs] Non-Activity Firehose log chunk has has_rules flag");
+            let (firehose_input, firehose_ttl) = le_u8(input)?;
+            non_activity.ttl_value = firehose_ttl;
+            non_activity.flags.push(MessageFlags::HasRules);
+
+            input = firehose_input;
+        }
+
+        let data_ref = 0x800; // has_oversize flag
+        if (firehose_flags & data_ref) != 0 {
+            debug!("[macos-unifiedlogs] Non-Activity Firehose log chunk has has_oversize flag");
+            let (firehose_input, firehose_data_ref) = le_u32(input)?;
+            non_activity.data_ref_value = firehose_data_ref;
+            non_activity.flags.push(MessageFlags::HasOversize);
+
+            input = firehose_input;
+        }
+
+        Ok((input, non_activity))
+    }
+
+    /// Get base log message string formatter from shared cache strings (dsc) or UUID text file for firehose non-activity log entries (chunks)
+    pub(crate) fn get_firehose_nonactivity_strings(
+        firehose: &FirehoseNonActivity,
+        provider: &impl FileProvider,
+        cache: &impl StringCache,
+        string_offset: u64,
+        first_proc_id: u64,
+        second_proc_id: u32,
+        catalogs: &CatalogChunk,
+    ) -> nom::IResult<&'static [u8], MessageData> {
+        let params = MessageParams {
+            pc_id: firehose.pc_id,
+            string_offset,
+            first_proc_id,
+            second_proc_id,
+            supports_large_offset: false,
+        };
+
+        MessageData::get_message(
+            &firehose.firehose_formatters,
+            provider,
+            cache,
+            &params,
+            catalogs,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FirehoseNonActivity;
+    use crate::{
+        chunks::firehose::firehose_log::MessageFlags, filesystem::LogarchiveProvider,
+        parser::parse_log,
+    };
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_parse_non_activity() {
+        let test_data = [
+            122, 179, 12, 13, 2, 0, 4, 0, 41, 0, 34, 9, 32, 4, 0, 0, 1, 0, 32, 4, 1, 0, 1, 0, 32,
+            4, 2, 0, 14, 0, 0, 8, 2, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 2, 0,
+            0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 4, 1, 0, 0, 0, 0, 4, 1, 0, 0, 0, 0, 0, 100, 105,
+            115, 112, 97, 116, 99, 104, 69, 118, 101, 110, 116, 0,
+        ];
+        let test_flags = 556;
+        let (_, nonactivity_results) =
+            FirehoseNonActivity::parse_non_activity(&test_data, test_flags).unwrap();
+        assert_eq!(nonactivity_results.activity_id, 0);
+        assert_eq!(nonactivity_results.sentinel, 0);
+        assert_eq!(nonactivity_results.private_strings_offset, 0);
+        assert_eq!(nonactivity_results.private_strings_size, 0);
+        assert_eq!(nonactivity_results.message_string_ref, 0);
+        assert_eq!(
+            nonactivity_results.firehose_formatters.main_exe_alt_index,
+            0
+        );
+        assert_eq!(
+            nonactivity_results.firehose_formatters.uuid_relative,
+            String::from("")
+        );
+        assert!(!nonactivity_results.firehose_formatters.main_exe);
+        assert!(!nonactivity_results.firehose_formatters.absolute);
+        assert_eq!(nonactivity_results.subsystem_value, 41);
+        assert_eq!(nonactivity_results.ttl_value, 0);
+        assert_eq!(nonactivity_results.data_ref_value, 0);
+        assert_eq!(
+            nonactivity_results.firehose_formatters.large_shared_cache,
+            4
+        );
+        assert_eq!(nonactivity_results.firehose_formatters.has_large_offset, 2);
+        assert_eq!(nonactivity_results.pc_id, 218936186);
+    }
+
+    #[test]
+    fn test_get_firehose_non_activity_big_sur() {
+        let mut test_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        test_path.push("tests/test_data/system_logs_big_sur.logarchive");
+
+        let provider = LogarchiveProvider::new(test_path.as_path());
+        let cache = crate::cache::MemoryStringCache::default();
+        test_path.push("Persist/0000000000000004.tracev3");
+        let handle = std::fs::File::open(&test_path).unwrap();
+        let log_data = parse_log(handle, test_path.to_str().unwrap()).unwrap();
+
+        let activity_type = 0x4;
+
+        for catalog_data in log_data.catalog_data {
+            for preamble in catalog_data.firehose {
+                for firehose in preamble.public_data {
+                    if firehose.log_activity_type == activity_type {
+                        let (_, message_data) =
+                            FirehoseNonActivity::get_firehose_nonactivity_strings(
+                                &firehose.firehose_non_activity,
+                                &provider,
+                                &cache,
+                                u64::from(firehose.format_string_location),
+                                preamble.first_number_proc_id,
+                                preamble.second_number_proc_id,
+                                &catalog_data.catalog,
+                            )
+                            .unwrap();
+                        assert_eq!(
+                            message_data.format_string,
+                            "opendirectoryd (build %{public}s) launched..."
+                        );
+                        assert_eq!(message_data.library, "/usr/libexec/opendirectoryd");
+                        assert_eq!(message_data.process, "/usr/libexec/opendirectoryd");
+                        assert_eq!(
+                            message_data.process_uuid,
+                            "B736DF1625F538248E9527A8CEC4991E"
+                        );
+                        assert_eq!(
+                            message_data.library_uuid,
+                            "B736DF1625F538248E9527A8CEC4991E"
+                        );
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_persona_flag() {
+        let test = [
+            200, 0, 0, 0, 72, 5, 91, 0, 6, 0, 34, 6, 0, 8, 16, 148, 64, 1, 1, 0, 0, 0, 34, 4, 0, 0,
+            11, 0, 0, 4, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 4, 1, 0, 0, 0, 34, 4, 11, 0, 54, 0, 97,
+            99, 116, 105, 118, 97, 116, 105, 110, 103, 0, 99, 111, 109, 46, 97, 112, 112, 108, 101,
+            46, 99, 102, 112, 114, 101, 102, 115, 100, 46, 100, 97, 101, 109, 111, 110, 46, 115,
+            121, 115, 116, 101, 109, 46, 112, 101, 101, 114, 91, 54, 53, 93, 46, 48, 120, 49, 48,
+            49, 52, 48, 57, 52, 49, 48, 0,
+        ];
+        let flags = 580;
+        let (_, result) = FirehoseNonActivity::parse_non_activity(&test, flags).unwrap();
+        assert_eq!(
+            result.flags,
+            vec![
+                MessageFlags::HasPersona,
+                MessageFlags::SharedCache,
+                MessageFlags::HasSubsystem
+            ]
+        );
+        assert_eq!(result.persona_id, 200);
+        assert_eq!(result.subsystem_value, 6);
+        assert!(result.firehose_formatters.shared_cache);
+        assert_eq!(result.pc_id, 5965128);
+    }
+}
