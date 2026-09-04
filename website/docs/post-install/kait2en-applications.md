@@ -13,9 +13,11 @@ sets the fans to 100% to prevent case heating and in effect prochot.
 
 ## T2 SMC Control
 
-Displays SMC temperatures, fan speeds, power data, and the hardware clock. It
-also configures a persistent battery charge limit when the hardware supports
-it. Note that this data shown in this app is direct hardware readings. It is
+Displays SMC temperatures, fan speeds, power data, and the hardware clock, and
+can write the current system time to that clock. The battery charge limit is
+shown but not set here: `t2smc` exposes it as the standard
+`charge_control_end_threshold`, so the desktop environment offers it in its own
+power settings. Note that this data shown in this app is direct hardware readings. It is
 the single source of truth for temperatures and battery statistics. 
 Desktop environment's readings of battery charge are only estimations.
 As we promised to ship a vanilla Fedora with KaiT2en sugar on top, we did not
