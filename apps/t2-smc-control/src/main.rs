@@ -5,8 +5,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::rc::Rc;
-use std::thread;
-use std::time::Duration;
 
 #[allow(unused_imports)]
 use adw::prelude::*;
@@ -17,10 +15,7 @@ const APP_ID: &str = "org.t2smccontrol.gtk";
 const APP_VERSION: &str = "0.02";
 const HWMON_NAMES: &[&str] = &["t2smc", "macsmc"];
 const RTC_NAME_PREFIX: &str = "t2smc ";
-const CONFIG_PATH: &str = "/etc/t2-smc-control/config.txt";
-const INSTALLED_BIN_PATH: &str = "/usr/local/bin/t2-smc-control";
-const APPLY_RETRY_ATTEMPTS: usize = 40;
-const APPLY_RETRY_DELAY: Duration = Duration::from_millis(250);
+const HWCLOCK_PATH: &str = "/usr/sbin/hwclock";
 
 fn kait2en_brand() -> gtk4::DrawingArea {
     let pixbuf = gtk4::gdk_pixbuf::Pixbuf::from_file("/usr/local/share/kait2en/kait2en-wordmark.png")
@@ -227,72 +222,6 @@ fn sensor_label(key: &str) -> String {
     }
 }
 
-fn parse_charge_percent(value: &str) -> Result<u8, String> {
-    let value = value.trim();
-    let percent: u8 = value
-        .parse()
-        .map_err(|_| format!("Invalid charge limit '{value}'"))?;
-    if percent > 100 {
-        return Err(format!("Invalid charge limit '{percent}': expected 0-100"));
-    }
-    Ok(percent)
-}
-
-fn parse_charge_limit_config(raw: &str) -> Result<Option<u8>, String> {
-    let mut charge_limit = None;
-
-    for (index, line) in raw.lines().enumerate() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-
-        let Some((key, value)) = line.split_once('=') else {
-            return Err(format!("Invalid config line {}", index + 1));
-        };
-
-        if key.trim() == "charge_limit" {
-            charge_limit = Some(parse_charge_percent(value)?);
-        }
-    }
-
-    Ok(charge_limit)
-}
-
-fn read_saved_charge_limit_from(path: &Path) -> Result<Option<u8>, String> {
-    match fs::read_to_string(path) {
-        Ok(raw) => parse_charge_limit_config(&raw),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(err) => Err(format!("Cannot read {}: {err}", path.display())),
-    }
-}
-
-fn read_saved_charge_limit() -> Result<Option<u8>, String> {
-    read_saved_charge_limit_from(Path::new(CONFIG_PATH))
-}
-
-fn write_charge_limit_config(path: &Path, percent: u8) -> Result<(), String> {
-    if percent > 100 {
-        return Err(format!("Invalid charge limit '{percent}': expected 0-100"));
-    }
-
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|err| format!("Cannot create {}: {err}", parent.display()))?;
-    }
-
-    fs::write(path, format!("charge_limit={percent}\n"))
-        .map_err(|err| format!("Cannot write {}: {err}", path.display()))
-}
-
-fn save_charge_limit(percent: u8) -> Result<(), String> {
-    write_charge_limit_config(Path::new(CONFIG_PATH), percent)
-}
-
-fn write_string(path: &Path, value: &str) -> Result<(), String> {
-    fs::write(path, value).map_err(|err| format!("Cannot write {}: {err}", path.display()))
-}
-
 fn find_hwmon_in(base: &Path) -> Option<PathBuf> {
     let mut candidates = Vec::new();
     for entry in fs::read_dir(base).ok()?.flatten() {
@@ -318,30 +247,6 @@ fn find_hwmon() -> Option<PathBuf> {
     find_hwmon_in(Path::new("/sys/class/hwmon"))
 }
 
-fn find_hwmon_with_retry(attempts: usize, delay: Duration) -> Option<PathBuf> {
-    for attempt in 0..attempts {
-        if let Some(hwmon) = find_hwmon() {
-            return Some(hwmon);
-        }
-        if attempt + 1 < attempts {
-            thread::sleep(delay);
-        }
-    }
-    None
-}
-
-fn running_as_root() -> bool {
-    let Ok(status) = fs::read_to_string("/proc/self/status") else {
-        return false;
-    };
-
-    status
-        .lines()
-        .find_map(|line| line.strip_prefix("Uid:"))
-        .and_then(|uids| uids.split_whitespace().nth(1))
-        .is_some_and(|uid| uid == "0")
-}
-
 fn find_t2smc_rtc() -> Option<PathBuf> {
     for entry in glob::glob("/sys/class/rtc/rtc*/name").ok()? {
         let path = entry.ok()?;
@@ -351,6 +256,29 @@ fn find_t2smc_rtc() -> Option<PathBuf> {
         }
     }
     None
+}
+
+fn sync_rtc_from_system(rtc: &Path) -> Result<(), String> {
+    let device = rtc
+        .file_name()
+        .map(|name| format!("/dev/{}", name.to_string_lossy()))
+        .ok_or_else(|| "Cannot derive the RTC device node".to_string())?;
+
+    let output = Command::new("pkexec")
+        .args([HWCLOCK_PATH, "--rtc", &device, "--systohc"])
+        .output()
+        .map_err(|err| format!("Cannot start pkexec: {err}"))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    if stderr.is_empty() {
+        Err("Writing the hardware clock was not authorized".into())
+    } else {
+        Err(stderr)
+    }
 }
 
 fn read_rtc_datetime(rtc: &Path) -> Option<String> {
@@ -524,8 +452,11 @@ fn read_sensors(hwmon: &Path) -> Vec<(String, String, Option<i64>)> {
 }
 
 fn read_charge_limit(hwmon: &Path) -> Option<u8> {
-    let path = hwmon.join("battery_charge_limit");
-    fs::read_to_string(&path).ok()?.trim().parse().ok()
+    fs::read_to_string(hwmon.join("battery_charge_limit"))
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
 }
 
 fn read_i64(path: &Path) -> Option<i64> {
@@ -749,110 +680,12 @@ fn read_power_telemetry(hwmon: &Path) -> Vec<(String, String, String)> {
     values
 }
 
-fn write_charge_limit(hwmon: &Path, percent: u8) -> Result<(), String> {
-    write_string(&hwmon.join("battery_charge_limit"), &percent.to_string())
-}
-
-fn write_and_verify_charge_limit(hwmon: &Path, percent: u8) -> Result<(), String> {
-    if percent > 100 {
-        return Err(format!("Invalid charge limit '{percent}': expected 0-100"));
-    }
-
-    write_charge_limit(hwmon, percent)?;
-
-    match read_charge_limit(hwmon) {
-        Some(actual) if actual == percent => Ok(()),
-        Some(actual) => Err(format!(
-            "Write mismatch: requested {percent}%, device reports {actual}%"
-        )),
-        None => Err(format!(
-            "Cannot read {} after writing charge limit",
-            hwmon.join("battery_charge_limit").display()
-        )),
-    }
-}
-
-fn set_charge_limit_via_pkexec(percent: u8) -> Result<(), String> {
-    let output = Command::new("pkexec")
-        .arg(INSTALLED_BIN_PATH)
-        .arg("--set-charge-limit")
-        .arg(percent.to_string())
-        .output()
-        .map_err(|err| format!("Cannot start pkexec: {err}"))?;
-
-    if output.status.success() {
-        return Ok(());
-    }
-
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-    if !stderr.is_empty() {
-        Err(stderr)
-    } else if !stdout.is_empty() {
-        Err(stdout)
-    } else {
-        Err("Setting battery charge limit was not authorized".into())
-    }
-}
-
-fn run_set_charge_limit(value: &str) -> Result<(), String> {
-    if !running_as_root() {
-        return Err("--set-charge-limit must be run as root".into());
-    }
-
-    let percent = parse_charge_percent(value)?;
-    let hwmon = find_hwmon().ok_or_else(|| "t2smc/macsmc hwmon device not found".to_string())?;
-    write_and_verify_charge_limit(&hwmon, percent)?;
-    save_charge_limit(percent)?;
-    println!("Charge limit set to {percent}% and saved");
-    Ok(())
-}
-
-fn run_apply_saved_charge_limit() -> Result<(), String> {
-    if !running_as_root() {
-        return Err("--apply-saved-charge-limit must be run as root".into());
-    }
-
-    let Some(percent) = read_saved_charge_limit()? else {
-        println!("No saved charge limit configured");
-        return Ok(());
-    };
-
-    let hwmon = find_hwmon_with_retry(APPLY_RETRY_ATTEMPTS, APPLY_RETRY_DELAY)
-        .ok_or_else(|| "t2smc/macsmc hwmon device not found".to_string())?;
-    write_and_verify_charge_limit(&hwmon, percent)?;
-    println!("Applied saved charge limit {percent}%");
-    Ok(())
-}
-
 fn print_usage() {
-    println!(
-        "Usage:\n  t2-smc-control\n  t2-smc-control --set-charge-limit <0-100>\n  t2-smc-control --apply-saved-charge-limit"
-    );
+    println!("Usage:\n  t2-smc-control");
 }
 
 fn handle_cli_args() -> Option<Result<(), String>> {
-    let mut args = env::args().skip(1);
-    let first = args.next()?;
-
-    match first.as_str() {
-        "--set-charge-limit" => {
-            let Some(value) = args.next() else {
-                return Some(Err("Missing value for --set-charge-limit".into()));
-            };
-            if args.next().is_some() {
-                return Some(Err("Too many arguments for --set-charge-limit".into()));
-            }
-            Some(run_set_charge_limit(&value))
-        }
-        "--apply-saved-charge-limit" => {
-            if args.next().is_some() {
-                return Some(Err(
-                    "Too many arguments for --apply-saved-charge-limit".into()
-                ));
-            }
-            Some(run_apply_saved_charge_limit())
-        }
+    match env::args().nth(1)?.as_str() {
         "-h" | "--help" => {
             print_usage();
             Some(Ok(()))
@@ -872,28 +705,17 @@ fn set_status(label: &gtk4::Label, text: &str, error: bool) {
     }
 }
 
-fn initialize_charge_limit(
-    hwmon: &Path,
-    slider: &gtk4::Scale,
-    charge_value: &gtk4::Label,
-    status: &gtk4::Label,
-    updating_slider: &Rc<RefCell<bool>>,
-    last_committed: &Rc<RefCell<Option<u8>>>,
-) {
-    let Some(limit) = read_charge_limit(hwmon) else {
-        slider.set_sensitive(false);
-        set_status(status, "battery_charge_limit not found", true);
-        return;
-    };
-
-    *updating_slider.borrow_mut() = true;
-    slider.set_value(limit as f64);
-    *updating_slider.borrow_mut() = false;
-    charge_value.set_text(&format!("{limit}%"));
-    *last_committed.borrow_mut() = Some(limit);
-
-    slider.set_sensitive(true);
-    set_status(status, "Ready", false);
+fn show_charge_limit(label: &gtk4::Label, meter: &gtk4::ProgressBar, hwmon: Option<&Path>) {
+    match hwmon.and_then(read_charge_limit) {
+        Some(limit) => {
+            label.set_text(&format!("{limit}%"));
+            meter.set_fraction(limit as f64 / 100.0);
+        }
+        None => {
+            label.set_text("--%");
+            meter.set_fraction(0.0);
+        }
+    }
 }
 
 fn clear_listbox(list: &gtk4::ListBox) {
@@ -1107,9 +929,13 @@ fn main() {
         brand.set_margin_start(10);
         brand.set_margin_end(10);
         header.pack_start(&brand);
-        let rtc_value = gtk4::Label::new(Some("RTC: --"));
+        let rtc_value = gtk4::Label::new(Some("RTC (UTC): --"));
         rtc_value.set_halign(gtk4::Align::End);
         rtc_value.add_css_class("numeric");
+        let rtc_sync = gtk4::Button::with_label("Sync RTC");
+        rtc_sync.set_tooltip_text(Some("Write the current system time to the SMC hardware clock"));
+        rtc_sync.set_sensitive(rtc.borrow().is_some());
+        header.pack_end(&rtc_sync);
         header.pack_end(&rtc_value);
 
         let status = gtk4::Label::new(None);
@@ -1117,7 +943,6 @@ fn main() {
         status.set_xalign(0.0);
         status.add_css_class("dim-label");
 
-        // Charge limit
         let charge_header = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
         let charge_title = gtk4::Label::new(Some("Battery charge limit"));
         charge_title.set_halign(gtk4::Align::Start);
@@ -1129,13 +954,12 @@ fn main() {
         charge_value.add_css_class("overview-value");
         charge_header.append(&charge_title);
         charge_header.append(&charge_value);
-
-        let slider = gtk4::Scale::with_range(gtk4::Orientation::Horizontal, 50.0, 100.0, 1.0);
-        slider.set_draw_value(false);
-        slider.set_hexpand(true);
-        slider.set_valign(gtk4::Align::Center);
-        slider.add_css_class("overview-meter");
-        slider.set_sensitive(false);
+        let charge_meter = gtk4::ProgressBar::new();
+        charge_meter.set_show_text(false);
+        charge_meter.set_hexpand(true);
+        charge_meter.set_valign(gtk4::Align::Center);
+        charge_meter.add_css_class("overview-meter");
+        charge_meter.set_tooltip_text(Some("Set in the desktop environment's power settings"));
 
         // Battery state and remaining-time estimate
         let battery_title = gtk4::Label::new(Some("Battery"));
@@ -1219,7 +1043,7 @@ fn main() {
         overview.attach(&battery_header, 0, 0, 1, 1);
         overview.attach(&charge_header, 1, 0, 1, 1);
         overview.attach(&battery_progress, 0, 1, 1, 1);
-        overview.attach(&slider, 1, 1, 1, 1);
+        overview.attach(&charge_meter, 1, 1, 1, 1);
         overview.attach(&battery_time, 0, 2, 1, 1);
         overview.attach(&status, 1, 2, 1, 1);
         let overview_frame = gtk4::Frame::new(None);
@@ -1260,18 +1084,10 @@ fn main() {
         window.set_default_size(1100, 760);
         window.set_content(Some(&root));
 
-        let updating_slider = Rc::new(RefCell::new(false));
-        let last_committed = Rc::new(RefCell::new(None));
         let battery_current_average = Rc::new(RefCell::new(BatteryCurrentAverage::default()));
+        show_charge_limit(&charge_value, &charge_meter, hwmon.borrow().as_deref());
         if let Some(ref h) = *hwmon.borrow() {
-            initialize_charge_limit(
-                h,
-                &slider,
-                &charge_value,
-                &status,
-                &updating_slider,
-                &last_committed,
-            );
+            set_status(&status, "Ready", false);
             update_battery_overview(
                 &battery_progress,
                 &battery_value,
@@ -1285,103 +1101,54 @@ fn main() {
 
         if let Some(ref r) = *rtc.borrow() {
             if let Some(time) = read_rtc_datetime(r) {
-                rtc_value.set_text(&format!("RTC: {time}"));
+                rtc_value.set_text(&format!("RTC (UTC): {time}"));
             } else {
-                rtc_value.set_text("RTC: unavailable");
+                rtc_value.set_text("RTC (UTC): unavailable");
             }
         } else {
-            rtc_value.set_text("RTC: searching…");
+            rtc_value.set_text("RTC (UTC): searching…");
         }
 
-        let value_for_slider = charge_value.clone();
-        let updating_for_slider = updating_slider.clone();
-        slider.connect_value_changed(move |scale| {
-            if *updating_for_slider.borrow() {
+        let rtc_for_sync = rtc.clone();
+        let status_for_sync = status.clone();
+        let rtc_value_for_sync = rtc_value.clone();
+        rtc_sync.connect_clicked(move |button| {
+            let Some(r) = rtc_for_sync.borrow().clone() else {
+                set_status(&status_for_sync, "t2smc RTC not found", true);
                 return;
-            }
-            let percent = scale.value().round().clamp(0.0, 100.0) as u8;
-            value_for_slider.set_text(&format!("{percent}%"));
-        });
+            };
 
-        let write_current_limit = Rc::new({
-            let hw_for_release = hwmon.clone();
-            let status_for_release = status.clone();
-            let value_for_release = charge_value.clone();
-            let slider_for_release = slider.clone();
-            let last_committed_for_release = last_committed.clone();
-            move || {
-                let percent = slider_for_release.value().round().clamp(0.0, 100.0) as u8;
-                value_for_release.set_text(&format!("{percent}%"));
-
-                if *last_committed_for_release.borrow() == Some(percent) {
-                    return;
+            button.set_sensitive(false);
+            match sync_rtc_from_system(&r) {
+                Ok(()) => {
+                    if let Some(time) = read_rtc_datetime(&r) {
+                        rtc_value_for_sync.set_text(&format!("RTC (UTC): {time}"));
+                    }
+                    set_status(&status_for_sync, "Hardware clock set from system time", false);
                 }
-
-                let Some(ref h) = *hw_for_release.borrow() else {
-                    set_status(&status_for_release, "t2smc hwmon device not found", true);
-                    return;
-                };
-
-                match set_charge_limit_via_pkexec(percent) {
-                    Ok(()) => match read_charge_limit(h) {
-                        Some(actual) if actual == percent => {
-                            *last_committed_for_release.borrow_mut() = Some(actual);
-                            set_status(
-                                &status_for_release,
-                                &format!("Charge limit set to {actual}% and saved"),
-                                false,
-                            );
-                        }
-                        Some(actual) => set_status(
-                            &status_for_release,
-                            &format!(
-                                "Write mismatch: requested {percent}%, device reports {actual}%"
-                            ),
-                            true,
-                        ),
-                        None => {
-                            *last_committed_for_release.borrow_mut() = Some(percent);
-                            set_status(
-                                &status_for_release,
-                                &format!("Charge limit set to {percent}% and saved"),
-                                false,
-                            );
-                        }
-                    },
-                    Err(err) => set_status(&status_for_release, &err, true),
-                }
+                Err(err) => set_status(&status_for_sync, &err, true),
             }
+            button.set_sensitive(true);
         });
-
-        let release = gtk4::EventControllerLegacy::new();
-        release.set_propagation_phase(gtk4::PropagationPhase::Capture);
-        let write_on_release = write_current_limit.clone();
-        release.connect_event(move |_, event| {
-            if event.event_type() == gtk4::gdk::EventType::ButtonRelease {
-                write_on_release();
-            }
-            glib::Propagation::Proceed
-        });
-        root.add_controller(release);
 
         // Poll
         let hw2 = hwmon.clone();
         let status_poll = status.clone();
-        let slider_poll = slider.clone();
-        let value_poll = charge_value.clone();
-        let updating_poll = updating_slider.clone();
-        let last_committed_poll = last_committed.clone();
         let sensor_rows_poll = sensor_rows.clone();
         let power_rows_poll = power_rows.clone();
         let power_list_poll = power_list.clone();
         let rtc_poll = rtc.clone();
         let rtc_value_poll = rtc_value.clone();
+        let rtc_sync_poll = rtc_sync.clone();
+        let charge_value_poll = charge_value.clone();
+        let charge_meter_poll = charge_meter.clone();
         let battery_progress_poll = battery_progress.clone();
         let battery_value_poll = battery_value.clone();
         let battery_time_poll = battery_time.clone();
         let battery_current_average_poll = battery_current_average.clone();
         timeout_add_local(std::time::Duration::from_secs(1), move || {
             let current_hwmon = hw2.borrow().clone();
+            show_charge_limit(&charge_value_poll, &charge_meter_poll, current_hwmon.as_deref());
             if let Some(h) = current_hwmon {
                 let power = read_power_telemetry(&h);
                 refresh_value_rows(&power_list_poll, &power_rows_poll, &power);
@@ -1395,14 +1162,7 @@ fn main() {
                     &mut battery_current_average_poll.borrow_mut(),
                 );
             } else if let Some(h) = find_hwmon() {
-                initialize_charge_limit(
-                    &h,
-                    &slider_poll,
-                    &value_poll,
-                    &status_poll,
-                    &updating_poll,
-                    &last_committed_poll,
-                );
+                set_status(&status_poll, "Ready", false);
                 *hw2.borrow_mut() = Some(h);
             }
 
@@ -1410,15 +1170,16 @@ fn main() {
             if let Some(r) = current_rtc {
                 match read_rtc_datetime(&r) {
                     Some(time) => {
-                        rtc_value_poll.set_text(&format!("RTC: {time}"));
+                        rtc_value_poll.set_text(&format!("RTC (UTC): {time}"));
                     }
-                    None => rtc_value_poll.set_text("RTC: unavailable"),
+                    None => rtc_value_poll.set_text("RTC (UTC): unavailable"),
                 }
             } else if let Some(r) = find_t2smc_rtc() {
                 if let Some(time) = read_rtc_datetime(&r) {
-                    rtc_value_poll.set_text(&format!("RTC: {time}"));
+                    rtc_value_poll.set_text(&format!("RTC (UTC): {time}"));
                 }
                 *rtc_poll.borrow_mut() = Some(r);
+                rtc_sync_poll.set_sensitive(true);
             }
             glib::ControlFlow::Continue
         });
@@ -1448,38 +1209,6 @@ mod tests {
             "t2-smc-control-test-{name}-{}-{nonce}",
             std::process::id()
         ))
-    }
-
-    #[test]
-    fn parses_charge_limit_config() {
-        let raw = "\n# saved by t2-smc-control\ncharge_limit=80\nignored=true\n";
-
-        assert_eq!(parse_charge_limit_config(raw).unwrap(), Some(80));
-    }
-
-    #[test]
-    fn rejects_invalid_charge_limit_config() {
-        assert!(parse_charge_limit_config("charge_limit=101\n").is_err());
-        assert!(parse_charge_limit_config("charge_limit=abc\n").is_err());
-        assert!(parse_charge_limit_config("broken\n").is_err());
-    }
-
-    #[test]
-    fn round_trips_charge_limit_config_file() {
-        let dir = temp_path("config");
-        let path = dir.join("config.txt");
-
-        write_charge_limit_config(&path, 77).unwrap();
-        assert_eq!(read_saved_charge_limit_from(&path).unwrap(), Some(77));
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn missing_charge_limit_config_is_empty() {
-        let path = temp_path("missing").join("config.txt");
-
-        assert_eq!(read_saved_charge_limit_from(&path).unwrap(), None);
     }
 
     #[test]

@@ -216,20 +216,18 @@ All Kait2en desktop applications use the shared header wordmark at
 | Application | Installed files |
 | --- | --- |
 | T2 Fan Control | `/usr/local/bin/t2-fancontrol-gtk`, `/usr/local/share/applications/org.t2fancontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2fancontrol.gtk.svg`, `/usr/local/lib/systemd/system/t2-fancontrol.service` |
-| T2 SMC Control | `/usr/local/bin/t2-smc-control`, `/usr/local/share/applications/org.t2smccontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2smccontrol.gtk.svg`, `/usr/local/lib/systemd/system/kait2en-t2-smc-charge-limit.service` |
+| T2 SMC Control | `/usr/local/bin/t2-smc-control`, `/usr/local/share/applications/org.t2smccontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2smccontrol.gtk.svg` |
 | T2 Power Explorer | `/usr/local/bin/t2-power-explorer`, `/usr/local/libexec/t2-power-explorer-status`, `/usr/local/share/applications/org.t2powerexplorer.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2powerexplorer.gtk.svg`, `/usr/share/polkit-1/actions/org.t2powerexplorer.policy` |
 | T2 CPU Control | `/usr/local/bin/t2-cpu-control`, `/usr/local/libexec/t2-cpu-control-helper`, `/usr/local/libexec/t2-cpu-control-status`, `/usr/local/libexec/t2-cpu-kernel-benchmark`, `/usr/local/lib/systemd/system/t2-cpu-control.service`, `/usr/local/lib/systemd/system-sleep/t2-cpu-control`, `/usr/local/share/applications/org.t2cpucontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2cpucontrol.gtk.svg`, `/usr/share/polkit-1/actions/org.t2cpucontrol.policy` |
 | T2 Power Tune | `/usr/local/bin/t2-power-tune`, `/usr/local/libexec/t2-power-tune-helper`, `/usr/local/libexec/t2-power-tune-status`, `/usr/local/share/applications/org.t2powertune.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2powertune.gtk.svg`, `/usr/share/polkit-1/actions/org.t2powertune.policy` |
 | T2 Hybrid GPU Control | `/usr/local/bin/t2-hybrid-gpu-control`, `/usr/local/libexec/t2-hybrid-gpu-control-helper`, `/usr/local/libexec/t2-hybrid-gpu-control-status`, `/usr/local/share/applications/org.t2hybridgpucontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2hybridgpucontrol.gtk.svg`, `/usr/share/polkit-1/actions/org.t2hybridgpucontrol.gtk.policy`, `/usr/share/polkit-1/actions/org.t2hybridgpucontrol.gtk.status.policy` |
 | T2 GPU Control | `/usr/local/bin/t2-dgpu-control`, `/usr/local/libexec/t2-dgpu-control-helper`, `/usr/local/libexec/t2-dgpu-control-status`, `/usr/local/share/applications/org.t2dgpucontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2dgpucontrol.gtk.svg`, `/usr/local/lib/systemd/system/kait2en-dgpu-off.service`, `/usr/local/lib/systemd/system/kait2en-dgpu-suspend.service`, `/usr/local/lib/systemd/system/kait2en-amdgpu-profile.service`, `/usr/local/lib/systemd/system/kait2en-amdgpu-profile-resume.service`, `/usr/share/polkit-1/actions/org.t2dgpucontrol.gtk.policy`, `/usr/share/polkit-1/actions/org.t2dgpucontrol.gtk.status.policy` |
 
-T2 SMC Control creates `/etc/t2-smc-control/config.txt` only after a charge
-limit is saved. Its system service restores that value at boot. T2 Fan Control's
-service starts immediately and persists fan curves across boot and resume.
-T2 Hybrid GPU Control does not install system services. T2 GPU Control enables
-its units only when the corresponding options are applied in the app. Both
-privileged helpers validate the GPU layout and accept only the fixed operations
-exposed by their UI.
+T2 Fan Control's service starts immediately and persists fan curves across
+boot and resume. T2 Hybrid GPU Control does not install system services.
+T2 GPU Control enables its units only when the corresponding options are
+applied in the app. Both privileged helpers validate the GPU layout and accept
+only the fixed operations exposed by their UI.
 
 T2 Power Tune reads package C-state residency and exposes PCIe ASPM, runtime
 power management, LTR ignore, and additional power tunables. The optional
