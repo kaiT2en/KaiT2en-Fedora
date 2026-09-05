@@ -26,15 +26,15 @@ struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
 
-    /// Select Linux boot by journalctl-compatible relative index
+    /// Select Linux boot by relative index, or all retained boots
     #[arg(short = 'b', long, num_args = 0..=1, default_missing_value = "0", allow_negative_numbers = true)]
-    boot: Option<i32>,
+    boot: Option<journal::Boot>,
 
     /// List Linux boots
     #[arg(long)]
     list_boots: bool,
 
-    /// Filter the message with a regular expression
+    /// Filter record text and metadata with a regular expression
     #[arg(short = 'g', long)]
     grep: Option<Regex>,
 
@@ -131,14 +131,18 @@ fn refresh(args: &Refresh, state_file: PathBuf) -> Result<()> {
 }
 
 fn show(cli: &Cli, state_file: PathBuf) -> Result<()> {
-    let mut linux = journal::linux_boot(cli.boot.unwrap_or(0))?;
+    let boot = cli.boot.unwrap_or(journal::Boot::Offset(0));
+    let mut linux = journal::linux_boot(boot)?;
     let mut bridge = store::read(&state_file)?;
-    if let (Some(first), Some(last)) = (linux.first(), linux.last()) {
-        bridge.retain(|record| {
-            record.timestamp_ns >= first.timestamp_ns && record.timestamp_ns <= last.timestamp_ns
-        });
-    } else {
-        bridge.clear();
+    if matches!(boot, journal::Boot::Offset(_)) {
+        if let (Some(first), Some(last)) = (linux.first(), linux.last()) {
+            bridge.retain(|record| {
+                record.timestamp_ns >= first.timestamp_ns
+                    && record.timestamp_ns <= last.timestamp_ns
+            });
+        } else {
+            bridge.clear();
+        }
     }
     linux.append(&mut bridge);
     linux.sort_by_key(|record| record.timestamp_ns);
@@ -149,11 +153,13 @@ fn show(cli: &Cli, state_file: PathBuf) -> Result<()> {
         if !matches_source(&record, cli.source) {
             continue;
         }
-        if cli
-            .grep
-            .as_ref()
-            .is_some_and(|grep| !grep.is_match(&record.message))
-        {
+        if cli.grep.as_ref().is_some_and(|grep| {
+            !grep.is_match(&record.message)
+                && !grep.is_match(&record.process)
+                && !grep.is_match(&record.subsystem)
+                && !grep.is_match(&record.category)
+                && !grep.is_match(&record.source)
+        }) {
             continue;
         }
         let result: io::Result<()> = match cli.output {
