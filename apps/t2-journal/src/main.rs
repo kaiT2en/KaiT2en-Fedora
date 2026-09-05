@@ -4,6 +4,7 @@ mod archive;
 mod discovery;
 mod historical;
 mod journal;
+mod noise;
 mod progress;
 mod record;
 mod remote;
@@ -26,9 +27,21 @@ struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
 
-    /// Select Linux boot by relative index, or all retained boots
+    /// Select Linux boot by relative index
     #[arg(short = 'b', long, num_args = 0..=1, default_missing_value = "0", allow_negative_numbers = true)]
     boot: Option<journal::Boot>,
+
+    /// Show all retained Linux boots and the complete T2 snapshot
+    #[arg(
+        long = "allboots",
+        visible_alias = "all-boots",
+        conflicts_with = "boot"
+    )]
+    allboots: bool,
+
+    /// Include transport and collection noise caused by this program
+    #[arg(short = 'a', long)]
+    all: bool,
 
     /// List Linux boots
     #[arg(long)]
@@ -131,9 +144,14 @@ fn refresh(args: &Refresh, state_file: PathBuf) -> Result<()> {
 }
 
 fn show(cli: &Cli, state_file: PathBuf) -> Result<()> {
-    let boot = cli.boot.unwrap_or(journal::Boot::Offset(0));
+    let boot = if cli.allboots {
+        journal::Boot::All
+    } else {
+        cli.boot.unwrap_or(journal::Boot::Offset(0))
+    };
     let mut linux = journal::linux_boot(boot)?;
     let mut bridge = store::read(&state_file)?;
+    let noise = noise::Acquisition::from_records(&bridge);
     if matches!(boot, journal::Boot::Offset(_)) {
         if let (Some(first), Some(last)) = (linux.first(), linux.last()) {
             bridge.retain(|record| {
@@ -151,6 +169,9 @@ fn show(cli: &Cli, state_file: PathBuf) -> Result<()> {
     let mut output = io::BufWriter::new(stdout.lock());
     for record in linux {
         if !matches_source(&record, cli.source) {
+            continue;
+        }
+        if !cli.all && noise.is_some_and(|noise| noise.contains(&record)) {
             continue;
         }
         if cli.grep.as_ref().is_some_and(|grep| {
@@ -211,5 +232,26 @@ fn main() {
             eprintln!("{error:#}");
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_controls_noise_and_allboots_controls_boot_range() {
+        let current = Cli::try_parse_from(["t2journal", "-b", "--all"]).unwrap();
+        assert!(matches!(current.boot, Some(journal::Boot::Offset(0))));
+        assert!(current.all);
+        assert!(!current.allboots);
+
+        let all_boots = Cli::try_parse_from(["t2journal", "--allboots"]).unwrap();
+        assert!(all_boots.boot.is_none());
+        assert!(all_boots.allboots);
+        assert!(!all_boots.all);
+
+        assert!(Cli::try_parse_from(["t2journal", "-b", "all"]).is_err());
+        assert!(Cli::try_parse_from(["t2journal", "-b", "--allboots"]).is_err());
     }
 }

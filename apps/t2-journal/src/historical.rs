@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
 use regex::Regex;
 
 use crate::archive;
@@ -49,6 +49,7 @@ fn wanted(name: &str) -> bool {
 fn parse_sysdiagnose(path: &Path, records: &mut Vec<Record>) -> Result<()> {
     let data = fs::read(path).with_context(|| format!("open {}", path.display()))?;
     let text = String::from_utf8_lossy(&data);
+    let utc_adjustment = sysdiagnose_utc_adjustment(path, &text).unwrap_or_default();
     let first_record = records.len();
     for line in text.lines() {
         let Some((raw, message)) = line.split_once(": ") else {
@@ -63,13 +64,42 @@ fn parse_sysdiagnose(path: &Path, records: &mut Vec<Record>) -> Result<()> {
         let Ok(time) = NaiveDateTime::parse_from_str(raw, "%Y-%m-%d %H:%M:%S") else {
             continue;
         };
+        let time = time.and_utc() + Duration::seconds(i64::from(utc_adjustment));
         records.push(record(
-            time.and_utc().timestamp_nanos_opt().unwrap_or_default(),
+            time.timestamp_nanos_opt().unwrap_or_default(),
             "sysdiagnose",
             message,
         ));
     }
     Ok(())
+}
+
+fn sysdiagnose_utc_adjustment(path: &Path, text: &str) -> Option<i32> {
+    let capture = path.ancestors().find_map(|ancestor| {
+        let name = ancestor.file_name()?.to_string_lossy();
+        let (_, timestamp) = name.split_once("sysdiagnose_")?;
+        let timestamp = timestamp.get(..24)?;
+        DateTime::parse_from_str(timestamp, "%Y.%m.%d_%H-%M-%S%z").ok()
+    })?;
+    let first = text.lines().find_map(|line| {
+        let (timestamp, _) = line.split_once(": ")?;
+        NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d %H:%M:%S").ok()
+    })?;
+
+    // The directory name carries an explicit UTC offset, while sysdiagnose.log
+    // uses local wall-clock time without one. Collection can start a few seconds
+    // after the directory timestamp, so infer the timezone in 15-minute steps.
+    let difference = capture.timestamp() - first.and_utc().timestamp();
+    let adjustment = if difference >= 0 {
+        (difference + 450) / 900 * 900
+    } else {
+        (difference - 450) / 900 * 900
+    };
+    if adjustment.unsigned_abs() > 14 * 60 * 60 || (difference - adjustment).unsigned_abs() > 5 * 60
+    {
+        return None;
+    }
+    i32::try_from(adjustment).ok()
 }
 
 fn parse_timestamped(
@@ -137,5 +167,56 @@ fn record(timestamp_ns: i64, process: &str, message: &str) -> Record {
         subsystem: String::new(),
         category: String::new(),
         message: message.into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sysdiagnose_local_time_is_aligned_with_archive_timestamp() {
+        let temporary = tempfile::tempdir().unwrap();
+        let archive = temporary
+            .path()
+            .join("bridge_sysdiagnose_2026.09.03_11-31-52+0000_Bridge-OS_Bridge_23P5067");
+        fs::create_dir(&archive).unwrap();
+        let log = archive.join("sysdiagnose.log");
+        fs::write(
+            &log,
+            "2026-09-03 04:31:52: collection started\ncontinued detail\n",
+        )
+        .unwrap();
+
+        let mut records = Vec::new();
+        parse_sysdiagnose(&log, &mut records).unwrap();
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(
+            records[0].timestamp_ns,
+            DateTime::parse_from_rfc3339("2026-09-03T11:31:52Z")
+                .unwrap()
+                .timestamp_nanos_opt()
+                .unwrap()
+        );
+        assert_eq!(records[0].message, "collection started\ncontinued detail");
+    }
+
+    #[test]
+    fn sysdiagnose_without_archive_timestamp_keeps_utc_fallback() {
+        let temporary = tempfile::tempdir().unwrap();
+        let log = temporary.path().join("sysdiagnose.log");
+        fs::write(&log, "2026-09-03 04:31:52: collection started\n").unwrap();
+
+        let mut records = Vec::new();
+        parse_sysdiagnose(&log, &mut records).unwrap();
+
+        assert_eq!(
+            records[0].timestamp_ns,
+            DateTime::parse_from_rfc3339("2026-09-03T04:31:52Z")
+                .unwrap()
+                .timestamp_nanos_opt()
+                .unwrap()
+        );
     }
 }

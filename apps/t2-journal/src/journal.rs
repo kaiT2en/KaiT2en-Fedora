@@ -18,13 +18,10 @@ impl FromStr for Boot {
     type Err = String;
 
     fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
-        if value.eq_ignore_ascii_case("all") {
-            return Ok(Self::All);
-        }
         value
             .parse()
             .map(Self::Offset)
-            .map_err(|_| "boot must be 'all' or a journalctl offset such as 0 or -1".into())
+            .map_err(|_| "boot must be a journalctl offset such as 0 or -1".into())
     }
 }
 
@@ -92,8 +89,8 @@ mod tests {
 
     #[test]
     fn parses_boot_selectors() {
-        assert!(matches!("all".parse(), Ok(Boot::All)));
         assert!(matches!("-3".parse(), Ok(Boot::Offset(-3))));
+        assert!("all".parse::<Boot>().is_err());
         assert!("previous".parse::<Boot>().is_err());
     }
 }
