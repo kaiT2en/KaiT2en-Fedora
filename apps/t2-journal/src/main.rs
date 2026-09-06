@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 
 use record::Record;
 
@@ -48,7 +48,7 @@ struct Cli {
     list_boots: bool,
 
     /// Filter record text and metadata with a regular expression
-    #[arg(short = 'g', long)]
+    #[arg(short = 'g', long, value_parser = parse_grep)]
     grep: Option<Regex>,
 
     /// Limit output to one source
@@ -95,6 +95,15 @@ enum Source {
 enum Output {
     Text,
     Jsonl,
+}
+
+fn parse_grep(pattern: &str) -> std::result::Result<Regex, String> {
+    // Match journalctl's smart-case behaviour: an all-lowercase pattern is
+    // case-insensitive, while a pattern containing uppercase is sensitive.
+    RegexBuilder::new(pattern)
+        .case_insensitive(!pattern.chars().any(char::is_uppercase))
+        .build()
+        .map_err(|error| error.to_string())
 }
 
 fn refresh(args: &Refresh, state_file: PathBuf) -> Result<()> {
@@ -253,5 +262,18 @@ mod tests {
 
         assert!(Cli::try_parse_from(["t2journal", "-b", "all"]).is_err());
         assert!(Cli::try_parse_from(["t2journal", "-b", "--allboots"]).is_err());
+    }
+
+    #[test]
+    fn grep_uses_journalctl_smart_case() {
+        let lowercase = Cli::try_parse_from(["t2journal", "--grep", "acpi"]).unwrap();
+        let lowercase = lowercase.grep.unwrap();
+        assert!(lowercase.is_match("IOACPIPlatformExpert"));
+        assert!(lowercase.is_match("acpi"));
+
+        let uppercase = Cli::try_parse_from(["t2journal", "--grep", "ACPI"]).unwrap();
+        let uppercase = uppercase.grep.unwrap();
+        assert!(uppercase.is_match("IOACPIPlatformExpert"));
+        assert!(!uppercase.is_match("acpi"));
     }
 }

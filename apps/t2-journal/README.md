@@ -51,6 +51,8 @@ when their timestamps fall inside that interval. `--allboots` (also accepted as
 with all retained Linux boots. RemoteXPC transport messages and explicit state
 dumps caused by collection are hidden by default; `--all` includes them.
 The built-in `--grep` also searches process, subsystem, category, and source.
+Like `journalctl`, an all-lowercase pattern is matched case-insensitively; a
+pattern containing uppercase letters is matched case-sensitively.
 Text output uses exactly one physical line per record; embedded line endings and
 backslashes are escaped as `\n`, `\r`, and `\\` without discarding their content.
 
