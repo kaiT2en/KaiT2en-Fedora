@@ -37,6 +37,11 @@ struct Connection {
     last_peer_stream: u32,
 }
 
+pub struct DiscoveredService {
+    pub discovery_port: u16,
+    pub service_port: u16,
+}
+
 impl Connection {
     fn connect(interface: &str, host: Ipv6Addr, port: u16) -> Result<Self> {
         Self::connect_with_timeout(
@@ -170,7 +175,7 @@ pub fn discover_service(
     interface: &str,
     host: Ipv6Addr,
     mut progress: impl FnMut(u64, u64),
-) -> Result<u16> {
+) -> Result<DiscoveredService> {
     let next = Arc::new(AtomicU32::new(FIRST_DYNAMIC_PORT.into()));
     let stop = Arc::new(AtomicBool::new(false));
     let (candidate_sender, candidate_receiver) = mpsc::channel();
@@ -196,9 +201,12 @@ pub fn discover_service(
                     Err(_) => break,
                 };
                 drop(receiver);
-                if let Ok(found) = discover_service_at(&interface, host, port) {
+                if let Ok(service_port) = discover_service_at(&interface, host, port) {
                     stop.store(true, Ordering::Relaxed);
-                    let _ = sender.send(found);
+                    let _ = sender.send(DiscoveredService {
+                        discovery_port: port,
+                        service_port,
+                    });
                     break;
                 }
             }
@@ -250,6 +258,19 @@ pub fn discover_service(
         let _ = worker.join();
     }
     service.ok_or_else(|| anyhow::anyhow!("T2 did not advertise com.apple.sysdiagnose.remote"))
+}
+
+pub fn discover_cached_service(
+    interface: &str,
+    host: Ipv6Addr,
+    port: u16,
+) -> Result<DiscoveredService> {
+    ensure!(probe(interface, host, port), "port {port} is not reachable");
+    let service_port = discover_service_at(interface, host, port)?;
+    Ok(DiscoveredService {
+        discovery_port: port,
+        service_port,
+    })
 }
 
 fn probe(interface: &str, host: Ipv6Addr, port: u16) -> bool {

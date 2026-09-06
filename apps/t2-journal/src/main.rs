@@ -5,6 +5,7 @@ mod discovery;
 mod historical;
 mod journal;
 mod noise;
+mod port_cache;
 mod progress;
 mod record;
 mod remote;
@@ -114,12 +115,38 @@ fn refresh(args: &Refresh, state_file: PathBuf) -> Result<()> {
     } else {
         let interface = discovery::interface(args.interface.clone())?;
         let host = discovery::host(&interface, args.host.clone())?;
-        eprintln!("Scanning T2 RemoteXPC services on [{host}%{interface}]");
-        let mut scan = progress::Bar::new("RemoteXPC scan");
-        let port = remote::discover_service(&interface, host, |current, total| {
-            scan.set(current, total);
-        })?;
-        scan.finish();
+        let cache_path = port_cache::path_for(&state_file)?;
+        let cached = port_cache::read(&cache_path)
+            .with_context(|| format!("read {}", cache_path.display()))?;
+        let mut discovered = None;
+        if !cached.is_empty() {
+            eprintln!("Trying {} cached RemoteXPC ports", cached.len());
+            for &candidate in &cached {
+                if let Ok(found) = remote::discover_cached_service(&interface, host, candidate) {
+                    discovered = Some(found);
+                    break;
+                }
+            }
+        }
+        let discovered = match discovered {
+            Some(found) => found,
+            None => {
+                eprintln!("Scanning T2 RemoteXPC services on [{host}%{interface}]");
+                let mut scan = progress::Bar::new("RemoteXPC scan");
+                let found = remote::discover_service(&interface, host, |current, total| {
+                    scan.set(current, total);
+                })?;
+                scan.finish();
+                found
+            }
+        };
+        port_cache::remember(
+            &cache_path,
+            &cached,
+            &[discovered.discovery_port, discovered.service_port],
+        )
+        .with_context(|| format!("write {}", cache_path.display()))?;
+        let port = discovered.service_port;
         eprintln!("Fetching com.apple.sysdiagnose.remote from port {port}");
         let path = work.path().join("sysdiagnose.tar.gz");
         let mut download = progress::Bar::new("Sysdiagnose download");
