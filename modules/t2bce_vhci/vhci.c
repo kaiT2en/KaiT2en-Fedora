@@ -110,7 +110,7 @@ int bce_vhci_create(struct device *parent, struct bce_vhci *vhci)
     if ((status = __bce_vhci_add_hcd(vhci)))
         goto fail_hcd;
 
-    pr_info("t2bce_vhci: initialized\n");
+    pr_info("t2bce_vhci: device initialized\n");
     return 0;
 
 fail_hcd:
@@ -644,7 +644,7 @@ static int bce_vhci_suspend_quiesce(struct usb_hcd *hcd)
     int status;
     struct bce_vhci *vhci = bce_vhci_from_hcd(hcd);
 
-    pr_debug("t2bce_vhci: suspend started\n");
+    pr_info("t2bce_vhci: suspend started\n");
     flush_workqueue(vhci->tq_state_wq);
 
     for (devid = 1; devid < ARRAY_SIZE(vhci->devices); devid++) {
@@ -673,7 +673,7 @@ static int bce_vhci_suspend_quiesce(struct usb_hcd *hcd)
             goto abort;
     }
 
-    pr_debug("t2bce_vhci: suspend quiesce complete\n");
+    pr_info("t2bce_vhci: suspend quiesce complete\n");
     return 0;
 
 abort:
@@ -687,7 +687,7 @@ static int bce_vhci_bus_suspend(struct usb_hcd *hcd)
     int status;
     struct bce_vhci *vhci = bce_vhci_from_hcd(hcd);
 
-    pr_debug("t2bce_vhci: bus_suspend entry\n");
+    pr_info("t2bce_vhci: bus_suspend entry\n");
     vhci->port_change_pending = 0;
     WRITE_ONCE(vhci->system_suspending, true);
     status = bce_vhci_suspend_quiesce(hcd);
@@ -702,6 +702,7 @@ static int bce_vhci_bus_resume(struct usb_hcd *hcd)
     struct bce_vhci *vhci = bce_vhci_from_hcd(hcd);
     int status;
 
+    pr_info("t2bce_vhci: bus_resume entry\n");
     vhci->port_change_pending = 0;
     bce_vhci_resume_event_queues(vhci);
     status = bce_vhci_resume_suspended(vhci);
