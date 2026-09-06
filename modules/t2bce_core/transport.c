@@ -93,8 +93,11 @@ void t2bce_core_client_put(struct t2bce_core_client *client)
 
     synchronize_srcu(&client->bce->clients_srcu);
 
-    if (client->link)
-        device_link_del(client->link);
+    /*
+     * DL_FLAG_AUTOREMOVE_CONSUMER makes this a managed link. The driver core
+     * removes it on consumer unbind (Audio) or device removal (VHCI).
+     * device_link_del() must not be called on this managed link.
+     */
     kfree(client);
 }
 EXPORT_SYMBOL_GPL(t2bce_core_client_put);
