@@ -64,7 +64,7 @@ int bce_vhci_event_queue_create(struct bce_vhci *vhci, struct bce_vhci_event_que
         bce_vhci_event_queue_callback cb);
 void bce_vhci_event_queue_destroy(struct bce_vhci *vhci, struct bce_vhci_event_queue *q);
 void bce_vhci_event_queue_submit_pending(struct bce_vhci_event_queue *q, size_t count);
-void bce_vhci_event_queue_pause(struct bce_vhci_event_queue *q);
+int bce_vhci_event_queue_pause(struct bce_vhci_event_queue *q);
 void bce_vhci_event_queue_resume(struct bce_vhci_event_queue *q);
 
 void bce_vhci_command_queue_create(struct bce_vhci_command_queue *ret, struct bce_vhci_message_queue *mq);

@@ -51,7 +51,7 @@ void bce_vhci_message_queue_write(struct bce_vhci_message_queue *q, struct bce_v
 {
     int sidx;
     sidx = t2bce_core_queue_sq_tail(q->sq);
-    pr_debug("t2bce_vhci: Send message: %x s=%x p1=%x p2=%llx\n", req->cmd, req->status, req->param1, req->param2);
+    /* pr_debug("t2bce_vhci: Send message: %x s=%x p1=%x p2=%llx\n", req->cmd, req->status, req->param1, req->param2); */
     q->data[sidx] = *req;
     t2bce_core_set_next_submission_single(q->sq, q->dma_addr + sizeof(struct bce_vhci_message) * sidx,
             sizeof(struct bce_vhci_message));
@@ -120,7 +120,8 @@ static void bce_vhci_event_queue_completion(struct t2bce_core_queue_sq *sq)
             continue;
         }
         msg = &ev->data[t2bce_core_queue_sq_head(sq)];
-        pr_debug("t2bce_vhci: Got event: %x s=%x p1=%x p2=%llx\n", msg->cmd, msg->status, msg->param1, msg->param2);
+        /* Temporary: raw events are too noisy with full dynamic debug enabled. */
+        /* pr_debug("t2bce_vhci: Got event: %x s=%x p1=%x p2=%llx\n", msg->cmd, msg->status, msg->param1, msg->param2); */
         ev->cb(ev, msg);
 
         t2bce_core_notify_submission_complete(sq);
@@ -146,20 +147,26 @@ void bce_vhci_event_queue_submit_pending(struct bce_vhci_event_queue *q, size_t 
     t2bce_core_submit_to_device(q->sq);
 }
 
-void bce_vhci_event_queue_pause(struct bce_vhci_event_queue *q)
+int bce_vhci_event_queue_pause(struct bce_vhci_event_queue *q)
 {
+    int status;
     unsigned long timeout;
+
     reinit_completion(&q->queue_empty_completion);
-    if (t2bce_core_flush_queue(q->vhci->client, q->sq))
-        pr_warn("t2bce_vhci: failed to flush event queue\n");
+    status = t2bce_core_flush_queue(q->vhci->client, q->sq);
+    if (status) {
+        pr_err("t2bce_vhci: failed to flush event queue: %d\n", status);
+        return status;
+    }
     timeout = msecs_to_jiffies(5000);
     while (t2bce_core_queue_sq_available(q->sq) != t2bce_core_queue_sq_capacity(q->sq) - 1) {
         timeout = wait_for_completion_timeout(&q->queue_empty_completion, timeout);
         if (timeout == 0) {
             pr_err("t2bce_vhci: waiting for queue to be flushed timed out\n");
-            break;
+            return -ETIMEDOUT;
         }
     }
+    return 0;
 }
 
 void bce_vhci_event_queue_resume(struct bce_vhci_event_queue *q)

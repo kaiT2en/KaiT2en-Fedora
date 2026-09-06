@@ -37,7 +37,6 @@ struct bce_vhci_transfer_queue {
     struct list_head cancel_urb_list;
 
     struct work_struct w_reset;
-    struct work_struct w_resume;
     struct work_struct w_cancel;
 };
 enum bce_vhci_urb_state {
@@ -74,7 +73,6 @@ int bce_vhci_transfer_queue_do_pause(struct bce_vhci_transfer_queue *q);
 int bce_vhci_transfer_queue_do_resume(struct bce_vhci_transfer_queue *q);
 int bce_vhci_transfer_queue_pause(struct bce_vhci_transfer_queue *q, enum bce_vhci_pause_source src);
 int bce_vhci_transfer_queue_resume(struct bce_vhci_transfer_queue *q, enum bce_vhci_pause_source src);
-int bce_vhci_transfer_queue_suspend_pause(struct bce_vhci_transfer_queue *q);
 void bce_vhci_transfer_queue_request_reset(struct bce_vhci_transfer_queue *q);
 
 int bce_vhci_urb_create(struct bce_vhci_transfer_queue *q, struct urb *urb, gfp_t mem_flags);

@@ -27,7 +27,7 @@ static void t2audio_reset_stream(struct t2audio_stream *stream);
 static void t2audio_reset_streams(struct t2audio_device *a);
 static void t2audio_resume_work(struct work_struct *ws);
 static void t2audio_resume_complete(void *userdata);
-static void t2audio_pm_prepare_client(void *userdata);
+static int t2audio_pm_prepare_client(void *userdata);
 static void t2audio_pm_shutdown_client(void *userdata);
 static int t2audio_debugfs_init(struct t2audio_device *a);
 
@@ -272,9 +272,9 @@ static int t2audio_suspend(struct device *dev)
     return 0;
 }
 
-static void t2audio_pm_prepare_client(void *userdata)
+static int t2audio_pm_prepare_client(void *userdata)
 {
-    t2audio_quiesce(userdata, true);
+    return t2audio_quiesce(userdata, true);
 }
 
 static void t2audio_pm_shutdown_client(void *userdata)

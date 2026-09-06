@@ -180,7 +180,7 @@ void t2bce_dma_handle_cq_completions_locked(struct t2bce_dma_engine *dma, struct
         e = t2bce_dma_cq_element(cq, cq->index);
         if (!(e->flags & BCE_COMPLETION_FLAG_PENDING))
             break;
-        pr_debug("t2bce_dma: compl: %i: %i %llx %llx", e->qid, e->status, e->data_size, e->result);
+        /* pr_debug("t2bce_dma: compl: %i: %i %llx %llx", e->qid, e->status, e->data_size, e->result); */
         t2bce_dma_handle_cq_completion(dma, e, ce);
         e->flags = 0;
         cq->index = (cq->index + 1) % cq->el_count;

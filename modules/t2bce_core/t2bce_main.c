@@ -587,7 +587,9 @@ static int t2bce_suspend(struct device *dev)
     bce->no_state_fallback = false;
     bce->no_state_resume = false;
     t2bce_core_clients_pm_reset(bce);
-    t2bce_core_clients_pm_prepare(bce);
+    status = t2bce_core_clients_pm_prepare(bce);
+    if (status)
+        goto out_unlock;
 
     status = bce_pm_suspend_prepare(bce);
     if (status)
@@ -766,7 +768,7 @@ static void __exit t2bce_module_exit(void)
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("André Eikmeyer <andre.eikmeyer@kait2en.org>");
 MODULE_DESCRIPTION("T2 BCE core driver");
-MODULE_VERSION("0.06");
+MODULE_VERSION("0.07");
 MODULE_SOFTDEP("post: t2bce_vhci");
 module_init(t2bce_module_init);
 module_exit(t2bce_module_exit);
