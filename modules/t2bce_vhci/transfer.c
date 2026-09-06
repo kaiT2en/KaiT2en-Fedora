@@ -258,10 +258,17 @@ void bce_vhci_transfer_queue_event(struct bce_vhci_transfer_queue *q, struct bce
     /* bce_vhci_transfer_queue_log_event(q, msg, "incoming"); */
     /* Paused queues may still complete in-flight work but must not deliver new work. */
     if (!q->active) {
-        if (bce_vhci_transfer_queue_is_ep0(q) &&
-            msg->cmd == BCE_VHCI_CMD_TRANSFER_REQUEST &&
-            (q->paused_by & (BCE_VHCI_PAUSE_INTERNAL_WQ |
-                             BCE_VHCI_PAUSE_SUSPEND))) {
+        /*
+         * Ports are resumed before their endpoint queues.  bridgeOS may send
+         * a fresh transfer window as soon as the port becomes active, so keep
+         * that request until the system-resume owner reactivates the queue.
+         * Dropping it leaves bulk OUT users such as cdc_ncm waiting forever.
+         * Internal recovery only needs this treatment for EP0.
+         */
+        if (msg->cmd == BCE_VHCI_CMD_TRANSFER_REQUEST &&
+            ((q->paused_by & BCE_VHCI_PAUSE_SUSPEND) ||
+             (bce_vhci_transfer_queue_is_ep0(q) &&
+              (q->paused_by & BCE_VHCI_PAUSE_INTERNAL_WQ)))) {
             bce_vhci_transfer_queue_log_event(q, msg, "defer-inactive-resume");
             if (!bce_vhci_transfer_queue_defer_event(q, msg))
                 bce_vhci_transfer_queue_log_event(q, msg,
