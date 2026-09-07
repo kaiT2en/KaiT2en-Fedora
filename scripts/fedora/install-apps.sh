@@ -52,12 +52,30 @@ REACT_DRM_CONFLICT_DAEMONS=(
 	mac-touchbar-plus
 )
 
+OBSOLETE_UNITS=(
+	kait2en-t2-smc-charge-limit.service
+)
+
 remove_obsolete_apps() {
+	local unit reload=0
+
 	info "removing obsolete t2-gpu-switch installation"
 	rm -f \
 		/usr/local/bin/t2-gpu-switch \
 		/usr/local/libexec/t2-gpu-switch-helper \
 		/usr/local/share/applications/org.t2gpuswitch.gtk.desktop
+
+	for unit in "${OBSOLETE_UNITS[@]}"; do
+		if systemctl list-unit-files "$unit" &>/dev/null; then
+			info "removing obsolete $unit"
+			systemctl disable --now "$unit" || true
+			reload=1
+		fi
+		[[ -e "/usr/local/lib/systemd/system/$unit" ]] || continue
+		rm -f "/usr/local/lib/systemd/system/$unit"
+		reload=1
+	done
+	[[ "$reload" -eq 0 ]] || systemctl daemon-reload
 }
 
 install_rust_app() {
