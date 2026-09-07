@@ -25,6 +25,10 @@ const MAX_ARCHIVE_SIZE: u64 = 2 * 1024 * 1024 * 1024;
 const SCAN_WORKERS: usize = 128;
 const HANDSHAKE_WORKERS: usize = 32;
 
+// macOS RSDRemoteMultiverseHostDevice::needsConnect uses 0xe8d2 for remoted.
+// Service ports are still read from the peer's Services dictionary.
+pub const DISCOVERY_PORT: u16 = 59602;
+
 struct Frame {
     kind: u8,
     flags: u8,
@@ -260,15 +264,10 @@ pub fn discover_service(
     service.ok_or_else(|| anyhow::anyhow!("T2 did not advertise com.apple.sysdiagnose.remote"))
 }
 
-pub fn discover_cached_service(
-    interface: &str,
-    host: Ipv6Addr,
-    port: u16,
-) -> Result<DiscoveredService> {
-    ensure!(probe(interface, host, port), "port {port} is not reachable");
-    let service_port = discover_service_at(interface, host, port)?;
+pub fn discover_direct_service(interface: &str, host: Ipv6Addr) -> Result<DiscoveredService> {
+    let service_port = discover_service_at(interface, host, DISCOVERY_PORT)?;
     Ok(DiscoveredService {
-        discovery_port: port,
+        discovery_port: DISCOVERY_PORT,
         service_port,
     })
 }

@@ -61,6 +61,6 @@ The default snapshot is
 `~/.local/state/t2-journal/bridgeos.jsonl`. A refresh verifies this destination
 before contacting the T2, writes one fixed `bridgeos.jsonl.partial`, and
 atomically replaces the snapshot after a successful parse.
-The ten most recently successful RemoteXPC discovery and service ports are kept
-in `remote-ports` beside the snapshot. They are tried before a full port scan
-and replaced in most-recently-used order.
+RemoteXPC discovery first connects directly to the T2's fixed port `59602`
+and reads the current sysdiagnose service port from its service directory.
+If direct discovery fails, it falls back to a dynamic-port scan because we don't know yet if `59602` is universal.
