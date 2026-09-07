@@ -73,13 +73,13 @@ items:
     title: "Panel Self Refresh on Apple T2 displays"
     state: in-progress
     upstream: submitted
-    version: v1
+    version: v2
     project: Linux kernel
     subsystem: DRM / i915
     authors:
       - 4f1sh3r
-    link: "https://lore.kernel.org/all/20260829161622.11396-1-alexander.fischer@kait2en.org/"
-    updated: "2026-08-29"
+    link: "https://lore.kernel.org/all/20260907083753.41393-1-alexander.fischer@kait2en.org/"
+    updated: "2026-09-07"
     notes: >-
       Enables PSR on Apple T2 eDP panels using the sink-specific DPCD setup
       and capture sequence, reducing idle display power and enabling deeper
