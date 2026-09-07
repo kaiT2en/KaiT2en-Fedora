@@ -204,13 +204,12 @@ outcome of the Bluetooth step is recorded in the installed system at:
 /var/log/kait2en/bluetooth-firmware.log
 ```
 
-## Desktop applications
+## Applications
 
-`t2-fan-control`, `t2-smc-control`, `t2-power-explorer`, `t2-cpu-control`, and
-`t2-power-tune` are installed system-wide under `/usr/local`. The
-MacBookPro15,1 gets `t2-hybrid-gpu-control`; other MacBook Pro models with Intel
-and AMD display devices get `t2-dgpu-control`.
-All Kait2en desktop applications use the shared header wordmark at
+`t2-fan-control`, `t2-smc-control`, `t2-power-explorer`, `t2-cpu-control`, `t2-journal`, `kernel-builder`, and `t2-power-tune` are installed system-wide under `/usr/local`.
+
+MacBookPro15,1 gets `t2-hybrid-gpu-control`; other MacBook Pro models with Intel and AMD display devices get `t2-dgpu-control`.
+All KAIT2EN desktop applications use the shared header wordmark at
 `/usr/local/share/kait2en/kait2en-wordmark.png`.
 
 | Application | Installed files |
@@ -218,7 +217,9 @@ All Kait2en desktop applications use the shared header wordmark at
 | T2 Fan Control | `/usr/local/bin/t2-fancontrol-gtk`, `/usr/local/share/applications/org.t2fancontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2fancontrol.gtk.svg`, `/usr/local/lib/systemd/system/t2-fancontrol.service` |
 | T2 SMC Control | `/usr/local/bin/t2-smc-control`, `/usr/local/share/applications/org.t2smccontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2smccontrol.gtk.svg` |
 | T2 Power Explorer | `/usr/local/bin/t2-power-explorer`, `/usr/local/libexec/t2-power-explorer-status`, `/usr/local/share/applications/org.t2powerexplorer.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2powerexplorer.gtk.svg`, `/usr/share/polkit-1/actions/org.t2powerexplorer.policy` |
+| T2 Journal | `/usr/local/bin/t2journal` |
 | T2 CPU Control | `/usr/local/bin/t2-cpu-control`, `/usr/local/libexec/t2-cpu-control-helper`, `/usr/local/libexec/t2-cpu-control-status`, `/usr/local/libexec/t2-cpu-kernel-benchmark`, `/usr/local/lib/systemd/system/t2-cpu-control.service`, `/usr/local/lib/systemd/system-sleep/t2-cpu-control`, `/usr/local/share/applications/org.t2cpucontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2cpucontrol.gtk.svg`, `/usr/share/polkit-1/actions/org.t2cpucontrol.policy` |
+| T2 Kernel Builder | `/usr/local/bin/t2-kernel-builder`, `/usr/local/libexec/t2-kernel-builder-cleanup`, `/usr/local/libexec/t2-kernel-builder/build.sh`, `/usr/local/libexec/t2-kernel-builder/configs/*.config`, `/usr/local/share/applications/org.t2kernelbuilder.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2kernelbuilder.gtk.svg`, `/usr/local/share/polkit-1/actions/org.t2kernelbuilder.gtk.policy` |
 | T2 Power Tune | `/usr/local/bin/t2-power-tune`, `/usr/local/libexec/t2-power-tune-helper`, `/usr/local/libexec/t2-power-tune-status`, `/usr/local/share/applications/org.t2powertune.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2powertune.gtk.svg`, `/usr/share/polkit-1/actions/org.t2powertune.policy` |
 | T2 Hybrid GPU Control | `/usr/local/bin/t2-hybrid-gpu-control`, `/usr/local/libexec/t2-hybrid-gpu-control-helper`, `/usr/local/libexec/t2-hybrid-gpu-control-status`, `/usr/local/share/applications/org.t2hybridgpucontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2hybridgpucontrol.gtk.svg`, `/usr/share/polkit-1/actions/org.t2hybridgpucontrol.gtk.policy`, `/usr/share/polkit-1/actions/org.t2hybridgpucontrol.gtk.status.policy` |
 | T2 GPU Control | `/usr/local/bin/t2-dgpu-control`, `/usr/local/libexec/t2-dgpu-control-helper`, `/usr/local/libexec/t2-dgpu-control-status`, `/usr/local/share/applications/org.t2dgpucontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2dgpucontrol.gtk.svg`, `/usr/local/lib/systemd/system/kait2en-dgpu-off.service`, `/usr/local/lib/systemd/system/kait2en-dgpu-suspend.service`, `/usr/local/lib/systemd/system/kait2en-amdgpu-profile.service`, `/usr/local/lib/systemd/system/kait2en-amdgpu-profile-resume.service`, `/usr/share/polkit-1/actions/org.t2dgpucontrol.gtk.policy`, `/usr/share/polkit-1/actions/org.t2dgpucontrol.gtk.status.policy` |
@@ -235,6 +236,26 @@ power management, LTR ignore, and additional power tunables. The optional
 the user chooses persistent settings. Its runtime selection cache is stored at
 `/run/t2-power-tune/items.json` and disappears on reboot.
 
+T2 Journal stores the last successfully parsed BridgeOS log snapshot and a
+cache of recently discovered RemoteXPC ports for each desktop user:
+
+```text
+~/.local/state/t2-journal/bridgeos.jsonl
+~/.local/state/t2-journal/remote-ports
+```
+
+`$XDG_STATE_HOME` replaces `~/.local/state` when it is set. The snapshot is
+created on the first query or explicit refresh and is atomically replaced only
+after a successful download and parse. See [T2 Journal](../post-install/kait2en-applications.md#t2-journal)
+for the required network setup.
+
+T2 Kernel Builder keeps downloaded sources, build trees and completed-build
+markers below `$XDG_CACHE_HOME/t2-kernel-builder/build` (normally
+`~/.cache/t2-kernel-builder/build`) and its saved UI state below
+`$XDG_CONFIG_HOME/t2-kernel-builder` (normally `~/.config/t2-kernel-builder`).
+Kernels installed through the app add their normal files below `/boot` and
+`/lib/modules/<kernel>/`; package-managed builds are installed through DNF.
+
 `react-drm` is installed for the desktop user only when the DMI product name is
 one of `MacBookPro15,1`, `MacBookPro15,2`, `MacBookPro15,3`, `MacBookPro15,4`,
 `MacBookPro16,1`, `MacBookPro16,2`, `MacBookPro16,3` or `MacBookPro16,4`:
@@ -242,6 +263,7 @@ one of `MacBookPro15,1`, `MacBookPro15,2`, `MacBookPro15,3`, `MacBookPro15,4`,
 ```text
 ~/react-drm/
 ~/.config/systemd/user/react-drm.service
+~/.local/share/applications/react-drm-config-gui.desktop
 /etc/udev/rules.d/99-react-drm.rules
 ```
 
