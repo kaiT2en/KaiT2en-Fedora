@@ -1,11 +1,13 @@
 [Unit]
 Description=Kait2en T2 suspend and resume hardware fixes
 Before=sleep.target
+After=NetworkManager.service kait2en-t2-remote.service
 StopWhenUnneeded=yes
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+TimeoutStopSec=150
 ExecStart=/usr/local/libexec/kait2en/kait2en-suspend.sh pre
 ExecStop=/usr/local/libexec/kait2en/kait2en-suspend.sh post
 

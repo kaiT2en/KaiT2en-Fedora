@@ -19,13 +19,13 @@ STEPS=(
 	install-gpu-runtime-pm.sh
 	install-alsa-ucm.sh
 	install-dsp.sh
-	install-networkmanager-rules.sh
 	install-acpi-fixes.sh
 	install-plymouth-theme.sh
 	install-gdm-branding.sh
-	rebuild-initramfs.sh
 	install-suspend-service.sh
 	install-apps.sh
+	install-t2-remote.sh
+	rebuild-initramfs.sh
 )
 
 failed_steps=()

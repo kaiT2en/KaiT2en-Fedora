@@ -9,6 +9,10 @@ description = "Merge Apple T2 bridgeOS unified logs with the Linux journal"
 name = "t2journal"
 path = "src/main.rs"
 
+[[bin]]
+name = "t2remote"
+path = "src/t2remote.rs"
+
 [dependencies]
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }

@@ -1,0 +1,16 @@
+[Unit]
+Description=KaiT2en RemoteXPC service manager
+After=NetworkManager.service network-online.target
+Wants=NetworkManager.service network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/modprobe t2bce_ave
+ExecStart=/usr/local/bin/t2remote daemon
+Restart=on-failure
+RestartSec=2
+UMask=0007
+Group=wheel
+
+[Install]
+WantedBy=multi-user.target

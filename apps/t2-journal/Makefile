@@ -2,8 +2,7 @@ CARGO ?= cargo
 INSTALL ?= install
 PREFIX ?= /usr/local
 
-BIN_NAME := t2journal
-BIN_SRC := target/release/$(BIN_NAME)
+BIN_NAMES := t2journal t2remote
 BIN_DIR := $(PREFIX)/bin
 
 .PHONY: build test check-build install uninstall clean
@@ -15,14 +14,18 @@ test:
 	$(CARGO) test --locked
 
 check-build:
-	@test -x "$(BIN_SRC)" || { echo "error: $(BIN_SRC) is missing; run 'make' first" >&2; exit 1; }
+	@for bin in $(BIN_NAMES); do \
+		test -x "target/release/$$bin" || { echo "error: target/release/$$bin is missing; run 'make' first" >&2; exit 1; }; \
+	done
 
 install: check-build
 	$(INSTALL) -d -m 0755 $(DESTDIR)$(BIN_DIR)
-	$(INSTALL) -m 0755 $(BIN_SRC) $(DESTDIR)$(BIN_DIR)/$(BIN_NAME)
+	@for bin in $(BIN_NAMES); do \
+		$(INSTALL) -m 0755 "target/release/$$bin" "$(DESTDIR)$(BIN_DIR)/$$bin"; \
+	done
 
 uninstall:
-	$(RM) $(DESTDIR)$(BIN_DIR)/$(BIN_NAME)
+	$(RM) $(addprefix $(DESTDIR)$(BIN_DIR)/,$(BIN_NAMES))
 
 clean:
 	$(CARGO) clean

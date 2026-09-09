@@ -16,6 +16,15 @@ You will receive kernel updates directly from Fedora and the latest T2 modules f
 
 Follow the [installation guide](https://kait2en.org/documentation.html#installation).
 
+## HandBrake with T2 AVE
+
+```bash
+sudo dnf install git gcc gcc-c++ make autoconf automake libtool pkgconf-pkg-config meson ninja-build nasm cmake cargo cargo-c patch tar python3 bzip2-devel xz-devel zlib-devel numactl-devel gtk4-devel glib2-devel libxml2-devel lame-devel opus-devel speex-devel libvpx-devel libass-devel libogg-devel libvorbis-devel libtheora-devel x264-devel jansson-devel libjpeg-turbo-devel gettext-devel desktop-file-utils
+git clone --branch t2-ave https://github.com/deqrocks/HandBrake.git
+cd HandBrake && ./configure --launch-jobs="$(nproc)" --launch
+sudo make -C build install
+```
+
 ## Community
 
 Join the KAIT2EN community on [Discord](https://discord.gg/AGfjRk4ydj) or on

@@ -96,6 +96,81 @@ has_bcm4377() {
 	return 1
 }
 
+is_t2_ncm_control() {
+	local dev parent
+	dev="$(readlink -f -- "$1")" || return 1
+	parent="${dev%/*}"
+	[[ -r "$parent/idVendor" && -r "$parent/idProduct" &&
+	   -r "$dev/bInterfaceClass" && -r "$dev/bInterfaceSubClass" ]] || return 1
+	[[ "$(<"$parent/idVendor")" == "05ac" &&
+	   "$(<"$parent/idProduct")" == "8233" &&
+	   "$(<"$dev/bInterfaceClass")" == "02" &&
+	   "$(<"$dev/bInterfaceSubClass")" == "0d" ]]
+}
+
+unbind_t2_ncm() {
+	local dev id net
+	for dev in /sys/bus/usb/drivers/cdc_ncm/*:*; do
+		is_t2_ncm_control "$dev" || continue
+		id="${dev##*/}"
+		# Save the USB control interface before its netdev disappears.
+		if ! printf '%s\n' "$id" >>"$STATE_DIR/t2-ncm.interfaces"; then
+			log "could not save NCM interface $id; leaving it bound"
+			continue
+		fi
+		if command -v nmcli >/dev/null 2>&1; then
+			for net in "$dev"/net/*; do
+				[[ -e "$net" ]] || continue
+				nmcli --wait 5 device disconnect "${net##*/}" >/dev/null 2>&1 || true
+			done
+		fi
+		log "unbinding T2 CDC-NCM control interface $id"
+		if ! printf '%s' "$id" >/sys/bus/usb/drivers/cdc_ncm/unbind; then
+			log "could not unbind T2 CDC-NCM interface $id"
+		fi
+	done
+}
+
+bind_t2_ncm() {
+	local id dev driver failed=0
+	[[ -f "$STATE_DIR/t2-ncm.interfaces" ]] || return 0
+	while IFS= read -r id; do
+		[[ "$id" =~ ^[0-9]+-[0-9]+(\.[0-9]+)*:[0-9]+\.[0-9]+$ ]] || {
+			log "invalid saved NCM interface: $id"
+			failed=1
+			continue
+		}
+		dev="/sys/bus/usb/devices/$id"
+		if [[ ! -e "$dev" ]]; then
+			# USB re-enumeration creates a new, automatically probed interface.
+			log "NCM interface $id disappeared; waiting for USB re-enumeration"
+			continue
+		fi
+		if ! is_t2_ncm_control "$dev"; then
+			log "saved interface $id is not T2 NCM; refusing to bind it"
+			failed=1
+			continue
+		fi
+		if [[ -L "$dev/driver" ]]; then
+			driver="$(readlink -f -- "$dev/driver")"
+			if [[ "${driver##*/}" != cdc_ncm ]]; then
+				log "interface $id is owned by ${driver##*/}; leaving it alone"
+				failed=1
+			fi
+			continue
+		fi
+		log "binding T2 CDC-NCM control interface $id"
+		if ! printf '%s' "$id" >/sys/bus/usb/drivers/cdc_ncm/bind; then
+			log "could not bind T2 CDC-NCM interface $id"
+			failed=1
+		fi
+	done <"$STATE_DIR/t2-ncm.interfaces"
+	if (( failed == 0 )); then
+		rm -f -- "$STATE_DIR/t2-ncm.interfaces"
+	fi
+	return "$failed"
+}
+
 pre_suspend() {
 	local status
 
@@ -103,6 +178,15 @@ pre_suspend() {
 		log "could not create state directory $STATE_DIR; skipping suspend fixes"
 		return 0
 	fi
+
+	if [[ -S /run/t2remote.sock ]] && command -v t2remote >/dev/null 2>&1; then
+		log "closing T2 RemoteXPC services and disconnecting NCM"
+		if ! timeout --kill-after=2 15 t2remote pre-suspend; then
+			log "T2 RemoteXPC pre-suspend failed; continuing suspend"
+		fi
+	fi
+
+	unbind_t2_ncm
 
 	has_bcm4377
 	status=$?
@@ -130,7 +214,14 @@ pre_suspend() {
 }
 
 post_resume() {
+	bind_t2_ncm || log "T2 NCM rebind incomplete; saved interfaces retained for retry"
 	restore_unloaded_modules
+	if [[ -S /run/t2remote.sock ]] && command -v t2remote >/dev/null 2>&1; then
+		log "reconnecting NCM and requested T2 RemoteXPC services"
+		if ! timeout --kill-after=2 120 t2remote post-resume; then
+			log "T2 RemoteXPC post-resume failed; services can be retried manually"
+		fi
+	fi
 	return 0
 }
 

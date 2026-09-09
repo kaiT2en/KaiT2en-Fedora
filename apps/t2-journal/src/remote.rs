@@ -46,6 +46,10 @@ pub struct DiscoveredService {
     pub service_port: u16,
 }
 
+pub struct RemoteService {
+    connection: Connection,
+}
+
 impl Connection {
     fn connect(interface: &str, host: Ipv6Addr, port: u16) -> Result<Self> {
         Self::connect_with_timeout(
@@ -124,14 +128,18 @@ impl Connection {
     }
 
     fn start(&mut self) -> Result<()> {
+        self.start_with_window(16 * 1024 * 1024)
+    }
+
+    fn start_with_window(&mut self, initial_window: u32) -> Result<()> {
         self.stream.write_all(PREFACE)?;
         let mut settings = Vec::new();
         settings.extend(3u16.to_be_bytes());
         settings.extend(100u32.to_be_bytes());
         settings.extend(4u16.to_be_bytes());
-        settings.extend((16u32 * 1024 * 1024).to_be_bytes());
+        settings.extend(initial_window.to_be_bytes());
         self.frame(SETTINGS, 0, 0, &settings)?;
-        self.window(0, 16 * 1024 * 1024 - 65535)?;
+        self.window(0, initial_window - 65535)?;
         Ok(())
     }
 
@@ -180,6 +188,20 @@ pub fn discover_service(
     host: Ipv6Addr,
     mut progress: impl FnMut(u64, u64),
 ) -> Result<DiscoveredService> {
+    discover_named_service(
+        interface,
+        host,
+        "com.apple.sysdiagnose.remote",
+        &mut progress,
+    )
+}
+
+pub fn discover_named_service(
+    interface: &str,
+    host: Ipv6Addr,
+    service_name: &str,
+    mut progress: impl FnMut(u64, u64),
+) -> Result<DiscoveredService> {
     let next = Arc::new(AtomicU32::new(FIRST_DYNAMIC_PORT.into()));
     let stop = Arc::new(AtomicBool::new(false));
     let (candidate_sender, candidate_receiver) = mpsc::channel();
@@ -189,6 +211,7 @@ pub fn discover_service(
     let mut handshakes = Vec::with_capacity(HANDSHAKE_WORKERS);
     for _ in 0..HANDSHAKE_WORKERS {
         let interface = interface.to_owned();
+        let service_name = service_name.to_owned();
         let receiver = Arc::clone(&candidate_receiver);
         let sender = service_sender.clone();
         let stop = Arc::clone(&stop);
@@ -205,7 +228,8 @@ pub fn discover_service(
                     Err(_) => break,
                 };
                 drop(receiver);
-                if let Ok(service_port) = discover_service_at(&interface, host, port) {
+                if let Ok(service_port) = discover_service_at(&interface, host, port, &service_name)
+                {
                     stop.store(true, Ordering::Relaxed);
                     let _ = sender.send(DiscoveredService {
                         discovery_port: port,
@@ -261,11 +285,19 @@ pub fn discover_service(
     for worker in handshakes {
         let _ = worker.join();
     }
-    service.ok_or_else(|| anyhow::anyhow!("T2 did not advertise com.apple.sysdiagnose.remote"))
+    service.ok_or_else(|| anyhow::anyhow!("T2 did not advertise {service_name}"))
 }
 
 pub fn discover_direct_service(interface: &str, host: Ipv6Addr) -> Result<DiscoveredService> {
-    let service_port = discover_service_at(interface, host, DISCOVERY_PORT)?;
+    discover_direct_named_service(interface, host, "com.apple.sysdiagnose.remote")
+}
+
+pub fn discover_direct_named_service(
+    interface: &str,
+    host: Ipv6Addr,
+    service_name: &str,
+) -> Result<DiscoveredService> {
+    let service_port = discover_service_at(interface, host, DISCOVERY_PORT, service_name)?;
     Ok(DiscoveredService {
         discovery_port: DISCOVERY_PORT,
         service_port,
@@ -287,7 +319,12 @@ fn probe(interface: &str, host: Ipv6Addr, port: u16) -> bool {
         .is_ok_and(|frame| frame.kind == SETTINGS && frame.stream == 0)
 }
 
-fn discover_service_at(interface: &str, host: Ipv6Addr, port: u16) -> Result<u16> {
+fn discover_service_at(
+    interface: &str,
+    host: Ipv6Addr,
+    port: u16,
+    service_name: &str,
+) -> Result<u16> {
     let mut connection = Connection::connect_with_timeout(
         interface,
         host,
@@ -340,16 +377,24 @@ fn discover_service_at(interface: &str, host: Ipv6Addr, port: u16) -> Result<u16
         let Some(services) = peer.get("Services") else {
             continue;
         };
-        let service = services
-            .get("com.apple.sysdiagnose.remote")
-            .ok_or_else(|| anyhow::anyhow!("peer did not advertise sysdiagnose"))?;
+        let service = services.get(service_name).ok_or_else(|| {
+            let Value::Dict(entries) = services else {
+                return anyhow::anyhow!("peer Services value is not a dictionary");
+            };
+            let mut names: Vec<_> = entries.iter().map(|(name, _)| name.as_str()).collect();
+            names.sort_unstable();
+            anyhow::anyhow!(
+                "peer did not advertise {service_name}; advertised services: {}",
+                names.join(", ")
+            )
+        })?;
         let port = service
             .get("Port")
             .and_then(|port| {
                 port.as_u64()
                     .or_else(|| port.as_str().and_then(|value| value.parse().ok()))
             })
-            .ok_or_else(|| anyhow::anyhow!("T2 did not advertise com.apple.sysdiagnose.remote"))?;
+            .ok_or_else(|| anyhow::anyhow!("T2 advertised no port for {service_name}"))?;
         let port = u16::try_from(port).context("invalid sysdiagnose port")?;
         ensure!(
             (FIRST_DYNAMIC_PORT..=LAST_DYNAMIC_PORT).contains(&port),
@@ -357,6 +402,67 @@ fn discover_service_at(interface: &str, host: Ipv6Addr, port: u16) -> Result<u16
         );
         connection.close()?;
         return Ok(port);
+    }
+}
+
+pub fn connect_remote_service(
+    interface: &str,
+    host: Ipv6Addr,
+    service_name: &str,
+) -> Result<RemoteService> {
+    let discovered = discover_direct_named_service(interface, host, service_name)?;
+    let mut connection = Connection::connect_with_timeout(
+        interface,
+        host,
+        discovered.service_port,
+        Duration::from_secs(3),
+        Duration::from_secs(5),
+    )?;
+    if service_name == "com.apple.aveservice" {
+        connection.start_with_window(1024 * 1024)?;
+    } else {
+        connection.start()?;
+    }
+    connection.frame(HEADERS, 4, 1, &[])?;
+    connection.frame(DATA, 0, 1, &xpc::wrapper(Some(&Value::Dict(vec![])), 1, 0))?;
+    connection.frame(HEADERS, 4, 3, &[])?;
+    connection.frame(DATA, 0, 3, &xpc::wrapper(None, 0x400001, 0))?;
+
+    let mut scratch = [0u8; 4096];
+    let received = connection
+        .stream
+        .read(&mut scratch)
+        .context("read aveservice initial handshake")?;
+    ensure!(received != 0, "aveservice closed during initial handshake");
+    connection.frame(SETTINGS, 1, 0, &[])?;
+    connection.frame(DATA, 0, 1, &xpc::wrapper(None, 0x201, 0))?;
+    let _ = connection.stream.read(&mut scratch);
+
+    if service_name == "com.apple.aveservice" {
+        let start = Value::Dict(vec![("startKey".into(), Value::Bool(true))]);
+        connection.frame(
+            DATA,
+            0,
+            1,
+            &xpc::wrapper(Some(&start), 0x101, 1),
+        )?;
+    }
+    eprintln!(
+        "connected {service_name} via discovery port {} and service port {}",
+        discovered.discovery_port, discovered.service_port
+    );
+
+    Ok(RemoteService { connection })
+}
+
+impl RemoteService {
+    pub fn close(mut self, service_name: &str) -> Result<()> {
+        if service_name == "com.apple.aveservice" {
+            let stop = Value::Dict(vec![("stopKey".into(), Value::Bool(true))]);
+            self.connection
+                .frame(DATA, 0, 1, &xpc::wrapper(Some(&stop), 0x100000, 3))?;
+        }
+        self.connection.close()
     }
 }
 
