@@ -118,14 +118,14 @@ After reboot type `modinfo t2bce_core`. The output should show a version number 
 ## DKMS
 
 The Fedora installer registers `t2bce_core` together with `t2bce_dma`,
-`t2bce_vhci`, and `t2bce_audio` as the single `t2bce_stack` DKMS package. This
+`t2bce_vhci`, `t2bce_audio`, and `t2bce_ave` as the single `t2bce_stack` DKMS package. This
 keeps their exported symbols and ABI synchronized. Do not register this source
 directory as a separate DKMS package.
 
 ## Dev Debug
 
 We use pr_debug instead of pr_info in most places to keep the logs clean for average users.
-Use `t2bce_vhci.dyndbg=+p t2bce_dma.dyndbg=+p t2bce_core.dyndbg=+p t2bce_audio.dyndbg=+p` to see full output.
+Use `t2bce_vhci.dyndbg=+p t2bce_dma.dyndbg=+p t2bce_core.dyndbg=+p t2bce_audio.dyndbg=+p t2bce_ave.dyndbg=+p` to see full output.
 
 ## Support
 

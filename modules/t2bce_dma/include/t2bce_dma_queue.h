@@ -9,8 +9,15 @@
 #define BCE_CMD_SIZE 0x40
 #define BCE_MAX_QUEUE_COUNT 0x100
 
+/* qids 2..BCE_QUEUE_USER_MAX-1 are a shared pool churned constantly by
+ * vhci/audio/hid (queues created and destroyed per USB transfer). AVE gets
+ * its own reserved band above that so a completion that arrives late for a
+ * just-destroyed vhci/audio/hid queue can never land on a qid AVE just took
+ * over with fresh (zeroed) completion bookkeeping. */
 #define BCE_QUEUE_USER_MIN 2
-#define BCE_QUEUE_USER_MAX (BCE_MAX_QUEUE_COUNT - 1)
+#define BCE_QUEUE_AVE_MIN (BCE_MAX_QUEUE_COUNT - 16)
+#define BCE_QUEUE_USER_MAX BCE_QUEUE_AVE_MIN
+#define BCE_QUEUE_AVE_MAX BCE_MAX_QUEUE_COUNT
 
 struct bce_queue_memcfg;
 struct dma_pool;
@@ -179,8 +186,12 @@ u32 t2bce_dma_cmd_flush_memory_queue(struct bce_queue_cmdq *cmdq, u16 qid);
 /* User API - Creates and registers the queue */
 
 struct bce_queue_cq *t2bce_dma_create_cq(struct t2bce_dma_engine *dma, u32 el_count);
+struct bce_queue_cq *t2bce_dma_create_cq_range(struct t2bce_dma_engine *dma, u32 el_count,
+        int qid_min, int qid_max);
 struct bce_queue_sq *t2bce_dma_create_sq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name, u32 el_count,
         int direction, bce_sq_completion compl, void *userdata);
+struct bce_queue_sq *t2bce_dma_create_sq_range(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name,
+        u32 el_count, int direction, bce_sq_completion compl, void *userdata, int qid_min, int qid_max);
 struct bce_queue_sq *t2bce_dma_create_sq_with_flags(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq, const char *name,
         u32 el_count, u16 flags, bce_sq_completion compl, void *userdata);
 void t2bce_dma_destroy_cq(struct t2bce_dma_engine *dma, struct bce_queue_cq *cq);

@@ -1,16 +1,13 @@
 // SPDX-License-Identifier: MIT
 
 mod archive;
-mod discovery;
 mod historical;
 mod journal;
 mod noise;
 mod progress;
 mod record;
-mod remote;
 mod store;
 mod unified;
-mod xpc;
 
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -18,6 +15,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use regex::{Regex, RegexBuilder};
+use t2_journal::{discovery, remote};
 
 use record::Record;
 

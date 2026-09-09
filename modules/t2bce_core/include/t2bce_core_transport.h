@@ -60,6 +60,15 @@ struct t2bce_core_queue_sq *t2bce_core_create_sq(struct t2bce_core_client *clien
         t2bce_core_sq_completion compl, void *userdata);
 void t2bce_core_destroy_sq(struct t2bce_core_client *client, struct t2bce_core_queue_sq *sq);
 
+/* Reserved-qid variants: allocate from a fixed band (must match
+ * BCE_QUEUE_AVE_MIN/MAX in t2bce_dma_queue.h) that vhci/audio/hid never
+ * touch, so a late completion for a qid they just recycled can never land
+ * on a queue that took over the same number moments later. */
+struct t2bce_core_queue_cq *t2bce_core_create_cq_reserved(struct t2bce_core_client *client, u32 el_count);
+struct t2bce_core_queue_sq *t2bce_core_create_sq_reserved(struct t2bce_core_client *client, struct t2bce_core_queue_cq *cq,
+        const char *name, u32 el_count, enum dma_data_direction direction,
+        t2bce_core_sq_completion compl, void *userdata);
+
 void *t2bce_core_queue_sq_userdata(struct t2bce_core_queue_sq *sq);
 
 int t2bce_core_reserve_submission(struct t2bce_core_queue_sq *sq, unsigned long *timeout);
@@ -83,5 +92,6 @@ u32 t2bce_core_queue_sq_tail(struct t2bce_core_queue_sq *sq);
 u32 t2bce_core_queue_sq_available(struct t2bce_core_queue_sq *sq);
 u32 t2bce_core_queue_sq_capacity(struct t2bce_core_queue_sq *sq);
 int t2bce_core_flush_queue(struct t2bce_core_client *client, struct t2bce_core_queue_sq *sq);
+void t2bce_core_synchronize_completions(struct t2bce_core_client *client);
 
 #endif

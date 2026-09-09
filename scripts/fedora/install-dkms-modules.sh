@@ -215,7 +215,7 @@ copy_module_source() {
 
 	if [[ "$name" == "t2bce_stack" ]]; then
 		local component
-		for component in t2bce_dma t2bce_core t2bce_vhci t2bce_audio; do
+		for component in t2bce_dma t2bce_core t2bce_vhci t2bce_audio t2bce_ave; do
 			info "staging $component in $dst"
 			install -d -o root -g root -m 0755 "$dst/$component"
 			tar -C "$REPO_ROOT/modules/$component" \

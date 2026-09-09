@@ -4,6 +4,8 @@
 #include <linux/errno.h>
 #include <linux/err.h>
 #include <linux/export.h>
+#include <linux/interrupt.h>
+#include <linux/pci.h>
 #include <linux/slab.h>
 #include <linux/string.h>
 
@@ -293,6 +295,13 @@ struct t2bce_core_queue_cq *t2bce_core_create_cq(struct t2bce_core_client *clien
 }
 EXPORT_SYMBOL_GPL(t2bce_core_create_cq);
 
+struct t2bce_core_queue_cq *t2bce_core_create_cq_reserved(struct t2bce_core_client *client, u32 el_count)
+{
+    return to_t2bce_cq(t2bce_dma_create_cq_range(&client->bce->dma, el_count,
+            BCE_QUEUE_AVE_MIN, BCE_QUEUE_AVE_MAX));
+}
+EXPORT_SYMBOL_GPL(t2bce_core_create_cq_reserved);
+
 void t2bce_core_destroy_cq(struct t2bce_core_client *client, struct t2bce_core_queue_cq *cq)
 {
     t2bce_dma_destroy_cq(&client->bce->dma, to_bce_cq(cq));
@@ -323,6 +332,31 @@ struct t2bce_core_queue_sq *t2bce_core_create_sq(struct t2bce_core_client *clien
     return to_t2bce_sq(sq);
 }
 EXPORT_SYMBOL_GPL(t2bce_core_create_sq);
+
+struct t2bce_core_queue_sq *t2bce_core_create_sq_reserved(struct t2bce_core_client *client, struct t2bce_core_queue_cq *cq,
+        const char *name, u32 el_count, enum dma_data_direction direction,
+        t2bce_core_sq_completion compl, void *userdata)
+{
+    struct t2bce_sq_ctx *ctx;
+    struct bce_queue_sq *sq;
+
+    ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+    if (!ctx)
+        return NULL;
+
+    ctx->completion = compl;
+    ctx->userdata = userdata;
+
+    sq = t2bce_dma_create_sq_range(&client->bce->dma, to_bce_cq(cq), name, el_count, direction,
+            t2bce_sq_completion_adapter, ctx, BCE_QUEUE_AVE_MIN, BCE_QUEUE_AVE_MAX);
+    if (!sq) {
+        kfree(ctx);
+        return NULL;
+    }
+
+    return to_t2bce_sq(sq);
+}
+EXPORT_SYMBOL_GPL(t2bce_core_create_sq_reserved);
 
 void t2bce_core_destroy_sq(struct t2bce_core_client *client, struct t2bce_core_queue_sq *sq)
 {
@@ -435,3 +469,9 @@ int t2bce_core_flush_queue(struct t2bce_core_client *client, struct t2bce_core_q
     return t2bce_dma_flush_sq(&client->bce->dma, to_bce_sq(sq));
 }
 EXPORT_SYMBOL_GPL(t2bce_core_flush_queue);
+
+void t2bce_core_synchronize_completions(struct t2bce_core_client *client)
+{
+    synchronize_irq(pci_irq_vector(client->bce->pci, 4));
+}
+EXPORT_SYMBOL_GPL(t2bce_core_synchronize_completions);
