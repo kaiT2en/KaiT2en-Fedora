@@ -11,8 +11,10 @@
 //! operation is pending.
 
 mod fprint;
+mod resume;
 mod signal;
 
+use std::sync::atomic::Ordering;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
@@ -28,6 +30,10 @@ const EVENT_WAIT: Duration = Duration::from_millis(500);
 const SETTLE: Duration = Duration::from_millis(750);
 /// Between two commands; long enough that libfprint has read the first.
 const BETWEEN: Duration = Duration::from_millis(150);
+/// After resume the link needs a moment to carry traffic. While fprintd is
+/// asking, keep trying to reach the sensor for this long before giving up to
+/// the password, so the prompt waits the link out.
+const REACH_GRACE: Duration = Duration::from_secs(15);
 
 struct Config {
     socket: String,
@@ -96,6 +102,8 @@ fn main() -> Result<()> {
     let mut user_id = config.user_id;
     let mut bind_pending = config.bind_user.is_some();
     let mut prompt = Signal::new();
+    let resumed = resume::watch();
+    let mut unreachable_since: Option<Instant> = None;
     log(&format!(
         "watching {} for uid {} with flags {:#x}",
         config.socket,
@@ -104,6 +112,12 @@ fn main() -> Result<()> {
     ));
 
     loop {
+        // The suspend kills the held session silently; drop it on resume so the
+        // next prompt opens a fresh one instead of blocking on a dead socket.
+        if resumed.swap(false, Ordering::Relaxed) && session.take().is_some() {
+            log("dropping the sensor session after resume");
+        }
+
         // A session is needed for both binding and matching, so keep one open
         // and reopen it if it drops. Holding it does not arm the sensor; only
         // start_match does that.
@@ -116,13 +130,23 @@ fn main() -> Result<()> {
                 }
                 Err(error) => {
                     log(&format!("cannot reach the sensor: {error:#}"));
+                    // Only fall the prompt back to the password once the sensor
+                    // has stayed unreachable past the grace window; a link
+                    // returning after resume settles well within it.
                     if fprint::device_is_open(&config.socket) {
-                        fprint::report_failure(&config.socket);
+                        let since = *unreachable_since.get_or_insert_with(Instant::now);
+                        if since.elapsed() >= REACH_GRACE {
+                            fprint::report_failure(&config.socket);
+                            unreachable_since = None;
+                        }
+                    } else {
+                        unreachable_since = None;
                     }
                     sleep(SETTLE);
                     continue;
                 }
             }
+            unreachable_since = None;
         }
 
         // Bind the enrolled fingers to the installing account. This drives

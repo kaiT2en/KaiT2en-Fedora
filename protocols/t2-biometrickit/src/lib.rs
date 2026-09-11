@@ -210,7 +210,10 @@ impl Session {
     fn request(&mut self, payload: Value) -> Result<Value> {
         let id = uuid::Uuid::new_v4().to_string().to_uppercase();
         wire::send_plist(&mut self.stream, &envelope(&id, false, payload))?;
-        self.stream.set_read_timeout(Some(Duration::from_secs(30)))?;
+        // Commands reply promptly; a long block here only happens on a link
+        // that died under us (a suspend), so keep it short enough that the
+        // caller notices well within fprintd's own wait rather than after 30s.
+        self.stream.set_read_timeout(Some(Duration::from_secs(8)))?;
         loop {
             let incoming = wire::receive_plist(&mut self.stream)?;
             let (is_reply, received, body) = split_envelope(&incoming)?;
