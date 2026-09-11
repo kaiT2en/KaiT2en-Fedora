@@ -3,10 +3,12 @@ import { Box } from 'react-drm';
 import { ESC_KEY, DOCK, FN_LAYER, CUSTOM_LAYER } from '@/lib/utils/configLoader';
 import { EscKey } from '@/components/EscKey';
 import { SafeArea } from '@/components/SafeArea';
+import { TouchIdOverlay } from '@/components/TouchIdOverlay';
 import { BootScreen } from '@/components/BootScreen';
 import { useBootSequence } from '@/lib/hooks/useBootSequence';
 import { usePomodoroEngine } from '@/lib/hooks/usePomodoro';
 import { useLayerToggle } from '@/lib/hooks/useLayerToggle';
+import { useTouchIdPrompt } from '@/lib/hooks/useTouchIdPrompt';
 import type { LayoutChildren } from '@/lib/routes/loadRoutes';
 
 // No layoutConfig/initial here anymore — app/page.tsx (this segment's own
@@ -38,6 +40,7 @@ export default function RootLayout({ width, height, children }: {
 
   const { booted, opacity } = useBootSequence();
   usePomodoroEngine();
+  const touchId = useTouchIdPrompt();
 
   if (!booted) {
     return <BootScreen width={width} height={height} opacity={opacity} />;
@@ -54,12 +57,19 @@ export default function RootLayout({ width, height, children }: {
         const layerW = showEsc ? w - ESC_KEY.width - ESC_KEY.gap : w;
         const layerHost = children(layerW, h);
 
-        if (!showEsc) return layerHost;
-
-        return (
+        const content = !showEsc ? layerHost : (
           <Box style={{ width: w, height: h, alignItems: 'stretch', gap: ESC_KEY.gap }}>
             <EscKey width={ESC_KEY.width} height={h} />
             {layerHost}
+          </Box>
+        );
+
+        // The Touch ID prompt overlays whatever is on the bar (lock screen,
+        // sudo) while fprintd is asking, and disappears again when it is idle.
+        return (
+          <Box style={{ width: w, height: h }}>
+            {content}
+            <TouchIdOverlay state={touchId} width={w} height={h} />
           </Box>
         );
       }}

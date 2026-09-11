@@ -11,11 +11,13 @@
 //! operation is pending.
 
 mod fprint;
+mod signal;
 
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
+use signal::{Signal, State};
 use t2_biometrickit::{Event, Identity, Session, proto};
 
 const IDLE_POLL: Duration = Duration::from_millis(250);
@@ -93,6 +95,7 @@ fn main() -> Result<()> {
     let mut stages_set = false;
     let mut user_id = config.user_id;
     let mut bind_pending = config.bind_user.is_some();
+    let mut prompt = Signal::new();
     log(&format!(
         "watching {} for uid {} with flags {:#x}",
         config.socket,
@@ -141,10 +144,12 @@ fn main() -> Result<()> {
         // the duration of one authentication attempt.
         if !fprint::device_is_open(&config.socket) {
             stages_set = false;
+            prompt.set(State::Idle);
             sleep(IDLE_POLL);
             continue;
         }
         log("fprintd is asking for a finger");
+        prompt.set(State::Waiting);
 
         // One touch is enough: the finger is already enrolled in the SEP.
         // Sent once per opening; repeating it mid-enrolment resets its progress.
@@ -152,8 +157,9 @@ fn main() -> Result<()> {
             stages_set = fprint::send(&config.socket, "SET_ENROLL_STAGES 1").is_ok();
         }
 
-        if let Err(error) = serve(session.as_mut().unwrap(), &config, &identities) {
+        if let Err(error) = serve(session.as_mut().unwrap(), &config, &identities, &mut prompt) {
             log(&format!("attempt failed: {error:#}"));
+            prompt.set(State::Failed);
             fprint::report_failure(&config.socket);
             session = None;
             sleep(SETTLE);
@@ -260,7 +266,7 @@ fn log(message: &str) {
 /// matched. The socket is deliberately not probed while the match runs,
 /// because every connection is a command channel and probing would disturb the
 /// operation libfprint has in flight.
-fn serve(session: &mut Session, config: &Config, identities: &[Identity]) -> Result<()> {
+fn serve(session: &mut Session, config: &Config, identities: &[Identity], prompt: &mut Signal) -> Result<()> {
     // First of all, before anything can take time: fprintd drops a stored
     // finger the moment it finds the device does not have it, so the bound
     // ones have to be back in place before it looks.
@@ -274,6 +280,7 @@ fn serve(session: &mut Session, config: &Config, identities: &[Identity]) -> Res
 
     if identities.is_empty() {
         log("nothing to match against; enroll the finger under macOS first");
+        prompt.set(State::Failed);
         fprint::report_failure(&config.socket);
         sleep(SETTLE);
         return Ok(());
@@ -294,7 +301,10 @@ fn serve(session: &mut Session, config: &Config, identities: &[Identity]) -> Res
                 outcome = Some(slot);
                 break;
             }
-            Some(Event::FingerDown) => log("finger down"),
+            Some(Event::FingerDown) => {
+                log("finger down");
+                prompt.set(State::Scanning);
+            }
             Some(Event::FingerUp) => log("finger up"),
             Some(Event::Status(code)) => log(&format!("status {code}")),
             Some(Event::Other { kind, bytes }) => {
@@ -310,6 +320,7 @@ fn serve(session: &mut Session, config: &Config, identities: &[Identity]) -> Res
             let id = fprint::print_id(&identities[slot]);
             fprint::send(&config.socket, &format!("SCAN {id}"))?;
             log(&format!("recognised finger {slot}, told fprintd"));
+            prompt.set(State::Matched);
             sleep(SETTLE);
         }
         Some(None) => {
@@ -317,6 +328,7 @@ fn serve(session: &mut Session, config: &Config, identities: &[Identity]) -> Res
             // be placed again. Reporting a no-match instead would spend one of
             // pam_fprintd's few attempts on what is usually a bad read.
             log("not recognised, asking for the finger again");
+            prompt.set(State::Retry);
             fprint::send(&config.socket, "RETRY 0")?;
             sleep(SETTLE);
         }

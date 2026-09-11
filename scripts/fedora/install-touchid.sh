@@ -49,6 +49,17 @@ elif ! semodule -i "$REPO_ROOT/selinux/kait2en-t2-touchid.pp"; then
 	warn "could not install the SELinux module; fprintd will be denied the socket"
 fi
 
+DBUS_SRC="$REPO_ROOT/data/dbus/org.kait2en.TouchId.conf"
+if [[ -f "$DBUS_SRC" ]]; then
+	install -o root -g root -m 0644 "$DBUS_SRC" \
+		/usr/share/dbus-1/system.d/org.kait2en.TouchId.conf
+	if ! systemctl reload dbus.service 2>/dev/null && ! systemctl reload dbus-broker.service 2>/dev/null; then
+		warn "could not reload the D-Bus config; the Touch Bar signal works after the next reboot"
+	fi
+else
+	warn "missing $DBUS_SRC; the Touch Bar touch-to-unlock signal will be blocked"
+fi
+
 install -o root -g root -m 0644 "$SERVICE_SRC" /etc/systemd/system/kait2en-t2-touchid.service
 install -d -o root -g root -m 0755 /etc/systemd/system/fprintd.service.d
 install -o root -g root -m 0644 "$DROPIN_SRC" \
