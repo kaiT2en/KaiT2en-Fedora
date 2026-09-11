@@ -136,7 +136,7 @@ items:
   - id: touchbar-runtime-pm-deadlock
     title: "Touch Bar suspend and resume without PM deadlock"
     state: available
-    upstream: submitted
+    upstream: merged
     version: v1
     project: Linux kernel
     subsystem: HID / Touch Bar
