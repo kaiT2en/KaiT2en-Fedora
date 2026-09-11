@@ -2,7 +2,7 @@
 name = "t2-journal"
 version = "0.1.0"
 edition = "2024"
-license = "MIT"
+license = "GPL-3.0-or-later"
 description = "Merge Apple T2 bridgeOS unified logs with the Linux journal"
 
 [[bin]]

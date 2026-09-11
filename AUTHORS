@@ -1,0 +1,9 @@
+KAIT2EN authors and copyright holders
+
+André Eikmeyer <andre.eikmeyer@kait2en.org>
+4f1sh3r <git@syn-flut.de>
+
+The GPL-3.0-or-later userspace is copyright André Eikmeyer, with 4f1sh3r as a
+co-author of t2-fan-control and t2-smc-control. Other components credit their
+own authors in their files and directories; see the git history for the full
+list of contributors.

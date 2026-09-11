@@ -2,7 +2,7 @@
 name = "t2-aks"
 version = "0.1.0"
 edition = "2024"
-license = "GPL-2.0-only"
+license = "GPL-3.0-or-later"
 description = "AppleKeyStore keybag transport over the t2sep SEP mailbox"
 
 [[bin]]

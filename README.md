@@ -41,3 +41,11 @@ licensed.
 
 Kernel modules, apps and third-party tools may include code with different
 origins. Those components keep their own licenses in their directories.
+
+KAIT2EN userspace written solely by the project owner is GPL-3.0-or-later; the
+kernel modules are GPL-2.0; the Touch ID transport and protocol stay MIT for a
+future libfprint driver. The full breakdown is in [LICENSING.md](LICENSING.md).
+
+The code licenses do not grant the KAIT2EN name or logo. Their use, and what
+the project stands for, are described in [TRADEMARK.md](TRADEMARK.md) and
+[VALUES.md](VALUES.md).

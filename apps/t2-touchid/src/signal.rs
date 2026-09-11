@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 //! Broadcasts the fingerprint prompt state on the D-Bus system bus so the Touch
 //! Bar (react-drm) can show a "touch to unlock" animation. It is best effort:

@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 /*
  * BridgeXPC/BiometricKit probe for the Apple T2 Touch ID sensor. It reaches
  * bridgeOS over the CDC-NCM link, loads the sensor calibration and runs either

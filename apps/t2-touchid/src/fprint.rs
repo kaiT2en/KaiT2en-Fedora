@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 //! Client side of libfprint's virtual storage device socket. The device reads
 //! one command per connection and closes it, so every command connects afresh.

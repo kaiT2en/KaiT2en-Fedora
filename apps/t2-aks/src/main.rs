@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 //! Userspace side of the Apple T2 AppleKeyStore transport. It builds the AKS
 //! wire request, including the SHA-256 header digest, and exchanges it with
