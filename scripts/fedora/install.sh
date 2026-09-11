@@ -25,6 +25,7 @@ STEPS=(
 	install-suspend-service.sh
 	install-apps.sh
 	install-t2-remote.sh
+	install-touchid.sh
 	rebuild-initramfs.sh
 )
 

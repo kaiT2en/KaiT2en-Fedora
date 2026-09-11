@@ -1,0 +1,13 @@
+[package]
+name = "t2-biometrickit"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "BiometricKit protocol for the Apple T2 Touch ID sensor over BridgeXPC"
+
+[dependencies]
+anyhow = "1.0"
+libc = "0.2"
+plist = "1.7"
+t2-bridgexpc = { path = "../t2-bridgexpc" }
+uuid = { version = "1.18", features = ["v4"] }

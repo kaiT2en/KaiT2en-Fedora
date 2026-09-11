@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use regex::{Regex, RegexBuilder};
-use t2_journal::{discovery, remote};
+use t2_bridgexpc::{discovery, remote};
 
 use record::Record;
 
@@ -234,7 +234,7 @@ fn matches_source(record: &Record, source: Option<Source>) -> bool {
 
 fn run() -> Result<i32> {
     let cli = Cli::parse();
-    let state_file = discovery::state_file(cli.state_file.clone())?;
+    let state_file = t2_journal::state::state_file(cli.state_file.clone())?;
     if cli.list_boots {
         return journal::list_boots();
     }

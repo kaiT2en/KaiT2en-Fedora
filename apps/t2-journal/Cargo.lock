@@ -693,6 +693,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "t2-bridgexpc"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "libc",
+ "serde_json",
+ "socket2",
+ "uuid",
+]
+
+[[package]]
 name = "t2-journal"
 version = "0.1.0"
 dependencies = [
@@ -706,6 +717,7 @@ dependencies = [
  "serde",
  "serde_json",
  "socket2",
+ "t2-bridgexpc",
  "tar",
  "tempfile",
  "uuid",

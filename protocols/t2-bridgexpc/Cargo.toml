@@ -1,0 +1,13 @@
+[package]
+name = "t2-bridgexpc"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "RemoteXPC and BridgeXPC transport for the Apple T2 CDC-NCM link"
+
+[dependencies]
+anyhow = "1.0"
+libc = "0.2"
+serde_json = "1.0"
+socket2 = { version = "0.6", features = ["all"] }
+uuid = { version = "1.18", features = ["v4"] }

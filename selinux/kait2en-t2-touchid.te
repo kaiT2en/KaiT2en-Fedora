@@ -1,0 +1,39 @@
+module kait2en-t2-touchid 1.0;
+
+# fprintd creates the virtual-device socket that t2-touchid drives. Its own
+# policy has no runtime type, so give the directory one instead of opening all
+# of /run to fprintd.
+
+require {
+	type fprintd_t;
+	type tmpfs_t;
+	type unconfined_service_t;
+	attribute file_type;
+	attribute non_security_file_type;
+	attribute pidfile;
+	attribute mountpoint;
+	role object_r;
+	class dir { add_name getattr open read remove_name search write };
+	class sock_file { create getattr setattr unlink write };
+	class filesystem associate;
+	class unix_stream_socket connectto;
+}
+
+# file_type and non_security_file_type are what make this behave like any other
+# file type, so systemd can create and bind-mount the directory and unconfined
+# services can reach it. mountpoint is needed because the sandboxed bridge unit
+# has the directory bind-mounted into its namespace.
+type kait2en_touchid_runtime_t, file_type, non_security_file_type, pidfile, mountpoint;
+role object_r types kait2en_touchid_runtime_t;
+
+# /run is a tmpfs, so the type has to be allowed to live on one.
+allow kait2en_touchid_runtime_t tmpfs_t:filesystem associate;
+
+allow fprintd_t kait2en_touchid_runtime_t:dir { add_name getattr open read remove_name search write };
+allow fprintd_t kait2en_touchid_runtime_t:sock_file { create getattr setattr unlink write };
+
+# t2-touchid connects to that socket. Fedora's unconfined services do not reach
+# a fresh type through attributes alone, so say it outright.
+allow unconfined_service_t kait2en_touchid_runtime_t:dir { getattr open read search };
+allow unconfined_service_t kait2en_touchid_runtime_t:sock_file { getattr write };
+allow unconfined_service_t fprintd_t:unix_stream_socket connectto;

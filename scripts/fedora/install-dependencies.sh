@@ -46,6 +46,12 @@ packages=(
 	libdrm-devel \
 	cairo-devel \
 	librsvg2-devel \
+	libplist-devel \
+	fprintd \
+	fprintd-pam \
+	libfprint \
+	checkpolicy \
+	policycoreutils-python-utils \
 	nodejs \
 	npm \
 	brightnessctl \

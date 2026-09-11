@@ -21,6 +21,7 @@ MODULES=(
 )
 
 LEGACY_MODULES=(
+	t2sep
 	t2bce_dma
 	t2bce_core
 	t2bce_vhci

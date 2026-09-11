@@ -1,0 +1,1 @@
+/run/t2-touchid(/.*)?	system_u:object_r:kait2en_touchid_runtime_t:s0

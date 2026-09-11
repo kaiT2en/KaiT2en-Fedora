@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::net::Ipv6Addr;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail, ensure};
@@ -102,17 +102,4 @@ fn ensure_link_local(interface: &str) -> Result<()> {
         "interface {interface} has no IPv6 link-local address; enable IPv6 on the CDC-NCM link"
     );
     Ok(())
-}
-
-pub fn state_file(explicit: Option<PathBuf>) -> Result<PathBuf> {
-    if let Some(path) = explicit {
-        return Ok(path);
-    }
-    if let Some(state_home) = std::env::var_os("XDG_STATE_HOME") {
-        let state_home = PathBuf::from(state_home);
-        ensure!(state_home.is_absolute(), "XDG_STATE_HOME must be absolute");
-        return Ok(state_home.join("t2-journal/bridgeos.jsonl"));
-    }
-    let home = std::env::var_os("HOME").context("HOME is not set")?;
-    Ok(PathBuf::from(home).join(".local/state/t2-journal/bridgeos.jsonl"))
 }

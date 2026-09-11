@@ -12,8 +12,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
-use t2_journal::discovery;
-use t2_journal::remote::{self, RemoteService};
+use t2_bridgexpc::discovery;
+use t2_bridgexpc::remote::{self, RemoteService};
 
 #[derive(Parser)]
 #[command(version, about = "Manage Apple T2 RemoteXPC services")]

@@ -212,6 +212,26 @@ collect_macos_bluetooth_firmware() {
 		printf 'macOS carries no %s firmware files, skipping Bluetooth.\n' "$chipset"
 }
 
+# Touch ID on Linux verifies against the fingers enrolled here in macOS, and
+# needs nothing else from this side. This only tells the user now, while they
+# are still in macOS and can enroll one, instead of after the installation.
+check_touch_id() {
+	local report templates
+	if ! report=$(run_as_calling_user bioutil -c 2>&1); then
+		printf 'Could not query Touch ID (%s); fingerprint login on Linux is unaffected if a finger is enrolled.\n' \
+			"${report:-bioutil failed}"
+		return 0
+	fi
+	templates=$(printf '%s\n' "$report" | grep -oE '[0-9]+ (biometric )?template' | grep -oE '^[0-9]+' | head -n1)
+	if [[ -z "$templates" ]]; then
+		printf 'Could not read the Touch ID enrollment count; continuing.\n'
+	elif ((templates == 0)); then
+		printf 'Warning: no Touch ID finger is enrolled for this macOS user. Enroll one in System Settings > Touch ID before installing if you want fingerprint login on Linux.\n'
+	else
+		printf 'Touch ID: %s finger(s) enrolled in macOS, usable for Linux login after a one-time fprintd-enroll.\n' "$templates"
+	fi
+}
+
 load_editions() {
 	local catalog=$1
 	local id display variant subvariant filename url size sha release_path
@@ -503,6 +523,7 @@ else
 	collect_macos_firmware "$firmware_stage"
 	collect_macos_bluetooth_firmware "$firmware_stage/bluetooth"
 fi
+check_touch_id
 
 trx_file=$(pick_one '.trx firmware' "$firmware_stage"/*.trx)
 clm_file=$(pick_one '.clmb regulatory blob' "$firmware_stage"/*.clmb)

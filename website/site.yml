@@ -90,6 +90,7 @@ documentation:
         - {file: post-install/audio-dsp.md}
         - {file: post-install/configuring-gpus.md, title: Configure GPUs}
         - {file: post-install/hardware-video-decoding.md}
+        - {file: post-install/touch-id.md, title: Touch ID}
         - {file: post-install/updating.md, title: Updating}
     - title: Reference
       pages:
