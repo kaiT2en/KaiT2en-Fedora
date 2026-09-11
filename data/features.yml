@@ -291,3 +291,32 @@ items:
     notes: >-
       Runtime GPU switching is available downstream on MacBookPro15,1. The
       apple-gmux, amdgpu and ALSA HDA changes were submitted upstream as v3.
+
+  - id: t2-ave-hardware-encode
+    title: "Hardware video encoding (T2 AVE)"
+    state: available
+    upstream: downstream
+    project: KAIT2EN Fedora
+    subsystem: t2bce_ave
+    authors:
+      - deqrocks
+    updated: "2026-09-11"
+    notes: >-
+      Exposes the T2 Apple Video Encoder for hardware HEVC encoding.
+      Usable today through the t2-ave HandBrake build https://github.com/deqrocks/HandBrake
+      or ffmpeg.
+
+  - id: touch-id
+    title: "Touch ID login"
+    state: available
+    upstream: downstream
+    project: KAIT2EN Fedora
+    subsystem: t2-touchid / BiometricKit
+    authors:
+      - deqrocks
+    link: post-install/touch-id.md
+    updated: "2026-09-11"
+    notes: >-
+      The finger enrolled under macOS unlocks login and sudo on Linux through
+      stock fprintd, with nothing patched. Aimed at a libfprint driver upstream.
+      Enrollment on Linux is prepared through T2sep, but not implemented.
