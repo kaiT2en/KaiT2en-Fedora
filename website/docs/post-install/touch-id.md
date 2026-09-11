@@ -10,22 +10,7 @@ You need a finger enrolled under macOS, in System Settings > Touch ID.
 The macOS installer tells you if none is enrolled while you are
 still in macOS. Your macOS and Linux passwords do not have to match.
 
-## Fresh installation
-
-The regular installer sets everything up, and the fingers enrolled under macOS
-are bound to the account that ran it as soon as the sensor is reachable. There
-is nothing to do. From then on the login screen and `sudo` offer the finger;
-the password keeps working as before.
-
-## Existing installation
-
-Update KAIT2EN, which runs the installer again:
-
-```bash
-kait2en-install
-```
-
-## The binding
+## Binding
 
 The Secure Enclave keeps the fingerprint and compares it. Linux only learns
 which enrolled finger it saw, and `fprintd` remembers which of them belong to
@@ -48,17 +33,6 @@ right pairing, edit `/etc/kait2en/t2-touchid.conf`: `T2_TOUCHID_UID` is the
 macOS id (`id -u` under macOS, usually 501 or 502) and `T2_TOUCHID_BIND_USER`
 the Linux account. Restart `kait2en-t2-touchid` afterwards. Any other Linux
 user can bind a finger by hand with `fprintd-enroll` and a touch.
-
-## What to expect
-
-- A finger that is not recognised is simply asked for again.
-- If the sensor cannot be reached, or the bridge is not running, there is no
-  fingerprint prompt at all and the password is asked for right away. A broken
-  bridge never makes you wait.
-- The prompts say *swipe* and the device is listed as *Virtual device with
-  storage and identification for debugging*. Both come from the libfprint
-  driver KAIT2EN drives and change only once a native driver exists upstream.
-  Press the finger flat on the sensor; do not swipe.
 
 ## Turning it off
 

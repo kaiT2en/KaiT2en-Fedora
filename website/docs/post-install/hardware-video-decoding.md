@@ -8,6 +8,9 @@ supported video decoder.
 T2 Macs do not provide AV1 hardware decoding. YouTube should use H.264 or a
 hardware-supported VP9 profile to avoid unnecessary CPU load.
 
+This page is about decoding on the GPUs. HEVC encoding runs on the T2 itself,
+see [Hardware video encoding](hardware-video-encoding.md).
+
 ## Install the VA-API drivers
 
 Run the installer from the KAIT2EN repository:

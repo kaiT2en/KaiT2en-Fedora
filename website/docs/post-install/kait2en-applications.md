@@ -40,29 +40,15 @@ the system from reaching deeper power-saving states.
 
 ## T2 Journal
 
-Fetches Apple T2 bridgeOS logs over the internal `t2_ncm` interface and merges
-them chronologically with the Linux journal. It can select one boot or all
-retained boots, filter by regular expression or source, and emit text or JSONL.
-The first query downloads a BridgeOS snapshot automatically; use
+Fetches Apple T2 bridgeOS logs over the internal `Apple T2 Bridge` network
+link and merges them chronologically with the Linux journal. It can select one
+boot or all retained boots, filter by regular expression or source, and emit
+text or JSONL. The first query downloads a BridgeOS snapshot automatically; use
 `t2journal refresh` to replace it explicitly.
 
-KAIT2EN normally keeps `t2_ncm` unmanaged because an active connection can
-prevent suspend while the T2 BCE stack lacks the required suspend handling.
-To collect logs, first remove that rule and reboot:
-
-```bash
-sudo rm /etc/udev/rules.d/90-kait2en-t2-network.rules
-sudo reboot
-```
-
-Then configure `t2_ncm` in the desktop network settings with IPv6 link-local
-enabled and IPv4 disabled. Disconnect it before suspending. Restore KAIT2EN's
-default unmanaged state with:
-
-```bash
-cd /usr/local/src/KaiT2en-Fedora
-sudo ./scripts/fedora/install-networkmanager-rules.sh
-```
+The link is set up by the installer and managed by `kait2en-t2-remote`, the
+same service that holds the T2 video encoder open. It is disconnected before
+suspend and reconnected after resume, so there is nothing to configure.
 
 Typical queries are:
 

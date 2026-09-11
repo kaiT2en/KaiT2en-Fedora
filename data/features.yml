@@ -300,6 +300,7 @@ items:
     subsystem: t2bce_ave
     authors:
       - deqrocks
+    link: post-install/hardware-video-encoding.md
     updated: "2026-09-11"
     notes: >-
       Exposes the T2 Apple Video Encoder for hardware HEVC encoding.
