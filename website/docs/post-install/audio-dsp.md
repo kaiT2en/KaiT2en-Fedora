@@ -57,16 +57,6 @@ the DSP output automatically when the profile is first created.
 ## Profile origins and support
 
 The speaker graphs are KAIT2EN's own work and are generated per model.
-Earlier KAIT2EN versions used measured FIR filters from
-[lemmyg's t2-apple-audio-dsp](https://github.com/lemmyg/t2-apple-audio-dsp)
-and [Asahi Linux](https://github.com/AsahiLinux/asahi-audio); the microphone
-graphs still come from lemmyg's project.
-
-Problems with these profiles must be reported to the
-[KAIT2EN issue tracker](https://github.com/kaiT2en/KaiT2en-Fedora/issues).
-Do not report KAIT2EN DSP behavior to lemmyg's project: its current routing,
-filter graphs and UCM integration are maintained here.
-
 The license information lives in the DSP module of the repository.
 
 ## Check the active output

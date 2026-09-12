@@ -2,7 +2,7 @@
 name = "t2-touchid"
 version = "0.1.0"
 edition = "2024"
-license = "GPL-3.0-or-later"
+license-file = "LICENSE"
 description = "Bridges the Apple T2 Touch ID sensor to fprintd through libfprint's virtual device socket"
 
 [dependencies]

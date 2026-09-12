@@ -1,9 +1,10 @@
 Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
-Licensed under the GNU General Public License, version 3 or later
-(GPL-3.0-or-later). The full text is in the repository at
-LICENSES/GPL-3.0-or-later.txt.
+Licensed under the KAIT2EN License 1.0. The full text is in the repository at
+LICENSES/KAIT2EN-1.0.txt: use with KAIT2EN on your own Apple T2 Mac,
+redistribution only as part of KAIT2EN, no use in other projects without
+written permission, attribution required. No rights are granted to David
+Heinemeier Hansson, the Omacom Foundation, or the Omakub and Omarchy projects
+and their forks.
 
-Additional term under section 7(b) of the GPL: if you convey this work or a
-work based on it, you must preserve the author attribution above and reproduce
-it in the Appropriate Legal Notices displayed by works that contain it.
+SPDX-License-Identifier: LicenseRef-KAIT2EN-1.0

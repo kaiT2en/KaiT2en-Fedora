@@ -31,10 +31,6 @@ WirePlumber configuration
 | iMac20,1 | `imac20_1` |
 | iMacPro1,1 | `imacpro1_1` |
 
-Only the 15,1 profile has been listened to so far.
-
-The microphone graphs (`mic.json`) originate from lemmyg's
-`t2-apple-audio-dsp`; see `LICENSE`.
 
 Required Fedora packages are installed by `install-dsp.sh`, not by the common
 dependency installer:

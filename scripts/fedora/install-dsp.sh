@@ -113,7 +113,7 @@ clean_installed_profile() {
 	# Only remove file types managed by this installer. Do not recursively
 	# replace the directory in case an administrator keeps other files there.
 	find "$dir" -maxdepth 1 -type f \
-		\( -name '*.wav' -o -name '*.lua' -o -name 'graph.json' -o -name 'mic.json' -o -name 'LICENSE.*' \) \
+		\( -name '*.wav' -o -name '*.lua' -o -name 'graph.json' -o -name 'mic.json' -o -name 'LICENSE.*' -o -name 'README.md' \) \
 		-delete
 }
 
@@ -152,7 +152,7 @@ dnf install -y "${DSP_PACKAGES[@]}"
 
 install -d -o root -g root -m 0755 "$dst_dir"
 clean_installed_profile "$dst_dir"
-find "$src_dir" -maxdepth 1 -type f \( -name '*.wav' -o -name '*.lua' -o -name 'LICENSE.*' \) \
+find "$src_dir" -maxdepth 1 -type f \( -name '*.wav' -o -name '*.lua' -o -name 'LICENSE.*' -o -name 'README.md' \) \
 	-exec install -o root -g root -m 0644 {} "$dst_dir/" \;
 
 install_graph "$src_dir/graph.json" "$dst_dir/graph.json" \

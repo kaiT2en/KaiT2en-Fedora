@@ -10,27 +10,33 @@ Everything under `modules/` is a Linux kernel module and stays GPL-2.0 as the
 kernel requires. This includes `t2bce_*`, `t2ave` (in the BCE stack), `t2sep`,
 `t2smc`, `t2smp` and the others.
 
-## GPL-3.0-or-later
+## KAIT2EN License 1.0 (userspace, not open source)
 
-KAIT2EN userspace authored solely by the project owner:
+Everything userspace authored by the project owner carries the KAIT2EN License
+1.0 (`LICENSES/KAIT2EN-1.0.txt`, SPDX `LicenseRef-KAIT2EN-1.0`): use with
+KAIT2EN on your own Apple T2 Mac, modification for your own machines,
+redistribution only unmodified as part of KAIT2EN, no use in other projects
+without written permission, attribution required, and an explicit exclusion of
+David Heinemeier Hansson, the Omacom Foundation and the Omakub and Omarchy
+projects with their forks. Versions released before 2026-09-12 stay under the
+license they were published under.
 
-- `apps/t2-cpu-control`, `apps/t2-dgpu-control`, `apps/t2-hybrid-gpu-control`
+- `apps/t2-cpu-control`, `apps/t2-dgpu-control`, `apps/t2-gpu-switch`,
+  `apps/t2-hybrid-gpu-control`
 - `apps/t2-journal`, `apps/t2-kernel-builder`
 - `apps/t2-power-explorer`, `apps/t2-power-tune`
 - `apps/t2-touchid`, `apps/t2-aks`, `apps/t2-touchid-probe`
-- `apps/t2-fan-control`, `apps/t2-smc-control`
+- the audio DSP profiles below `modules/t2bce_audio-dsp/profiles/` (each
+  folder carries a README.md with the notice; the installer copies it next to
+  the installed files)
 
-Full text: `LICENSES/GPL-3.0-or-later.txt`.
-
-## Attribution (GPL-3.0 section 7b)
-
-The GPL-3.0-or-later components carry an additional term under section 7(b):
-their author attribution must be preserved when the work is conveyed, and
-reproduced in the Appropriate Legal Notices displayed by works that contain it.
 Copyright of that userspace is held by André Eikmeyer
-<andre.eikmeyer@kait2en.org>, and by 4f1sh3r <git@syn-flut.de> for
-`t2-fan-control` and `t2-smc-control`. This is a reasonable attribution
-requirement and adds no restriction beyond section 7(b).
+<andre.eikmeyer@kait2en.org>.
+
+`apps/t2-fan-control` and `apps/t2-smc-control` are co-owned by 4f1sh3r
+<git@syn-flut.de> and stay GPL-3.0-or-later with the section 7(b) attribution
+term (`LICENSES/GPL-3.0-or-later.txt`) until that contributor agrees to the
+change.
 
 ## MIT (permissive)
 
