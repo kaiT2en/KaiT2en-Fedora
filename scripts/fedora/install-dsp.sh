@@ -7,7 +7,7 @@ require_repo_root
 require_fedora
 require_command basename cp dnf find id install mktemp rm runuser sed systemctl
 
-DSP_SRC="$REPO_ROOT/modules/t2bce_audio-dsp/firs"
+DSP_SRC="$REPO_ROOT/modules/t2bce_audio-dsp/profiles"
 DSP_DST_BASE="/usr/share/kait2en/audio-dsp"
 WP_CONF_DIR="/etc/wireplumber/wireplumber.conf.d"
 WP_CONF="$WP_CONF_DIR/51-kait2en-t2-dsp.conf"
@@ -31,11 +31,14 @@ model_dir_for_product() {
 		MacBookAir9,1) printf '%s\n' "9_1" ;;
 		MacBookPro15,1) printf '%s\n' "15_1" ;;
 		MacBookPro15,2) printf '%s\n' "15_2" ;;
+		MacBookPro15,3) printf '%s\n' "15_3" ;;
 		MacBookPro15,4) printf '%s\n' "15_4" ;;
 		MacBookPro16,1) printf '%s\n' "16_1" ;;
 		MacBookPro16,2) printf '%s\n' "16_2" ;;
 		MacBookPro16,3) printf '%s\n' "16_3" ;;
 		MacBookPro16,4) printf '%s\n' "16_4" ;;
+		iMac20,1) printf '%s\n' "imac20_1" ;;
+		iMacPro1,1) printf '%s\n' "imacpro1_1" ;;
 		*) return 1 ;;
 	esac
 }

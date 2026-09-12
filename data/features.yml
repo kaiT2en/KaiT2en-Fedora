@@ -47,12 +47,13 @@ items:
     authors:
       - deqrocks
     link: post-install/audio-dsp.md
-    updated: "2026-08-03"
+    updated: "2026-09-12"
     notes: >-
-      Speaker protection and FIR filter profiles that make the internal speakers
-      usable at full volume. Tied to Apple's hardware, so this stays downstream.
+      Speaker DSP generated from Apple's own bridgeOS tunings: equalization,
+      crossovers, compressor, limiters and crosstalk cancellation as PipeWire
+      filter-chain graphs. Tied to Apple's hardware, so this stays downstream.
     help: >-
-      FIRs from machines not yet supported.
+      Listening reports from models other than MacBookPro15,1.
 
   - id: package-c-states
     title: "Package C-states"
