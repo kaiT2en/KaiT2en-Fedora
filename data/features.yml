@@ -49,9 +49,9 @@ items:
     link: post-install/audio-dsp.md
     updated: "2026-09-12"
     notes: >-
-      Speaker DSP generated from Apple's own bridgeOS tunings: equalization,
-      crossovers, compressor, limiters and crosstalk cancellation as PipeWire
-      filter-chain graphs. Tied to Apple's hardware, so this stays downstream.
+      Model-specific speaker DSP: equalization, crossovers, compressor,
+      limiters and crosstalk cancellation as PipeWire filter-chain graphs.
+      Tied to Apple's hardware, so this stays downstream.
     help: >-
       Listening reports from models other than MacBookPro15,1.
 

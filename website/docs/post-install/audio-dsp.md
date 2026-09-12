@@ -9,16 +9,15 @@ the native T2 audio devices.
 
 The T2 audio driver exposes the physical speaker channels, but the T2 does not
 apply the model-specific processing to audio coming from the host; macOS does
-that in coreaudiod. KAIT2EN provides that processing as a PipeWire filter
-graph generated from Apple's own speaker tunings, which bridgeOS carries for
-every T2 Mac.
+that on the host as well. KAIT2EN provides that processing as a PipeWire
+filter graph per model.
 
 Depending on the model, the graph
 
 - distributes stereo audio across the physical woofer and tweeter channels
-- applies Apple's equalization and crossovers as biquad filters
-- applies Apple's multiband compressor and limiters
-- widens the stereo image with Apple's crosstalk cancellation
+- applies the model's equalization and crossovers as biquad filters
+- applies a multiband compressor and limiters
+- widens the stereo image with crosstalk cancellation
 - adds virtual-bass processing
 
 The biquad chains are cheap compared with the FIR convolution used before.
@@ -57,10 +56,8 @@ the DSP output automatically when the profile is first created.
 
 ## Profile origins and support
 
-The speaker graphs are generated from the speaker tunings that bridgeOS ships
-for each T2 Mac, translated to PipeWire filter-chain nodes; the filter designs
-follow Apple's libAudioDSP. Apple's loudness boosters are deliberately left
-out. Earlier KAIT2EN versions used measured FIR filters from
+The speaker graphs are KAIT2EN's own work and are generated per model.
+Earlier KAIT2EN versions used measured FIR filters from
 [lemmyg's t2-apple-audio-dsp](https://github.com/lemmyg/t2-apple-audio-dsp)
 and [Asahi Linux](https://github.com/AsahiLinux/asahi-audio); the microphone
 graphs still come from lemmyg's project.
@@ -70,8 +67,7 @@ Problems with these profiles must be reported to the
 Do not report KAIT2EN DSP behavior to lemmyg's project: its current routing,
 filter graphs and UCM integration are maintained here.
 
-The generator, the decoded tunings and the license information live in the
-DSP module of the repository.
+The license information lives in the DSP module of the repository.
 
 ## Check the active output
 
