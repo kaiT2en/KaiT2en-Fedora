@@ -1,7 +1,7 @@
 [Unit]
 Description=KaiT2en Touch ID bridge for fprintd
-After=kait2en-t2-remote.service
-Wants=kait2en-t2-remote.service
+After=NetworkManager.service network-online.target
+Wants=NetworkManager.service network-online.target
 
 [Service]
 Type=simple
