@@ -56,14 +56,24 @@ index e5f26e5..2175743 100644
  #include <linux/pci-p2pdma.h>
  #include <linux/apple-gmux.h>
  #include <linux/nospec.h>
-@@ -568,6 +569,22 @@ bool amdgpu_device_supports_px(struct amdgpu_device *adev)
+@@ -568,6 +569,32 @@ bool amdgpu_device_supports_px(struct amdgpu_device *adev)
  	return false;
  }
- 
+
 +static const struct dmi_system_id amdgpu_gmux_runpm_dmi_table[] = {
 +	{
 +		.matches = {
 +			DMI_MATCH(DMI_PRODUCT_NAME, "MacBookPro15,1"),
++		},
++	},
++	{
++		.matches = {
++			DMI_MATCH(DMI_PRODUCT_NAME, "MacBookPro16,1"),
++		},
++	},
++	{
++		.matches = {
++			DMI_MATCH(DMI_PRODUCT_NAME, "MacBookPro16,4"),
 +		},
 +	},
 +	{ }
