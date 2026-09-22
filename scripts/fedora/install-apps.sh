@@ -137,8 +137,8 @@ install_gpu_control() {
 	read -r model </sys/class/dmi/id/product_name
 
 	case "$model" in
-		MacBookPro15,1)
-			info "installing tested hybrid graphics support for $model"
+		MacBookPro15,1|MacBookPro16,1|MacBookPro16,4)
+			info "installing hybrid graphics support for $model"
 			if ! make -C "$REPO_ROOT/apps/t2-dgpu-control" uninstall; then
 				warn "unable to remove the inactive t2-dgpu-control app; continuing"
 			fi
@@ -146,7 +146,7 @@ install_gpu_control() {
 				warn "t2-hybrid-gpu-control installation failed; continuing"
 			fi
 			;;
-		MacBookPro15,3|MacBookPro16,1|MacBookPro16,4)
+		MacBookPro15,3)
 			if ! make -C "$REPO_ROOT/apps/t2-hybrid-gpu-control" uninstall; then
 				warn "unable to remove the inactive t2-hybrid-gpu-control app; continuing"
 			fi
