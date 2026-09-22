@@ -2136,6 +2136,63 @@ hero-brand h1 {
     font-size: 0.95rem;
 }
 
+/* Direct support links for the people doing the development work. */
+.donation-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+    gap: 24px;
+}
+
+.donation-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 24px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    text-align: center;
+}
+
+.donation-avatar {
+    width: 112px;
+    height: 112px;
+    margin: 0 auto 4px;
+    border: 3px solid var(--border);
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+}
+
+.donation-card h3,
+.donation-card p {
+    margin: 0;
+}
+
+.donation-card > p {
+    color: var(--text-secondary);
+}
+
+.donation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 8px;
+    justify-content: center;
+}
+
+.donation-actions .btn {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+}
+
+.donation-pending {
+    margin-top: auto !important;
+    padding-top: 8px;
+    font-size: 0.85rem;
+}
+
 /* ==========================================================================
    Blog
    ========================================================================== */

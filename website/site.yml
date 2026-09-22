@@ -23,6 +23,7 @@ nav:
   - {label: Home, href: index.html}
   - {label: Documentation, href: documentation.html}
   - {label: Blog, href: blog.html}
+  - {label: Donate, href: 'index.html#donate'}
 
 hero:
   image: img/hero-touchbar.jpg
@@ -54,6 +55,32 @@ index:
       group: Overview
       type: markdown
       file: pages/concept.md
+    - id: donate
+      title: Fund KAIT2EN development
+      subtitle: Donations go directly to the developer you choose.
+      group: Overview
+      sidebar: false
+      type: donations
+      developers:
+        - name: deqrocks
+          avatar: img/contributors/deqrocks.webp
+          work: Project lead and primary development
+          donations:
+            - {label: GitHub Sponsors, href: 'https://github.com/sponsors/deqrocks'}
+            - {label: PayPal, href: 'https://www.paypal.com/paypalme/negmaster'}
+        - name: Byte
+          avatar: img/contributors/byte.webp
+          work: GMUX, SMC, Thunderbolt and iMac 5K
+          donations:
+            - label: Bitcoin
+              href: 'bitcoin:bc1qek526plgsjw3ea6dektw5vn0j3yq7l8h8cuxy2'
+              address: 'bc1qek526plgsjw3ea6dektw5vn0j3yq7l8h8cuxy2'
+        - name: 4f1sh3r
+          avatar: img/contributors/4f1sh3r.webp
+          work: Auto-installer, PSR and scatter-gather support
+          donations:
+            - label: Copy PayPal email
+              copy: 'alexander@fischermail.me'
     - id: installation
       title: Install KAIT2EN
       group: Get started

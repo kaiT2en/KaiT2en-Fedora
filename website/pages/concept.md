@@ -85,8 +85,10 @@ perfect Linux laptops. Once everything is properly fixed, models like the
 MacBook Pro 15,1 or MacBook Air 9,1 run cool, offer great battery life, and cost
 very little. All while keeping Apple’s exceptional build quality, Retina
 displays, and Touch Bar. (Mentioning these two models specifically, because they
-are running perfectly on KAIT2EN. Also the 15,2 does. Generally 16,x MacBooks
-are more problematic).
+are running perfectly on KAIT2EN. The MacBookPro16,1 and MacBookPro16,4 now join
+them with complete hybrid graphics and suspend support, and the 15,2 also runs
+well. The 15,3 and 15,1 vega models do not support hybrid graphics yet, due to
+lack of testers.
 
 So this is x86 architecture and we won't get anywhere near to what Asahi with
 Apple Silicon can do. But the message is not to buy into T2 Macs. It's about

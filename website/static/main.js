@@ -168,6 +168,16 @@ function copyBlock(btn) {
     });
 }
 
+function copyDonation(btn) {
+    const value = btn.dataset.copy;
+    if (!value) return;
+    navigator.clipboard.writeText(value).then(() => {
+        const original = btn.innerHTML;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.innerHTML = original; }, 2000);
+    });
+}
+
 // Feature Board Filter. Without JavaScript every row stays visible and only
 // the chips are inert.
 document.addEventListener('DOMContentLoaded', function () {

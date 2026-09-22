@@ -352,7 +352,7 @@ def build_index_sections(config: dict[str, Any], anchors: dict[str, str]) -> lis
                 return f"documentation.html#{anchors[link]}"
 
             section["html"] = Markup(render_board(load_items(), resolve=resolve))
-        elif kind not in ("install", "community"):
+        elif kind not in ("install", "community", "donations"):
             raise BuildError(f"site.yml: unknown index section type '{kind}'")
         sections.append(section)
     return sections
@@ -362,6 +362,8 @@ def group_sidebar(items: list[dict], key: str = "group") -> list[dict]:
     """Turn a flat section list into the sidebar's grouped shape."""
     groups: list[dict] = []
     for item in items:
+        if item.get("sidebar") is False:
+            continue
         title = item.get(key) or ""
         if not groups or groups[-1]["title"] != title:
             groups.append({"title": title, "entries": []})
@@ -463,7 +465,7 @@ def check_links(out: Path) -> None:
 
     for page in pages:
         for target in LINK_RE.findall(page.read_text(encoding="utf-8")):
-            if target.startswith(("http://", "https://", "mailto:", "data:", "//")):
+            if target.startswith(("http://", "https://", "mailto:", "bitcoin:", "data:", "//")):
                 continue
             path, _, fragment = target.partition("#")
             where = page.relative_to(out)

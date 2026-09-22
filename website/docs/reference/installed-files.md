@@ -51,9 +51,9 @@ The installer also writes
 `/etc/kernel/install.d/39-kait2en-dkms-cleanup.install`. The hook removes stale
 DKMS build state before a kernel installation is retried.
 
-On the MacBookPro15,1, the app installer also builds the AMDGPU and Intel HDA
-modules with the hybrid runtime-PM patches and installs them for the running
-kernel at:
+On the MacBookPro15,1, MacBookPro16,1 and MacBookPro16,4, the app installer also
+builds the AMDGPU and Intel HDA modules with the hybrid runtime-PM patches and
+installs them for the running kernel at:
 
 ```text
 /usr/lib/modules/<kernel>/updates/kait2en-gpu-runtime-pm/amdgpu.ko.xz
@@ -222,7 +222,9 @@ outcome of the Bluetooth step is recorded in the installed system at:
 
 `t2-fan-control`, `t2-smc-control`, `t2-power-explorer`, `t2-cpu-control`, `t2-journal`, `kernel-builder`, and `t2-power-tune` are installed system-wide under `/usr/local`.
 
-MacBookPro15,1 gets `t2-hybrid-gpu-control`; other MacBook Pro models with Intel and AMD display devices get `t2-dgpu-control`.
+MacBookPro15,1, MacBookPro16,1 and MacBookPro16,4 get
+`t2-hybrid-gpu-control`; other MacBook Pro models with Intel and AMD display
+devices get `t2-dgpu-control`.
 All KAIT2EN desktop applications use the shared header wordmark at
 `/usr/local/share/kait2en/kait2en-wordmark.png`.
 

@@ -20,9 +20,11 @@ A fixed t2bce doesn't fix suspend. While it was broken for many years, developer
 The below units will help you around the roughest cliffs. Note that you can combine them into one unit. Also note the minus sign in for example `ExecStart=-/usr/bin...` will let the systemd unit continue in case of error. For example if you haven't tiny-dfr installed, the service should still continue to execute - with cosmetic errors in journal. Feel free to remove what you don't need.
 The code blocks are full commands. They will create the units and activate them. Copy them, modify them to your needs if you want and execute them. But don't forget the important bits like daemon-reload and systemctl enable.
 
-## Notes for MacBookPro15,1 graphics
+## Notes for MacBookPro15,1, MacBookPro16,1 and MacBookPro16,4 graphics
 
-We have upstreamed a patch for the 15,1 dGPU which will ship with kernel 7.3. Until release, suspend will not work unless you patch amdgpu yourself. The patch file is located in the patches folder.
+KaiT2en carries the apple-gmux, AMDGPU and HDA patches required for hybrid
+graphics on the MacBookPro15,1, MacBookPro16,1 and MacBookPro16,4. Runtime dGPU
+power management and system suspend/resume work on all three models.
 
 
 ## Notes for Macbooks with Touchbar
