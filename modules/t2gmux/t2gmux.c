@@ -718,9 +718,8 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 	if (state == VGA_SWITCHEROO_ON) {
 		if (gmux_data->use_pwrd_power_sequence &&
 		    gmux_data->discrete_pdev) {
-			/* PUPD does MBWR(0x50, 1, 3) itself, so do not write 3 here. */
-			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 2);
-			msleep(100);
+			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
+			msleep(20);
 
 			ret = gmux_call_pwrd(gmux_data, false);
 			if (ret)
@@ -781,6 +780,8 @@ static int gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 		    gmux_data->use_pwrd_power_sequence)
 			usleep_range(10000, 11000);
 		gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
+		if (gmux_data->use_pwrd_power_sequence)
+			msleep(20);
 		pr_debug("Discrete card powered down\n");
 	}
 
