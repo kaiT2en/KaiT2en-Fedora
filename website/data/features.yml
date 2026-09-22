@@ -281,6 +281,19 @@ items:
       Replaces the standard Touch Bar interface: function keys, media and
       brightness controls, application-aware panels and system information.
 
+  - id: force-click
+    title: "Force Click trackpad controls"
+    state: available
+    upstream: downstream
+    project: KAIT2EN Fedora
+    subsystem: Input / Force Touch
+    authors:
+      - deqrocks
+    updated: "2026-09-21"
+    notes: >-
+      Provides adjustable click and Force Click pressure, Taptic Engine
+      feedback, and configurable actions for the separate Force Click event.
+
   - id: hybrid-graphics
     title: "Hybrid graphics and dGPU power management"
     state: available
