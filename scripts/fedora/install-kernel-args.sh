@@ -22,26 +22,6 @@ has_intel_pci_device() {
 	return 1
 }
 
-has_amdgpu_macbook_model() {
-	local model
-
-	[[ -r /sys/class/dmi/id/product_name ]] || {
-		info "DMI product name not found; skipping AMDGPU ASPM argument"
-		return 1
-	}
-
-	read -r model </sys/class/dmi/id/product_name
-	case "$model" in
-		MacBookPro15,1|MacBookPro15,3|MacBookPro16,1|MacBookPro16,4)
-			return 0
-			;;
-		*)
-			info "Model $model has no supported AMD dGPU ASPM override"
-			return 1
-			;;
-	esac
-}
-
 repair_empty_grub_cmdline() {
 	local arg cmdline escaped
 	local -a args kept_args=()
@@ -107,7 +87,6 @@ ADD_ARGS=(
 	"pcie_aspm=force"
 	"pcie_aspm.policy=powersave"
 	"pcie_ports=compat"
-	"pci=noaer"
 	"mem_sleep_default=deep"
 )
 
@@ -129,11 +108,6 @@ MODULE_BLACKLIST="module_blacklist=$(IFS=,; printf '%s' "${BLACKLIST_MODULES[*]}
 SILENT_BLACKLIST_CONF="/etc/modprobe.d/kait2en-silent-blacklist.conf"
 
 ADD_ARGS+=("$INITCALL_BLACKLIST" "$MODULE_BLACKLIST")
-
-if has_amdgpu_macbook_model; then
-	info "supported AMD dGPU MacBook Pro detected; enabling AMDGPU ASPM"
-	ADD_ARGS+=("amdgpu.aspm=1")
-fi
 
 if has_intel_pci_device 0x15e8 0x15eb; then
 	info "Titan Ridge detected; removing obsolete ACPI OSI overrides"
