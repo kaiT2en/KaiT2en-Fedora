@@ -1,3 +1,2 @@
 0001-drm-amdgpu-reset-VI-ASIC-on-MacBookPro15-1.patch
 0002-drm-amdgpu-Add-Apple-GMUX-runtime-PM-support.patch
-0003-ALSA-hda-Allow-direct-complete-with-a-powered-off-GPU.patch
