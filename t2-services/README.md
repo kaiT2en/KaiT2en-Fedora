@@ -45,16 +45,14 @@ Each `packaging/` directory contains RPM and Debian recipes. See
 
 ## Suspend and resume
 
-`shared/integration/systemd/t2-services-suspend.service` owns the NCM transition.
-Before sleep its helper invokes installed feature hooks, saves the active
-NetworkManager connection, and unbinds NCM. After resume it binds NCM, restores
-the connection, waits for link-local IPv6, then invokes resume hooks. The AVE hook
-closes/reopens only its own sessions, and skips an inactive AVE daemon. Touch ID
-uses its existing logind resume watcher and connection retry loop. Journal holds
-no persistent daemon session.
+`shared/integration/systemd/t2-services-suspend.service` runs feature sleep/resume
+hooks around system suspend. The T2 NCM link survives suspend on its own
+(`t2bce_vhci` reset-resumes it after a stateful sleep), so the helper no longer
+touches it. The AVE hook closes/reopens only its own sessions, and skips an
+inactive AVE daemon. Touch ID uses its existing logind resume watcher and
+connection retry loop. Journal holds no persistent daemon session.
 
-The remaining `kait2en-suspend.service` handles WLAN/Bluetooth only. The source
-installer updates both helpers. An old helper must not also unbind NCM.
+The remaining `kait2en-suspend.service` handles WLAN/Bluetooth only.
 
 ## Kernel boundary
 

@@ -152,8 +152,8 @@ audio behavior and diagnostics.
 | --- | --- |
 | `/etc/systemd/system/kait2en-suspend.service` | Calls the suspend helper before `sleep.target` and again after resume |
 | `/usr/local/libexec/kait2en/kait2en-suspend.sh` | Handles the BCM4377 suspend workaround described below |
-| `/etc/systemd/system/t2-services-suspend.service` | Coordinates feature hooks and the common NCM link around sleep |
-| `/usr/local/libexec/t2-services/t2-ncm-sleep` | Saves the NCM connection, unbinds before sleep, binds and restores IPv6 after resume |
+| `/etc/systemd/system/t2-services-suspend.service` | Runs feature sleep/resume hooks around sleep |
+| `/usr/local/libexec/t2-services/t2-ncm-sleep` | Runs installed feature hooks before sleep and after resume |
 | `/usr/local/libexec/t2-services/sleep.d/t2-ave` | Closes/reopens sessions only when the AVE daemon is running |
 | `/etc/systemd/system/kait2en-t2-remote.service` | Loads `t2bce_ave` and runs `t2remote`, which holds the bridgeOS services Linux uses, currently `com.apple.aveservice` for the video encoder |
 | `/usr/local/bin/t2remote` | RemoteXPC service manager; `t2remote status` shows the live services. Listens on `/run/t2remote.sock` |

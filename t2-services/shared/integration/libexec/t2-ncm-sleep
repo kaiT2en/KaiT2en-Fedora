@@ -1,26 +1,15 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Owns the common link. Feature hooks only close/reopen their own sessions.
+# Runs feature sleep/resume hooks. The T2 NCM link now survives suspend on
+# its own (t2bce_vhci reset-resumes it after a stateful sleep), so this no
+# longer needs to unbind/rebind cdc_ncm or wait for the link to come back.
 set -uo pipefail
-STATE_DIR=${T2_STATE_DIR:-/run/t2-services}
 HOOK_DIR=${T2_HOOK_DIR:-"$(dirname -- "$0")/sleep.d"}
-SYSFS=${T2_SYSFS:-/sys}
-INET6=${T2_INET6:-/proc/net/if_inet6}
 errors=()
 
 log_error() {
 	printf '[t2-services] error: %s\n' "$*" >&2
 	errors+=("$*")
-}
-
-is_t2_ncm_control() {
-	local dev parent
-	dev="$(readlink -f -- "$1")" || return 1
-	parent="${dev%/*}"
-	[[ -r "$parent/idVendor" && -r "$parent/idProduct" &&
-	   -r "$dev/bInterfaceClass" && -r "$dev/bInterfaceSubClass" ]] || return 1
-	[[ "$(<"$parent/idVendor")" == 05ac && "$(<"$parent/idProduct")" == 8233 &&
-	   "$(<"$dev/bInterfaceClass")" == 02 && "$(<"$dev/bInterfaceSubClass")" == 0d ]]
 }
 
 run_hooks() {
@@ -33,103 +22,9 @@ run_hooks() {
 	done
 }
 
-unbind_ncm() {
-	local dev id net uuid
-	for dev in "$SYSFS"/bus/usb/drivers/cdc_ncm/*:*; do
-		is_t2_ncm_control "$dev" || continue
-		id="${dev##*/}"
-		if ! printf '%s\n' "$id" >>"$STATE_DIR/ncm.interfaces"; then
-			log_error "cannot save $id; leaving it bound"
-			continue
-		fi
-		for net in "$dev"/net/*; do
-			[[ -e "$net" ]] || continue
-			if ! uuid=$(nmcli --get-values GENERAL.CON-UUID device show "${net##*/}"); then
-				log_error "cannot read connection for ${net##*/}"
-			elif [[ "$uuid" =~ ^[0-9a-fA-F-]{36}$ ]]; then
-				printf '%s\n' "$uuid" >"$STATE_DIR/ncm.uuid" || log_error "cannot save NCM connection"
-			fi
-			if ! nmcli --wait 5 device disconnect "${net##*/}"; then
-				log_error "cannot disconnect ${net##*/}; continuing with unbind"
-			fi
-		 done
-		printf '%s' "$id" >"$SYSFS"/bus/usb/drivers/cdc_ncm/unbind || log_error "cannot unbind $id"
-	done
-}
-
-bind_ncm() {
-	local id dev driver failed=0
-	[[ -f "$STATE_DIR/ncm.interfaces" ]] || return 0
-	while IFS= read -r id; do
-		if [[ ! "$id" =~ ^[0-9]+-[0-9]+(\.[0-9]+)*:[0-9]+\.[0-9]+$ ]]; then
-			log_error "invalid saved interface $id"
-			failed=1
-			continue
-		fi
-		dev="$SYSFS/bus/usb/devices/$id"
-		[[ -e "$dev" ]] || continue # Re-enumerated devices are probed automatically.
-		if ! is_t2_ncm_control "$dev"; then
-			log_error "$id is no longer T2 NCM"
-			failed=1
-			continue
-		fi
-		if [[ -L "$dev/driver" ]]; then
-			driver=$(readlink -f -- "$dev/driver")
-			if [[ "${driver##*/}" != cdc_ncm ]]; then
-				log_error "$id belongs to another driver"
-				failed=1
-			fi
-		elif ! printf '%s' "$id" >"$SYSFS"/bus/usb/drivers/cdc_ncm/bind; then
-			log_error "cannot bind $id"
-			failed=1
-		fi
-	done <"$STATE_DIR/ncm.interfaces"
-	if (( failed == 0 )); then
-		rm -f -- "$STATE_DIR/ncm.interfaces" || log_error "cannot clear saved interfaces"
-	fi
-}
-
-restore_link() {
-	local attempt dev net uuid=""
-	[[ ! -f "$STATE_DIR/ncm.uuid" ]] || read -r uuid <"$STATE_DIR/ncm.uuid"
-	for attempt in {1..20}; do
-		for dev in "$SYSFS"/bus/usb/drivers/cdc_ncm/*:*; do
-			is_t2_ncm_control "$dev" || continue
-			for net in "$dev"/net/*; do
-				[[ -e "$net" ]] || continue
-				if [[ -n "$uuid" ]]; then
-					if ! nmcli --wait 5 connection up uuid "$uuid" ifname "${net##*/}"; then
-						log_error "NCM connection restore attempt $attempt failed"
-						continue
-					fi
-				fi
-				if awk -v iface="${net##*/}" '$4 == "20" && $6 == iface { found=1 } END { exit !found }' "$INET6"; then
-					return 0
-				fi
-			done
-		done
-		sleep 1
-	done
-	log_error "NCM IPv6 link did not become ready; services must retry"
-}
-
 case "${1:-}" in
-	pre)
-		if mkdir -p "$STATE_DIR"; then
-			run_hooks pre
-			unbind_ncm
-		else
-			log_error "cannot create $STATE_DIR; keeping the link bound"
-		fi
-		;;
-	post)
-		# No saved interfaces means no T2 link was suspended on this machine.
-		if [[ -f "$STATE_DIR/ncm.interfaces" ]]; then
-			bind_ncm
-			restore_link
-		fi
-		run_hooks post
-		;;
+	pre) run_hooks pre ;;
+	post) run_hooks post ;;
 	*) printf 'usage: %s pre|post\n' "$0" >&2; exit 2 ;;
 esac
 if (( ${#errors[@]} )); then
