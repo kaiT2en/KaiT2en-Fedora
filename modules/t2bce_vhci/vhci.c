@@ -812,7 +812,11 @@ static int bce_vhci_drop_endpoint(struct usb_hcd *hcd, struct usb_device *udev, 
         }
     }
 
-    bce_vhci_cmd_endpoint_destroy(&vhci->cq, devid, (u8) (endp->desc.bEndpointAddress & 0x8Fu));
+    if (!bce_vhci_transfer_queue_pause(q, BCE_VHCI_PAUSE_SHUTDOWN))
+        bce_vhci_cmd_endpoint_destroy(&vhci->cq, devid, (u8) (endp->desc.bEndpointAddress & 0x8Fu));
+    else
+        pr_warn("t2bce_vhci: [%02x] pause not confirmed, skipping endpoint destroy\n",
+                (u8) (endp->desc.bEndpointAddress & 0x8Fu));
     vdev->tq_mask &= ~BIT(endp_index);
     bce_vhci_destroy_transfer_queue(vhci, q);
     endp->hcpriv = NULL;
