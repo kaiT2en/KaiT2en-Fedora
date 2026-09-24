@@ -505,6 +505,34 @@ static int bce_pm_suspend_fallback_no_state(struct t2bce_device *bce)
     return 0;
 }
 
+static int bce_pm_suspend_no_state_fallback(struct t2bce_device *bce)
+{
+    int status;
+
+    /* Client teardown sends firmware commands, so restore transport first. */
+    bce_pm_suspend_abort(bce);
+
+    /* Let ->complete rebuild clients if teardown or the sleep request fails. */
+    bce->no_state_fallback = true;
+    bce->no_state_resume = true;
+    t2bce_core_clients_pm_mark_no_state_resume(bce);
+
+    status = t2bce_core_clients_pm_prepare_no_state(bce);
+    if (status) {
+        pr_err("t2bce_core: no-state client preparation failed: %d\n", status);
+        bce_pm_suspend_abort(bce);
+        return status;
+    }
+
+    /* Client teardown is complete; quiesce transport before no-state sleep. */
+    status = bce_pm_suspend_prepare(bce);
+    if (!status)
+        status = bce_pm_suspend_fallback_no_state(bce);
+    if (status)
+        bce_pm_suspend_abort(bce);
+    return status;
+}
+
 static int bce_pm_suspend_try_state(struct t2bce_device *bce)
 {
     int status;
@@ -597,15 +625,7 @@ static int t2bce_suspend(struct device *dev)
 
     if (!bce_stateful_supported(bce)) {
         /* No-state resume tears down and rebuilds clients that cannot preserve firmware state. */
-        t2bce_core_clients_pm_prepare_no_state(bce);
-        status = bce_pm_suspend_fallback_no_state(bce);
-        if (!status) {
-            bce->no_state_fallback = true;
-            bce->no_state_resume = true;
-            t2bce_core_clients_pm_mark_no_state_resume(bce);
-        } else {
-            bce_pm_suspend_abort(bce);
-        }
+        status = bce_pm_suspend_no_state_fallback(bce);
         goto out_unlock;
     }
 
@@ -619,16 +639,8 @@ static int t2bce_suspend(struct device *dev)
     }
 
     /* bridgeOS can reject state save; fall back to the no-state path then. */
-    pr_debug("t2bce_core: suspend: stateful path not ready, falling back to no-state\n");
-    t2bce_core_clients_pm_prepare_no_state(bce);
-    status = bce_pm_suspend_fallback_no_state(bce);
-    if (!status) {
-        bce->no_state_fallback = true;
-        bce->no_state_resume = true;
-        t2bce_core_clients_pm_mark_no_state_resume(bce);
-    } else {
-        bce_pm_suspend_abort(bce);
-    }
+    pr_info("t2bce_core: suspend: stateful path not ready, falling back to no-state\n");
+    status = bce_pm_suspend_no_state_fallback(bce);
 
 out_unlock:
     mutex_unlock(&bce->pm_lock);

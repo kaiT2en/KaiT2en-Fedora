@@ -19,7 +19,7 @@ struct t2bce_core_client_pm_ops {
     void (*shutdown)(void *userdata);
     void (*pm_reset)(void *userdata);
     int (*pm_prepare)(void *userdata);
-    void (*pm_prepare_no_state)(void *userdata);
+    int (*pm_prepare_no_state)(void *userdata);
     void (*pm_mark_no_state_resume)(void *userdata);
     bool (*pm_is_no_state_resume)(void *userdata);
     void (*pm_complete)(void *userdata);

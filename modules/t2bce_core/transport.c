@@ -212,18 +212,23 @@ int t2bce_core_clients_pm_prepare(struct t2bce_device *bce)
     return ret;
 }
 
-void t2bce_core_clients_pm_prepare_no_state(struct t2bce_device *bce)
+int t2bce_core_clients_pm_prepare_no_state(struct t2bce_device *bce)
 {
     struct t2bce_core_client *client;
+    int ret = 0;
     int srcu_idx;
 
     srcu_idx = srcu_read_lock(&bce->clients_srcu);
     list_for_each_entry_srcu(client, &bce->clients, list,
             srcu_read_lock_held(&bce->clients_srcu)) {
-        if (client->pm_ops.pm_prepare_no_state)
-            client->pm_ops.pm_prepare_no_state(READ_ONCE(client->pm_userdata));
+        if (client->pm_ops.pm_prepare_no_state) {
+            ret = client->pm_ops.pm_prepare_no_state(READ_ONCE(client->pm_userdata));
+            if (ret)
+                break;
+        }
     }
     srcu_read_unlock(&bce->clients_srcu, srcu_idx);
+    return ret;
 }
 
 void t2bce_core_clients_pm_mark_no_state_resume(struct t2bce_device *bce)

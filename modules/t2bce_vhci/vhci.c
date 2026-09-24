@@ -42,7 +42,7 @@ static int __bce_vhci_add_hcd(struct bce_vhci *vhci);
 static void bce_vhci_shutdown_client(void *userdata);
 static void bce_vhci_pm_reset_client(void *userdata);
 static int bce_vhci_pm_prepare_client(void *userdata);
-static void bce_vhci_pm_prepare_no_state_client(void *userdata);
+static int bce_vhci_pm_prepare_no_state_client(void *userdata);
 static void bce_vhci_pm_mark_no_state_resume_client(void *userdata);
 static bool bce_vhci_pm_is_no_state_resume_client(void *userdata);
 static void bce_vhci_pm_complete_client(void *userdata);
@@ -240,9 +240,12 @@ int bce_vhci_pm_prepare(struct bce_vhci *vhci)
     return status;
 }
 
-void bce_vhci_pm_prepare_no_state(struct bce_vhci *vhci)
+int bce_vhci_pm_prepare_no_state(struct bce_vhci *vhci)
 {
+    /* HCD removal needs firmware replies delivered through event queues. */
+    bce_vhci_resume_event_queues(vhci);
     bce_vhci_remove_hcd(vhci);
+    return bce_vhci_pause_event_queues(vhci);
 }
 
 void bce_vhci_pm_mark_no_state_resume(struct bce_vhci *vhci)
@@ -282,9 +285,9 @@ static void bce_vhci_shutdown_client(void *userdata)
     bce_vhci_shutdown(userdata);
 }
 
-static void bce_vhci_pm_prepare_no_state_client(void *userdata)
+static int bce_vhci_pm_prepare_no_state_client(void *userdata)
 {
-    bce_vhci_pm_prepare_no_state(userdata);
+    return bce_vhci_pm_prepare_no_state(userdata);
 }
 
 static void bce_vhci_pm_mark_no_state_resume_client(void *userdata)
