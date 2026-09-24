@@ -544,8 +544,11 @@ static void bce_vhci_free_device(struct usb_hcd *hcd, struct usb_device *udev)
     dev = vhci->devices[devid];
     for (i = 0; i < 32; i++) {
         if (dev->tq_mask & BIT(i)) {
-            bce_vhci_transfer_queue_pause(&dev->tq[i], BCE_VHCI_PAUSE_SHUTDOWN);
-            bce_vhci_cmd_endpoint_destroy(&vhci->cq, devid, dev->tq[i].endp_addr);
+            if (!bce_vhci_transfer_queue_pause(&dev->tq[i], BCE_VHCI_PAUSE_SHUTDOWN))
+                bce_vhci_cmd_endpoint_destroy(&vhci->cq, devid, dev->tq[i].endp_addr);
+            else
+                pr_warn("t2bce_vhci: [%02x] pause not confirmed, skipping endpoint destroy\n",
+                        dev->tq[i].endp_addr);
             if (dev->tq[i].endp)
                 dev->tq[i].endp->hcpriv = NULL;
             bce_vhci_destroy_transfer_queue(vhci, &dev->tq[i]);
@@ -572,8 +575,11 @@ static int bce_vhci_reset_device(struct bce_vhci *vhci, int index, u16 timeout)
 
         for (i = 0; i < 32; i++) {
             if (dev->tq_mask & BIT(i)) {
-                bce_vhci_transfer_queue_pause(&dev->tq[i], BCE_VHCI_PAUSE_SHUTDOWN);
-                bce_vhci_cmd_endpoint_destroy(&vhci->cq, devid, dev->tq[i].endp_addr);
+                if (!bce_vhci_transfer_queue_pause(&dev->tq[i], BCE_VHCI_PAUSE_SHUTDOWN))
+                    bce_vhci_cmd_endpoint_destroy(&vhci->cq, devid, dev->tq[i].endp_addr);
+                else
+                    pr_warn("t2bce_vhci: [%02x] pause not confirmed, skipping endpoint destroy\n",
+                            dev->tq[i].endp_addr);
                 if (dev->tq[i].endp)
                     dev->tq[i].endp->hcpriv = NULL;
                 bce_vhci_destroy_transfer_queue(vhci, &dev->tq[i]);
