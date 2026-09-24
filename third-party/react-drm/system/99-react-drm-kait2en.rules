@@ -19,15 +19,16 @@ SUBSYSTEM=="input", ATTR{name}=="Mac14,7 Touch Bar", ENV{ID_SEAT}="seat-touchbar
 # USBDEVFS_RESET ioctl on /dev/bus/usb/BBB/DDD before each config switch to
 # wake the T2 firmware's display interface — when it has gone to sleep, every
 # transfer (config writes included) fails with ETIMEDOUT until a reset.
-# USB runtime PM must stay off: with the device idle in config 1,
-# hid_appletb_kbd's runtime-suspend handler (appletb_kbd_set_mode) deadlocks in
-# the kernel holding the device lock, which wedges any later
-# bConfigurationValue write in unkillable D state until reboot. power/control=on
-# alone is not enough — powertop --auto-tune flips it back to auto without a
-# uevent — so autosuspend_delay_ms=-1 pins a second, independent usage-count
-# reference that blocks runtime suspend even with control=auto.
+# USB runtime PM used to have to stay off here: with the device idle in
+# config 1, hid_appletb_kbd's runtime-suspend handler took a nested
+# runtime-PM reference and deadlocked the USB PM state machine, wedging any
+# later bConfigurationValue write in unkillable D state until reboot. That
+# was fixed at the source in t2touchbar_kbd.c (avoid nested runtime PM in
+# callbacks) — the driver's own .suspend/.resume no longer re-enter runtime
+# PM, so this device is safe to autosuspend like any other and t2-power-tune
+# is left alone to manage it.
 #ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8302", ATTR{bConfigurationValue}=="1", ATTR{bConfigurationValue}="0", ATTR{bConfigurationValue}="1"
-ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8302", GROUP="video", MODE="0660", RUN+="/bin/chown root:video /sys%p/bConfigurationValue", RUN+="/bin/chmod g+w /sys%p/bConfigurationValue", ATTR{power/control}="on", ATTR{power/autosuspend_delay_ms}="-1"
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8302", GROUP="video", MODE="0660", RUN+="/bin/chown root:video /sys%p/bConfigurationValue", RUN+="/bin/chmod g+w /sys%p/bConfigurationValue"
 
 # Backlight: let the video group set Touch Bar brightness without sudo.
 ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="t2tb_backlight", RUN+="/bin/chown root:video /sys/class/backlight/%k/brightness", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
