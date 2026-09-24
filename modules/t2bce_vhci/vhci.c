@@ -499,13 +499,18 @@ static int bce_vhci_enable_device(struct usb_hcd *hcd, struct usb_device *udev)
     if (vhci->port_to_device[udev->portnum])
         return 0;
 
+    vdev = kzalloc(sizeof(struct bce_vhci_device), GFP_KERNEL);
+    if (!vdev)
+        return -ENOMEM;
+
     /* bridgeOS requires a firmware device id before endpoints are created. */
-    if (bce_vhci_cmd_device_create(&vhci->cq, udev->portnum, &devid))
+    if (bce_vhci_cmd_device_create(&vhci->cq, udev->portnum, &devid)) {
+        kfree(vdev);
         return -EIO;
+    }
 
     pr_debug("t2bce_vhci: device_create port=%u dev=%u\n", udev->portnum, devid);
 
-    vdev = kzalloc(sizeof(struct bce_vhci_device), GFP_KERNEL);
     vhci->port_to_device[udev->portnum] = devid;
     vhci->devices[devid] = vdev;
 
