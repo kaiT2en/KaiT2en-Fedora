@@ -17,6 +17,7 @@ install: build
 	find '$(DESTDIR)$(DATADIR)/t2-dsp/profiles' -type d -exec chmod 0755 {} +
 	find '$(DESTDIR)$(DATADIR)/t2-dsp/profiles' -type f -exec chmod 0644 {} +
 	install -D -m 0644 build/51-t2-dsp.conf '$(DESTDIR)$(DATADIR)/wireplumber/wireplumber.conf.d/51-t2-dsp.conf'
+	install -D -m 0644 integration/wireplumber/t2-default-output.lua '$(DESTDIR)$(DATADIR)/wireplumber/scripts/t2-default-output.lua'
 	install -D -m 0644 build/89-t2-dsp.rules '$(DESTDIR)$(UDEVDIR)/89-t2-dsp.rules'
 	install -D -m 0644 integration/pipewire/50-kait2en-quantum.conf '$(DESTDIR)$(DATADIR)/pipewire/pipewire.conf.d/50-kait2en-quantum.conf'
 	install -D -m 0755 integration/libexec/package-actions '$(DESTDIR)$(LIBEXECDIR)/t2-dsp/package-actions'

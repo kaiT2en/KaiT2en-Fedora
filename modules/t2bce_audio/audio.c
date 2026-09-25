@@ -9,6 +9,7 @@
 #include <sound/jack.h>
 #include "audio.h"
 #include "pcm.h"
+#include "timing.h"
 #include <linux/version.h>
 #include <linux/debugfs.h>
 #include <linux/uaccess.h>
@@ -82,6 +83,12 @@ static int t2audio_probe(struct pci_dev *dev, const struct pci_device_id *id)
     init_completion(&t2audio->remote_alive);
     INIT_WORK(&t2audio->resume_work, t2audio_resume_work);
     INIT_LIST_HEAD(&t2audio->subdevice_list);
+    t2audio->pcm_io_wq = alloc_ordered_workqueue("t2bce_audio_io",
+                                                  WQ_MEM_RECLAIM);
+    if (!t2audio->pcm_io_wq) {
+        status = -ENOMEM;
+        goto fail;
+    }
 
     /* Init: set an unknown flag in the bitset */
     if (pci_read_config_dword(dev, 4, &cfg))
@@ -176,6 +183,8 @@ fail:
             pci_iounmap(dev, t2audio->reg_mem_cfg);
         if (t2audio->bce)
             t2bce_core_client_set_pm_ops(t2audio->bce, NULL, NULL);
+        if (t2audio->pcm_io_wq)
+            destroy_workqueue(t2audio->pcm_io_wq);
         t2bce_core_client_put(t2audio->bce);
         kfree(t2audio);
     }
@@ -196,6 +205,8 @@ static void t2audio_remove(struct pci_dev *dev)
     struct t2audio_device *t2audio = pci_get_drvdata(dev);
 
     cancel_work_sync(&t2audio->resume_work);
+    list_for_each_entry(sdev, &t2audio->subdevice_list, list)
+        t2audio_pcm_quiesce_subdevice(sdev);
     debugfs_remove_recursive(t2audio->debugfs_dir);
     t2audio->debugfs_dir = NULL;
     snd_card_free(t2audio->card);
@@ -204,6 +215,7 @@ static void t2audio_remove(struct pci_dev *dev)
         list_del(&sdev->list);
         t2audio_free_dev(sdev);
     }
+    destroy_workqueue(t2audio->pcm_io_wq);
     pci_iounmap(dev, t2audio->reg_mem_bs);
     pci_iounmap(dev, t2audio->reg_mem_cfg);
     device_destroy(t2audio_class, t2audio->devt);
@@ -218,7 +230,6 @@ static void t2audio_remove(struct pci_dev *dev)
 static int t2audio_quiesce(struct t2audio_device *t2audio, bool suspend_pcm)
 {
     struct t2audio_subdevice *sdev;
-    size_t i;
     int status;
 
     if (t2audio->pm_quiesced)
@@ -227,30 +238,16 @@ static int t2audio_quiesce(struct t2audio_device *t2audio, bool suspend_pcm)
     cancel_work_sync(&t2audio->resume_work);
     t2audio->resume_deferred = false;
 
-    /* Suspend PCM streams */
+    /* Stop PCM I/O while the BCE command transport is still available. */
     list_for_each_entry(sdev, &t2audio->subdevice_list, list) {
-        bool stopped_io = false;
-
-        for (i = 0; i < sdev->out_stream_cnt; i++) {
-            if (!smp_load_acquire(&sdev->out_streams[i].started))
-                continue;
-            stopped_io = true;
-            t2audio_pcm_quiesce_stream(&sdev->out_streams[i]);
-        }
-
-        for (i = 0; i < sdev->in_stream_cnt; i++) {
-            if (!smp_load_acquire(&sdev->in_streams[i].started))
-                continue;
-            stopped_io = true;
-            smp_store_release(&sdev->in_streams[i].started, 0);
-        }
-
-        if (stopped_io)
-            t2audio_cmd_stop_io(sdev->a, sdev->dev_id);
+        if (t2audio_pcm_quiesce_subdevice(sdev))
+            dev_warn(t2audio->dev, "Failed to stop %s during quiesce\n",
+                     sdev->uid);
 
         if (suspend_pcm && sdev->pcm)
             snd_pcm_suspend_all(sdev->pcm);
     }
+    flush_workqueue(t2audio->pcm_io_wq);
 
     status = t2audio_cmd_set_remote_access(t2audio, T2AUDIO_REMOTE_ACCESS_OFF);
     if (status)
@@ -367,10 +364,7 @@ static void t2audio_resume_complete(void *userdata)
 static void t2audio_reset_stream(struct t2audio_stream *stream)
 {
     t2audio_pcm_quiesce_stream(stream);
-    stream->waiting_for_first_ts = true;
-    stream->remote_timestamp = 0;
-    stream->timestamp_accept_after = 0;
-    stream->frame_min = stream->latency;
+    t2audio_pcm_reset_timing(stream);
 }
 
 static void t2audio_reset_streams(struct t2audio_device *a)
@@ -525,6 +519,8 @@ static void t2audio_init_stream_info(struct t2audio_subdevice *sdev, struct t2au
 static void t2audio_free_dev(struct t2audio_subdevice *sdev)
 {
     size_t i;
+
+    t2audio_pcm_cleanup_subdevice(sdev);
     for (i = 0; i < sdev->in_stream_cnt; i++) {
         struct t2audio_dma_buf *buf = sdev->in_streams[i].buffers;
 
@@ -878,19 +874,26 @@ void t2audio_handle_prop_change(struct t2audio_device *a, struct t2audio_msg *ms
 
 void t2audio_handle_cmd_timestamp(struct t2audio_device *a, struct t2audio_msg *msg)
 {
-    ktime_t time_os = ktime_get_boottime();
     struct t2audio_send_ctx sctx;
     struct t2audio_subdevice *sdev;
-    u64 devid, timestamp, update_seed;
-    t2audio_msg_read_update_timestamp(msg, &devid, &timestamp, &update_seed);
+    u64 devid, timestamp, update_seed, sample_time, sample_frames;
 
-    pr_debug("t2bce_audio: timestamp dev=%llx t2=%llx host=%lld seed=%llx\n",
-            devid, timestamp, ktime_to_ns(time_os), update_seed);
+    if (t2audio_msg_read_update_timestamp(msg, &devid, &timestamp,
+                &update_seed, &sample_time) ||
+            !t2audio_decode_sample_time(sample_time, &sample_frames) ||
+            update_seed > 1) {
+        dev_warn_ratelimited(a->dev, "Invalid or unsupported timestamp message (%zu bytes)\n",
+                msg->size);
+        goto reply;
+    }
 
+    pr_debug("t2bce_audio: timestamp dev=%llx t2=%llu host=%llu seed=%llu sample=%llu\n",
+            devid, timestamp, msg->received_ns, update_seed, sample_frames);
     sdev = t2audio_find_dev_by_dev_id(a, devid);
     if (sdev)
-        t2audio_handle_timestamp(sdev, time_os);
-
+        t2audio_handle_timestamp(sdev, timestamp, update_seed,
+                sample_frames);
+reply:
     t2audio_send_cmd_response(a, &sctx, msg,
             t2audio_msg_write_update_timestamp_response);
 }
@@ -990,6 +993,6 @@ MODULE_SOFTDEP("pre: t2bce_core");
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("André Eikmeyer <andre.eikmeyer@kait2en.org>");
 MODULE_DESCRIPTION("Apple T2 Audio Driver");
-MODULE_VERSION("0.02");
+MODULE_VERSION("0.04");
 module_init(t2audio_module_init);
 module_exit(t2audio_module_exit);

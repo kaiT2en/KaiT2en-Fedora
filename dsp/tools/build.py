@@ -73,6 +73,12 @@ def build(output, datadir):
                 continue
             graph = relocate(json.loads(path.read_text()), profile, datadir)
             graph[props]["target.object"] = target
+            if stream == "playback":
+                # This is the DSP filter's internal stream, not an application
+                # stream. WirePlumber's follow-default-target policy must move
+                # clients between the DSP sink and headphones without moving
+                # this stream away from its raw speaker backend.
+                graph[props]["node.dont-move"] = True
             write_json(dest / filename, graph)
             filters.append({"matches": [match(profile, stream)], "actions": {
                 "create-filter": {"filter-path": f"{datadir}/t2-dsp/profiles/{profile}/{filename}",
@@ -90,12 +96,31 @@ def build(output, datadir):
         "actions": {"update-props": {
             "audio.allowed-rates": [96000, 88200, 48000, 44100]}},
     })
+    # The speaker DSP sink has priority.session=1400.  Keep the headphone
+    # PCM as a separate node, but let it win automatic default selection while
+    # its jack-backed UCM route is available.
+    monitor.append({
+        "matches": [{
+            "alsa.id": "~t2-.*",
+            "api.alsa.pcm.stream": "playback",
+            "device.profile.name": "HiFi: Headphones: sink",
+        }],
+        "actions": {"update-props": {"priority.session": 1500}},
+    })
     # Strict JSON is accepted as SPA-JSON. Speaker PCM split parents must keep
     # their WirePlumber-generated names so UCM loopbacks keep linking correctly.
     write_json(output / "51-t2-dsp.conf", {
         "monitor.alsa.rules": monitor,
         "node.software-dsp.rules": filters,
-        "wireplumber.profiles": {"main": {"node.software-dsp": "required"}},
+        "wireplumber.profiles": {"main": {
+            "node.software-dsp": "required",
+            "hooks.t2-default-output": "required",
+        }},
+        "wireplumber.components": [{
+            "name": "t2-default-output.lua",
+            "type": "script/lua",
+            "provides": "hooks.t2-default-output",
+        }],
     })
 
 

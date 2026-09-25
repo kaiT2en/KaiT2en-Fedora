@@ -2,7 +2,6 @@
 #define T2AUDIO_H
 
 #include <linux/types.h>
-#include <linux/hrtimer.h>
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
 #include <sound/pcm.h>
@@ -79,24 +78,24 @@ struct t2audio_stream {
     struct snd_pcm_hardware *alsa_hw_desc;
     u32 latency;
 
-    struct hrtimer playback_timer;
-    spinlock_t playback_lock;
-    struct snd_pcm_substream *playback_substream;
-    void *playback_area;
-    size_t playback_bytes;
-    ktime_t playback_last;
-    u64 playback_remainder;
-    u64 playback_frames;
-    snd_pcm_uframes_t bridge_pos;
-    snd_pcm_uframes_t period_pos;
-    bool playback_timer_initialized;
-
     bool waiting_for_first_ts;
 
     ktime_t remote_timestamp;
     ktime_t timestamp_accept_after;
-    snd_pcm_sframes_t frame_min;
+    u64 last_device_timestamp;
+    u64 last_sample_frames;
+    u64 sample_frames;
+    u64 reported_frames;
+    bool timeline_fault;
     int started;
+
+    struct t2audio_subdevice *sdev;
+    struct snd_pcm_substream *substream;
+    struct work_struct io_work;
+    spinlock_t io_lock;
+    u32 io_generation;
+    bool io_requested;
+    int remote_io_state;
 };
 struct t2audio_subdevice {
     struct t2audio_device *a;
@@ -142,6 +141,7 @@ struct t2audio_device {
 
     struct completion remote_alive;
     struct work_struct resume_work;
+    struct workqueue_struct *pcm_io_wq;
     bool resume_deferred;
     bool pm_quiesced;
 

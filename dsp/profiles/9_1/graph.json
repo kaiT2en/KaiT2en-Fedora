@@ -5156,7 +5156,7 @@
             44100
         ],
         "node.virtual": "false",
-        "priority.session": 1500,
+        "priority.session": 1400,
         "state.default-volume": 0.75,
         "device.icon-name": "audio-speakers"
     },

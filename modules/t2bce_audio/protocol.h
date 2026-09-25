@@ -11,6 +11,8 @@ typedef u64 t2audio_object_id_t;
 struct t2audio_msg {
     void *data;
     size_t size;
+    /* Host monotonic time at transport reception, before deferred processing. */
+    u64 received_ns;
 };
 
 struct __attribute__((packed)) t2audio_msg_header {
@@ -90,7 +92,7 @@ int t2audio_msg_read_base(struct t2audio_msg *msg, struct t2audio_msg_base *base
 int t2audio_msg_read_start_io_response(struct t2audio_msg *msg);
 int t2audio_msg_read_stop_io_response(struct t2audio_msg *msg);
 int t2audio_msg_read_update_timestamp(struct t2audio_msg *msg, t2audio_device_id_t *devid,
-        u64 *timestamp, u64 *update_seed);
+        u64 *timestamp, u64 *update_seed, u64 *sample_time);
 int t2audio_msg_read_get_property_response(struct t2audio_msg *msg, t2audio_object_id_t *obj,
         struct t2audio_prop_addr *prop, void **data, u64 *data_size);
 int t2audio_msg_read_set_property_response(struct t2audio_msg *msg, t2audio_object_id_t *obj);

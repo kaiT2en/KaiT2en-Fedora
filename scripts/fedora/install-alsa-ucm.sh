@@ -78,17 +78,21 @@ apple_t2_wireplumber_devices() {
 }
 
 reset_wireplumber_t2_profile_state() {
-	local home state_dir default_profile default_nodes device escaped changed=
+	local home state_dir default_profile default_nodes default_routes
+	local device escaped node_tag changed=
 
 	home="$(target_user_home)"
 	state_dir="$home/.local/state/wireplumber"
 	default_profile="$state_dir/default-profile"
 	default_nodes="$state_dir/default-nodes"
+	default_routes="$state_dir/default-routes"
 
 	[[ -d "$state_dir" ]] || return 0
 
 	while IFS= read -r device; do
 		escaped="${device//./\\.}"
+		node_tag="${device#alsa_card.}"
+		node_tag="${node_tag//./\\.}"
 
 		if [[ -f "$default_profile" ]]; then
 			[[ -e "$default_profile.kait2en.bak" ]] || cp -p "$default_profile" "$default_profile.kait2en.bak"
@@ -98,7 +102,14 @@ reset_wireplumber_t2_profile_state() {
 
 		if [[ -f "$default_nodes" ]]; then
 			[[ -e "$default_nodes.kait2en.bak" ]] || cp -p "$default_nodes" "$default_nodes.kait2en.bak"
-			sed -i "/${escaped}/d" "$default_nodes"
+			sed -i -e "/${escaped}/d" -e "/${node_tag}/d" \
+				-e '/\.t2-/d' "$default_nodes"
+			changed=1
+		fi
+
+		if [[ -f "$default_routes" ]]; then
+			[[ -e "$default_routes.kait2en.bak" ]] || cp -p "$default_routes" "$default_routes.kait2en.bak"
+			sed -i "/^${escaped}:/d" "$default_routes"
 			changed=1
 		fi
 	done < <(apple_t2_wireplumber_devices)

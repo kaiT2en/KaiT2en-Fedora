@@ -122,11 +122,17 @@ configure_ncm() {
 	if [[ -n "$MAC" ]]; then
 		binding=(connection.interface-name "" 802-3-ethernet.mac-address "$MAC")
 	fi
+	# Normalize every autoconnect-related property: a profile left over from
+	# an older mechanism (e.g. the retired t2_ncm udev rule) can carry a
+	# stale autoconnect-priority that keeps NetworkManager from activating
+	# it, and nothing else corrects that once t2-ncm-sleep stops nudging the
+	# connection up on resume.
 	nmcli connection modify uuid "$profile" \
 		connection.id "Apple T2 Bridge" \
 		"${binding[@]}" \
 		connection.permissions "" \
 		connection.autoconnect yes \
+		connection.autoconnect-priority 0 \
 		connection.autoconnect-retries 0 \
 		ipv4.method disabled ipv6.method link-local
 

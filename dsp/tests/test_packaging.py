@@ -43,6 +43,8 @@ class PackagingTests(unittest.TestCase):
                 props = "playback.props" if source.name == "graph.json" else "capture.props"
                 expected[props]["target.object"] = (f"alsa_output.hw_t2-{profile}_0"
                     if source.name == "graph.json" else builder.mic_name(profile))
+                if source.name == "graph.json":
+                    expected[props]["node.dont-move"] = True
                 actual = json.loads((self.output / "profiles" / profile / source.name).read_text())
                 self.assertEqual(expected, actual)
                 for asset in (SOURCE / "profiles" / profile).glob("*.wav"):
@@ -83,6 +85,35 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(len(matching(builder.match(profile, "capture"))), int(mic.exists()))
         self.assertEqual([], matching(builder.match("unknown", "playback")))
         self.assertEqual([], matching({"media.class": "Audio/Sink", "device.api": "dsp"}))
+
+    def test_headphones_outrank_speaker_dsp_for_automatic_selection(self):
+        for profile in builder.models().values():
+            graph = json.loads((SOURCE / "profiles" / profile / "graph.json").read_text())
+            self.assertEqual(graph["capture.props"]["priority.session"], 1400)
+        matches = []
+        for rule in self.conf["monitor.alsa.rules"]:
+            if rule.get("actions", {}).get("update-props", {}).get("priority.session") == 1500:
+                matches.extend(rule["matches"])
+        self.assertEqual(matches, [{
+            "alsa.id": "~t2-.*",
+            "api.alsa.pcm.stream": "playback",
+            "device.profile.name": "HiFi: Headphones: sink",
+        }])
+
+    def test_t2_default_output_uses_wireplumber_policy(self):
+        components = self.conf["wireplumber.components"]
+        self.assertEqual(components, [{
+            "name": "t2-default-output.lua",
+            "type": "script/lua",
+            "provides": "hooks.t2-default-output",
+        }])
+        self.assertEqual(
+            self.conf["wireplumber.profiles"]["main"]["hooks.t2-default-output"],
+            "required")
+        script = (SOURCE / "integration/wireplumber/t2-default-output.lua").read_text()
+        self.assertNotIn("LocalModule", script)
+        self.assertNotIn("libpipewire-module-loopback", script)
+        self.assertIn('before = { "default-nodes/find-best-default-node" }', script)
 
     def test_build_reproducible_and_relocatable(self):
         other = self.root / "other"
@@ -146,6 +177,7 @@ class PackagingTests(unittest.TestCase):
         subprocess.run(["make", "-C", str(SOURCE), "install", "PREFIX=/usr", f"DESTDIR={stage}"],
                        check=True, stdout=subprocess.DEVNULL)
         self.assertTrue((stage / "usr/lib/udev/rules.d/89-t2-dsp.rules").is_file())
+        self.assertTrue((stage / "usr/share/wireplumber/scripts/t2-default-output.lua").is_file())
         self.assertTrue((stage / "usr/share/licenses/t2-dsp/GPL-3.0-or-later.txt").is_file())
         self.assertFalse((stage / "etc").exists())
         self.assertFalse((stage / "var").exists())

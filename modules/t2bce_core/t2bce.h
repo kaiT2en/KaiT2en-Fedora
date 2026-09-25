@@ -30,7 +30,9 @@ struct t2bce_device {
     bool no_state_fallback;
     bool no_state_resume;
     bool mailbox_channel_active;
+    bool dma_irq_disabled;
     struct mutex pm_lock;
+    struct mutex dma_completion_lock;
     struct mutex clients_lock;
     struct list_head clients;
     struct srcu_struct clients_srcu;

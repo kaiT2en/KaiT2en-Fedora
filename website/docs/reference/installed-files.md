@@ -132,6 +132,7 @@ graphs and FIR data. udev and WirePlumber select the matching profile at runtime
 ```text
 /usr/share/t2-dsp/profiles/<profile>/
 /usr/share/wireplumber/wireplumber.conf.d/51-t2-dsp.conf
+/usr/share/wireplumber/scripts/t2-default-output.lua
 /usr/share/pipewire/pipewire.conf.d/50-kait2en-quantum.conf
 /usr/lib/udev/rules.d/89-t2-dsp.rules
 /usr/libexec/t2-dsp/package-actions

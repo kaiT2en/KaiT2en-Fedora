@@ -36,17 +36,18 @@ static int bce_create_command_queues(struct t2bce_device *bce);
 static void bce_free_command_queues(struct t2bce_device *bce);
 static irqreturn_t bce_handle_mb_irq(int irq, void *dev);
 static irqreturn_t bce_handle_dma_irq(int irq, void *dev);
+static void bce_process_dma_completions(struct t2bce_device *bce);
 static int bce_fw_version_handshake(struct t2bce_device *bce);
 static int bce_register_command_queue(struct t2bce_device *bce, struct bce_queue_memcfg *cfg, int is_sq);
 static int t2bce_dma_register_queue(void *userdata, struct bce_queue_memcfg *cfg,
         const char *name, bool isdirout);
 static int t2bce_dma_unregister_queue(void *userdata, u16 qid);
 static int t2bce_dma_flush_queue(void *userdata, u16 qid);
-static int bce_alloc_state_buffer(struct t2bce_device *bce);
+static int bce_alloc_state_buffer(struct t2bce_device *bce, size_t size);
 static void bce_free_state_buffer(struct t2bce_device *bce);
 static int bce_pm_suspend_prepare(struct t2bce_device *bce);
 static void bce_pm_suspend_abort(struct t2bce_device *bce);
-static void bce_pm_resume_finish(struct t2bce_device *bce);
+static void bce_pm_resume_finish_locked(struct t2bce_device *bce);
 
 static const struct t2bce_dma_engine_ops t2bce_dma_ops = {
     .register_queue = t2bce_dma_register_queue,
@@ -54,17 +55,21 @@ static const struct t2bce_dma_engine_ops t2bce_dma_ops = {
     .flush_queue = t2bce_dma_flush_queue,
 };
 
-static int bce_alloc_state_buffer(struct t2bce_device *bce)
+#define BCE_STATE_INITIAL_SIZE 0x1000
+#define BCE_STATE_MAX_SIZE     0x100000
+#define BCE_STATE_ADDR_MASK    0xffffffff000ULL
+
+static int bce_alloc_state_buffer(struct t2bce_device *bce, size_t size)
 {
-    /* bridgeOS stateful sleep stores BCE state in a persistent 0x2000 buffer. */
-    bce->saved_data_dma_size = 0x2000;
-    bce->saved_data_dma_ptr = dma_alloc_coherent(&bce->pci->dev, bce->saved_data_dma_size,
-            &bce->saved_data_dma_addr, GFP_KERNEL);
+    bce->saved_data_dma_ptr = kzalloc(size, GFP_KERNEL);
     if (!bce->saved_data_dma_ptr) {
         bce->saved_data_dma_size = 0;
         bce->saved_data_dma_addr = 0;
         return -ENOMEM;
     }
+
+    bce->saved_data_dma_size = size;
+    bce->saved_data_dma_addr = 0;
 
     return 0;
 }
@@ -74,8 +79,7 @@ static void bce_free_state_buffer(struct t2bce_device *bce)
     if (!bce->saved_data_dma_ptr)
         return;
 
-    dma_free_coherent(&bce->pci->dev, bce->saved_data_dma_size,
-            bce->saved_data_dma_ptr, bce->saved_data_dma_addr);
+    kfree(bce->saved_data_dma_ptr);
     bce->saved_data_dma_ptr = NULL;
     bce->saved_data_dma_addr = 0;
     bce->saved_data_dma_size = 0;
@@ -134,8 +138,10 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
     bce->dma.reg_mem_dma = bce->reg_mem_dma;
 
     spin_lock_init(&bce->dma.queues_lock);
+    atomic_set(&bce->dma.available, 1);
     ida_init(&bce->dma.queue_ida);
     mutex_init(&bce->pm_lock);
+    mutex_init(&bce->dma_completion_lock);
     mutex_init(&bce->clients_lock);
     INIT_LIST_HEAD(&bce->clients);
     status = init_srcu_struct(&bce->clients_srcu);
@@ -156,9 +162,6 @@ static int t2bce_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
     if ((status = t2bce_dma_init_segment_list_pool(&bce->dma)))
         goto fail_interrupt;
-
-    if ((status = bce_alloc_state_buffer(bce)))
-        goto fail_segment_list_pool;
 
     /*
      * DMA on the BCE function depends on function 0 also being bus master.
@@ -199,7 +202,6 @@ fail_ts:
 fail_dev0:
 #endif
     pci_dev_put(bce->pci0);
-fail_segment_list_pool:
     t2bce_dma_destroy_segment_list_pool(&bce->dma);
 fail_interrupt:
     pci_free_irq(dev, 4, dev);
@@ -284,11 +286,10 @@ static irqreturn_t bce_handle_mb_irq(int irq, void *dev)
     return IRQ_HANDLED;
 }
 
-static irqreturn_t bce_handle_dma_irq(int irq, void *dev)
+static void bce_process_dma_completions_locked(struct t2bce_device *bce)
 {
     int i;
     size_t ce = 0;
-    struct t2bce_device *bce = pci_get_drvdata(dev);
     struct t2bce_dma_engine *dma = &bce->dma;
 
     spin_lock(&dma->queues_lock);
@@ -297,7 +298,60 @@ static irqreturn_t bce_handle_dma_irq(int irq, void *dev)
             t2bce_dma_handle_cq_completions_locked(dma, (struct bce_queue_cq *) dma->queues[i], &ce);
     spin_unlock(&dma->queues_lock);
     t2bce_dma_dispatch_pending_sq_completions(dma, ce);
+}
+
+static void bce_process_dma_completions(struct t2bce_device *bce)
+{
+    mutex_lock(&bce->dma_completion_lock);
+    bce_process_dma_completions_locked(bce);
+    mutex_unlock(&bce->dma_completion_lock);
+}
+
+static irqreturn_t bce_handle_dma_irq(int irq, void *dev)
+{
+    struct t2bce_device *bce = pci_get_drvdata(dev);
+
+    mutex_lock(&bce->dma_completion_lock);
+    bce_process_dma_completions_locked(bce);
+    mutex_unlock(&bce->dma_completion_lock);
     return IRQ_HANDLED;
+}
+
+static void bce_dma_engine_disable(struct t2bce_device *bce)
+{
+    /*
+     * Tahoe closes the submission gate and sleeps until its command queue's
+     * pending-element count reaches zero.  Process anything already visible
+     * before waiting; MSI0 remains enabled to deliver later completions.
+     */
+    mutex_lock(&bce->dma_completion_lock);
+    t2bce_dma_disable(&bce->dma);
+    bce_process_dma_completions_locked(bce);
+    mutex_unlock(&bce->dma_completion_lock);
+    t2bce_dma_wait_command_queue_idle(&bce->dma);
+}
+
+static void bce_dma_engine_enable(struct t2bce_device *bce)
+{
+    t2bce_dma_enable(&bce->dma);
+}
+
+static void bce_dma_irq_disable(struct t2bce_device *bce)
+{
+    if (bce->dma_irq_disabled)
+        return;
+
+    disable_irq(pci_irq_vector(bce->pci, 4));
+    bce->dma_irq_disabled = true;
+}
+
+static void bce_dma_irq_enable(struct t2bce_device *bce)
+{
+    if (!bce->dma_irq_disabled)
+        return;
+
+    enable_irq(pci_irq_vector(bce->pci, 4));
+    bce->dma_irq_disabled = false;
 }
 
 static int bce_fw_version_handshake(struct t2bce_device *bce)
@@ -371,9 +425,12 @@ static int bce_pm_suspend_prepare(struct t2bce_device *bce)
 {
     int status;
 
+    bce_dma_engine_disable(bce);
     status = bce_pm_channel_pause(bce);
-    if (status)
+    if (status) {
+        bce_dma_engine_enable(bce);
         return status;
+    }
 
     /* The XHCI PM doorbell is part of the bridgeOS sleep ordering. */
     bce_xhci_pm_stop(&bce->xhci_pm);
@@ -383,15 +440,22 @@ static int bce_pm_suspend_prepare(struct t2bce_device *bce)
 static void bce_pm_suspend_abort(struct t2bce_device *bce)
 {
     /* Failed suspend must unwind the wrapper order back to the running state. */
+    bce_dma_irq_enable(bce);
     bce_xhci_pm_start(&bce->xhci_pm, false);
     bce_pm_channel_resume(bce);
+    bce_dma_engine_enable(bce);
+    bce_process_dma_completions(bce);
 }
 
-static void bce_pm_resume_finish(struct t2bce_device *bce)
+/* dma_completion_lock serializes this sequence against the threaded MSI0 handler. */
+static void bce_pm_resume_finish_locked(struct t2bce_device *bce)
 {
     /* Match the bridgeOS wake ordering before clients observe resume complete. */
     bce_xhci_pm_start(&bce->xhci_pm, false);
     bce_pm_channel_resume(bce);
+    bce_dma_engine_enable(bce);
+    /* Tahoe explicitly services completion vector 0 after enabling the engine. */
+    bce_process_dma_completions_locked(bce);
 }
 
 static int bce_register_command_queue(struct t2bce_device *bce, struct bce_queue_memcfg *cfg, int is_sq)
@@ -536,37 +600,83 @@ static int bce_pm_suspend_no_state_fallback(struct t2bce_device *bce)
 static int bce_pm_suspend_try_state(struct t2bce_device *bce)
 {
     int status;
+    size_t requested_size;
     u64 resp;
 
-    /* Try the stateful bridgeOS path first; a reject falls back to no-state. */
+    /* macOS creates a fresh 4 KiB state buffer for every suspend attempt. */
     bce->stateful_suspend_valid = false;
-
-    if (!bce->saved_data_dma_ptr || !bce->saved_data_dma_addr || !bce->saved_data_dma_size) {
-        pr_err("t2bce_core: suspend failed (persistent state buffer missing)\n");
-        return -ENOMEM;
-    }
-
-    BUG_ON((bce->saved_data_dma_addr % 4096) != 0);
-    status = bce_mailbox_send_locked(&bce->mbox,
-            BCE_MB_MSG(BCE_MB_SAVE_STATE_AND_SLEEP,
-                    (bce->saved_data_dma_addr & ~(4096LLU - 1)) | (bce->saved_data_dma_size / 4096)),
-            &resp);
-    if (status) {
-        pr_err("t2bce_core: suspend failed (mailbox send)\n");
+    bce_free_state_buffer(bce);
+    status = bce_alloc_state_buffer(bce, BCE_STATE_INITIAL_SIZE);
+    if (status)
         return status;
+
+    for (;;) {
+        bce->saved_data_dma_addr = dma_map_single(&bce->pci->dev,
+                bce->saved_data_dma_ptr, bce->saved_data_dma_size,
+                DMA_FROM_DEVICE);
+        if (dma_mapping_error(&bce->pci->dev,
+                bce->saved_data_dma_addr)) {
+            bce->saved_data_dma_addr = 0;
+            status = -ENOMEM;
+            goto fail;
+        }
+        if (bce->saved_data_dma_addr & (BCE_STATE_INITIAL_SIZE - 1)) {
+            pr_err("t2bce_core: suspend state DMA address is not page aligned\n");
+            status = -EINVAL;
+            goto unmap_fail;
+        }
+
+        status = bce_mailbox_send_locked(&bce->mbox,
+                BCE_MB_MSG(BCE_MB_SAVE_STATE_AND_SLEEP,
+                        (bce->saved_data_dma_addr & BCE_STATE_ADDR_MASK) |
+                        (bce->saved_data_dma_size / BCE_STATE_INITIAL_SIZE)),
+                &resp);
+        dma_unmap_single(&bce->pci->dev, bce->saved_data_dma_addr,
+                bce->saved_data_dma_size, DMA_FROM_DEVICE);
+        bce->saved_data_dma_addr = 0;
+        if (status) {
+            pr_err("t2bce_core: suspend failed (mailbox send)\n");
+            goto fail;
+        }
+
+        if (BCE_MB_TYPE(resp) == BCE_MB_SAVE_RESTORE_STATE_COMPLETE) {
+            pr_debug("t2bce_core: suspend: remote response: restore state saved\n");
+            bce->stateful_suspend_valid = true;
+            return 0;
+        }
+
+        if (BCE_MB_TYPE(resp) != BCE_MB_SAVE_STATE_AND_SLEEP_GROW) {
+            pr_err("t2bce_core: unexpected state-save response type %#x\n",
+                    BCE_MB_TYPE(resp));
+            status = -EINVAL;
+            goto fail;
+        }
+
+        requested_size = BCE_MB_VALUE(resp);
+        if (requested_size <= bce->saved_data_dma_size ||
+                requested_size > BCE_STATE_MAX_SIZE) {
+            pr_err("t2bce_core: invalid state buffer size request %zu\n",
+                    requested_size);
+            status = -EINVAL;
+            goto fail;
+        }
+
+        requested_size = ALIGN(requested_size, BCE_STATE_INITIAL_SIZE);
+        pr_debug("t2bce_core: growing suspend state buffer to %zu bytes\n",
+                requested_size);
+        bce_free_state_buffer(bce);
+        status = bce_alloc_state_buffer(bce, requested_size);
+        if (status)
+            return status;
     }
 
-    if (BCE_MB_TYPE(resp) == BCE_MB_SAVE_RESTORE_STATE_COMPLETE) {
-        pr_debug("t2bce_core: suspend: remote response: restore state saved\n");
-        bce->stateful_suspend_valid = true;
-        return 0;
-    }
-
-    if (BCE_MB_TYPE(resp) == BCE_MB_SAVE_STATE_AND_SLEEP_REJECTED) {
-        pr_err("t2bce_core: remote rejected stateful suspend payload\n");
-        return -EAGAIN;
-    }
-    return -EINVAL;
+unmap_fail:
+    dma_unmap_single(&bce->pci->dev, bce->saved_data_dma_addr,
+            bce->saved_data_dma_size, DMA_FROM_DEVICE);
+    bce->saved_data_dma_addr = 0;
+fail:
+    bce_free_state_buffer(bce);
+    return status;
 }
 
 static int bce_pm_resume_no_state(struct t2bce_device *bce)
@@ -590,17 +700,44 @@ static int bce_pm_resume_stateful(struct t2bce_device *bce)
     int status;
     u64 resp;
 
-    if ((status = bce_mailbox_send_locked(&bce->mbox, BCE_MB_MSG(BCE_MB_RESTORE_STATE_AND_WAKE,
-            (bce->saved_data_dma_addr & ~(4096LLU - 1)) | (bce->saved_data_dma_size / 4096)), &resp))) {
+    if (!bce->saved_data_dma_ptr || !bce->saved_data_dma_size)
+        return -EINVAL;
+
+    /* macOS prepares a new DMA mapping for the retained state on wake. */
+    bce->saved_data_dma_addr = dma_map_single(&bce->pci->dev,
+            bce->saved_data_dma_ptr, bce->saved_data_dma_size,
+            DMA_TO_DEVICE);
+    if (dma_mapping_error(&bce->pci->dev, bce->saved_data_dma_addr)) {
+        bce->saved_data_dma_addr = 0;
+        bce_free_state_buffer(bce);
+        return -ENOMEM;
+    }
+    if (bce->saved_data_dma_addr & (BCE_STATE_INITIAL_SIZE - 1)) {
+        pr_err("t2bce_core: resume state DMA address is not page aligned\n");
+        status = -EINVAL;
+        goto out_unmap;
+    }
+
+    status = bce_mailbox_send_locked(&bce->mbox,
+            BCE_MB_MSG(BCE_MB_RESTORE_STATE_AND_WAKE,
+                    (bce->saved_data_dma_addr & BCE_STATE_ADDR_MASK) |
+                    (bce->saved_data_dma_size / BCE_STATE_INITIAL_SIZE)),
+            &resp);
+    if (status) {
         pr_err("t2bce_core: resume with state failed (mailbox send)\n");
-        return status;
+        goto out_unmap;
     }
     if (BCE_MB_TYPE(resp) != BCE_MB_SAVE_RESTORE_STATE_COMPLETE) {
         pr_err("t2bce_core: resume with state failed (invalid device response)\n");
-        return -EINVAL;
+        status = -EINVAL;
     }
 
-    return 0;
+out_unmap:
+    dma_unmap_single(&bce->pci->dev, bce->saved_data_dma_addr,
+            bce->saved_data_dma_size, DMA_TO_DEVICE);
+    bce->saved_data_dma_addr = 0;
+    bce_free_state_buffer(bce);
+    return status;
 }
 
 static int t2bce_suspend(struct device *dev)
@@ -643,6 +780,8 @@ static int t2bce_suspend(struct device *dev)
     status = bce_pm_suspend_no_state_fallback(bce);
 
 out_unlock:
+    if (!status)
+        bce_dma_irq_disable(bce);
     mutex_unlock(&bce->pm_lock);
     pr_info("t2bce_core: suspend: exit status=%d stateful_valid=%d no_state_resume=%d no_state_fallback=%d\n",
             status, bce->stateful_suspend_valid, bce->no_state_resume, bce->no_state_fallback);
@@ -657,9 +796,13 @@ static int t2bce_resume(struct device *dev)
 
     pr_info("t2bce_core: resume: entry\n");
     mutex_lock(&bce->pm_lock);
+    /* Serialize MSI0 delivery across RESTORE, engine enable and the CQ0 poll. */
+    mutex_lock(&bce->dma_completion_lock);
 
     pci_set_master(bce->pci);
     pci_set_master(bce->pci0);
+    /* Tahoe enables MSI0 before issuing the RESTORE/WAKE mailbox command. */
+    bce_dma_irq_enable(bce);
 
     /* Resume follows the suspend result, not a preselected policy. */
     used_stateful = bce_stateful_supported(bce) && bce->stateful_suspend_valid;
@@ -668,15 +811,18 @@ static int t2bce_resume(struct device *dev)
         status = bce_pm_resume_stateful(bce);
     else
         status = bce_pm_resume_no_state(bce);
-    if (status)
+    if (status) {
+        bce_pm_resume_finish_locked(bce);
         goto out_unlock;
+    }
 
     if (used_stateful)
         bce->stateful_suspend_valid = false;
 
-    bce_pm_resume_finish(bce);
+    bce_pm_resume_finish_locked(bce);
 
 out_unlock:
+    mutex_unlock(&bce->dma_completion_lock);
     mutex_unlock(&bce->pm_lock);
     pr_info("t2bce_core: resume: exit status=%d path=%s stateful_valid=%d no_state_resume=%d no_state_fallback=%d\n",
             status, used_stateful ? "stateful" : "no-state",
@@ -780,7 +926,7 @@ static void __exit t2bce_module_exit(void)
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("André Eikmeyer <andre.eikmeyer@kait2en.org>");
 MODULE_DESCRIPTION("T2 BCE core driver");
-MODULE_VERSION("0.07");
+MODULE_VERSION("0.09");
 MODULE_SOFTDEP("post: t2bce_vhci");
 module_init(t2bce_module_init);
 module_exit(t2bce_module_exit);

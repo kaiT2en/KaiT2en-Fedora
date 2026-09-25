@@ -155,7 +155,17 @@ int bce_mailbox_handle_interrupt(struct bce_mailbox *mb)
     return status;
 }
 
-static void bce_xhci_pm_tick(struct timer_list *tl);
+#define BCE_TIMESTAMP_INTERVAL_NS 125000000ULL
+#define BCE_TIMESTAMP_LEEWAY_NS   200000000ULL
+
+static enum hrtimer_restart bce_xhci_pm_tick(struct hrtimer *timer);
+
+static void bce_xhci_pm_schedule(struct bce_xhci_pm *pm)
+{
+    hrtimer_start_range_ns(&pm->timer,
+            ns_to_ktime(BCE_TIMESTAMP_INTERVAL_NS),
+            BCE_TIMESTAMP_LEEWAY_NS, HRTIMER_MODE_REL);
+}
 
 void bce_xhci_pm_init(struct bce_xhci_pm *pm, void __iomem *reg)
 {
@@ -171,7 +181,13 @@ void bce_xhci_pm_init(struct bce_xhci_pm *pm, void __iomem *reg)
     ioread32(regb);
     mb();
 
-    timer_setup(&pm->timer, bce_xhci_pm_tick, 0);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+    hrtimer_init(&pm->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+    pm->timer.function = bce_xhci_pm_tick;
+#else
+    hrtimer_setup(&pm->timer, bce_xhci_pm_tick, CLOCK_MONOTONIC,
+            HRTIMER_MODE_REL);
+#endif
 }
 
 void bce_xhci_pm_start(struct bce_xhci_pm *pm, bool is_initial)
@@ -190,7 +206,7 @@ void bce_xhci_pm_start(struct bce_xhci_pm *pm, bool is_initial)
     spin_lock_irqsave(&pm->stop_sl, flags);
     pm->stopped = false;
     spin_unlock_irqrestore(&pm->stop_sl, flags);
-    mod_timer(&pm->timer, jiffies + msecs_to_jiffies(150));
+    bce_xhci_pm_schedule(pm);
 }
 
 void bce_xhci_pm_stop(struct bce_xhci_pm *pm)
@@ -201,34 +217,33 @@ void bce_xhci_pm_stop(struct bce_xhci_pm *pm)
     spin_lock_irqsave(&pm->stop_sl, flags);
     pm->stopped = true;
     spin_unlock_irqrestore(&pm->stop_sl, flags);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
-    del_timer_sync(&pm->timer);
-#else
-    timer_delete_sync(&pm->timer);
-#endif
+    hrtimer_cancel(&pm->timer);
     iowrite32((u32) -2, regb + 2);
     iowrite32((u32) -1, regb);
 }
 
-static void bce_xhci_pm_tick(struct timer_list *tl)
+static enum hrtimer_restart bce_xhci_pm_tick(struct hrtimer *timer)
 {
     struct bce_xhci_pm *pm;
     unsigned long flags;
     u32 __iomem *regb;
-    ktime_t bt;
+    ktime_t host_time;
 
-    pm = container_of(tl, struct bce_xhci_pm, timer);
+    pm = container_of(timer, struct bce_xhci_pm, timer);
     regb = (u32*) ((u8*) pm->reg + REG_TIMESTAMP_BASE);
     local_irq_save(flags);
     ioread32(regb + 2);
     mb();
-    bt = ktime_get_boottime();
-    iowrite32((u32) bt, regb + 2);
-    iowrite32((u32) (bt >> 32), regb);
+    /* Match macOS mach_absolute_time(), which does not advance in suspend. */
+    host_time = ktime_get();
+    iowrite32((u32) host_time, regb + 2);
+    iowrite32((u32) (host_time >> 32), regb);
 
     spin_lock(&pm->stop_sl);
     if (!pm->stopped)
-        mod_timer(&pm->timer, jiffies + msecs_to_jiffies(150));
+        bce_xhci_pm_schedule(pm);
     spin_unlock(&pm->stop_sl);
     local_irq_restore(flags);
+
+    return HRTIMER_NORESTART;
 }

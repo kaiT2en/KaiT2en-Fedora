@@ -4,7 +4,7 @@
 #include <linux/completion.h>
 #include <linux/mutex.h>
 #include <linux/pci.h>
-#include <linux/timer.h>
+#include <linux/hrtimer.h>
 
 struct bce_mailbox {
     void __iomem *reg_mb;
@@ -24,8 +24,8 @@ enum bce_message_type {
     BCE_MB_RESTORE_NO_STATE = 0x15,              // to-device
     BCE_MB_SLEEP_LIGHT = 0x16,                   // to-device, unused; reserved for future runtime-PM work
     BCE_MB_SAVE_STATE_AND_SLEEP = 0x17,          // to-device
-    BCE_MB_RESTORE_STATE_AND_WAKE = 0x18,        // to-device
-    BCE_MB_SAVE_STATE_AND_SLEEP_REJECTED = 0x19, // from-device, stateful suspend payload rejected
+    BCE_MB_RESTORE_STATE_AND_WAKE = 0x1B,        // to-device (Tahoe/macOS)
+    BCE_MB_SAVE_STATE_AND_SLEEP_GROW = 0x19,     // from-device, value is required buffer size
     BCE_MB_SAVE_RESTORE_STATE_COMPLETE = 0x1A,   // from-device
 };
 
@@ -50,7 +50,7 @@ int bce_mailbox_handle_interrupt(struct bce_mailbox *mb);
 
 struct bce_xhci_pm {
     void __iomem *reg;
-    struct timer_list timer;
+    struct hrtimer timer;
     struct spinlock stop_sl;
     bool stopped;
 };

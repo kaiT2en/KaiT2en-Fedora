@@ -223,11 +223,13 @@ struct bce_queue_sq *t2bce_dma_alloc_sq(struct t2bce_dma_engine *dma, int qid, u
                                  &q->dma_handle, GFP_KERNEL);
     q->completion = compl;
     q->userdata = userdata;
+    q->dma = dma;
     q->completion_data = kzalloc(sizeof(struct bce_sq_completion_data) * el_count, GFP_KERNEL);
     q->reg_mem_dma = dma->reg_mem_dma;
     atomic_set(&q->available_commands, el_count - 1);
     init_completion(&q->available_command_completion);
     atomic_set(&q->available_command_completion_waiting_count, 0);
+    init_waitqueue_head(&q->idle_wait);
     if (!q->data || !q->completion_data) {
         pr_err("DMA queue memory alloc failed\n");
         if (q->data)
@@ -261,7 +263,12 @@ EXPORT_SYMBOL_GPL(t2bce_dma_free_sq);
 
 int t2bce_dma_reserve_submission(struct bce_queue_sq *sq, unsigned long *timeout)
 {
+    if (!atomic_read(&sq->dma->available))
+        return -ESHUTDOWN;
+
     while (atomic_dec_if_positive(&sq->available_commands) < 0) {
+        if (!atomic_read(&sq->dma->available))
+            return -ESHUTDOWN;
         if (!timeout || !*timeout)
             return -EAGAIN;
         atomic_inc(&sq->available_command_completion_waiting_count);
@@ -270,10 +277,39 @@ int t2bce_dma_reserve_submission(struct bce_queue_sq *sq, unsigned long *timeout
             if (atomic_dec_if_positive(&sq->available_command_completion_waiting_count) < 0)
                 try_wait_for_completion(&sq->available_command_completion); /* consume the pending completion */
         }
+        if (!atomic_read(&sq->dma->available))
+            return -ESHUTDOWN;
+    }
+    if (!atomic_read(&sq->dma->available)) {
+        atomic_inc(&sq->available_commands);
+        return -ESHUTDOWN;
     }
     return 0;
 }
 EXPORT_SYMBOL_GPL(t2bce_dma_reserve_submission);
+
+void t2bce_dma_disable(struct t2bce_dma_engine *dma)
+{
+    atomic_set(&dma->available, 0);
+    smp_mb__after_atomic();
+}
+EXPORT_SYMBOL_GPL(t2bce_dma_disable);
+
+void t2bce_dma_enable(struct t2bce_dma_engine *dma)
+{
+    atomic_set(&dma->available, 1);
+    smp_mb__after_atomic();
+}
+EXPORT_SYMBOL_GPL(t2bce_dma_enable);
+
+void t2bce_dma_wait_command_queue_idle(struct t2bce_dma_engine *dma)
+{
+    struct bce_queue_sq *sq = dma->cmd_cmdq->sq;
+
+    wait_event(sq->idle_wait,
+            atomic_read(&sq->available_commands) == sq->el_count - 1);
+}
+EXPORT_SYMBOL_GPL(t2bce_dma_wait_command_queue_idle);
 
 void t2bce_dma_cancel_submission_reservation(struct bce_queue_sq *sq)
 {
@@ -299,6 +335,7 @@ void t2bce_dma_notify_submission_complete(struct bce_queue_sq *sq)
 {
     sq->head = (sq->head + 1) % sq->el_count;
     atomic_inc(&sq->available_commands);
+    wake_up_all(&sq->idle_wait);
     if (atomic_dec_if_positive(&sq->available_command_completion_waiting_count) >= 0) {
         complete(&sq->available_command_completion);
     }

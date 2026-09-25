@@ -5,6 +5,7 @@
 #include <linux/gfp_types.h>
 #include <linux/pci.h>
 #include <linux/scatterlist.h>
+#include <linux/wait.h>
 
 #define BCE_CMD_SIZE 0x40
 #define BCE_MAX_QUEUE_COUNT 0x100
@@ -62,10 +63,12 @@ struct bce_queue_sq {
     void *data;
     void *userdata;
     void __iomem *reg_mem_dma;
+    struct t2bce_dma_engine *dma;
 
     atomic_t available_commands;
     struct completion available_command_completion;
     atomic_t available_command_completion_waiting_count;
+    wait_queue_head_t idle_wait;
     u32 head, tail;
 
     u32 completion_cidx, completion_tail;
@@ -100,6 +103,7 @@ struct t2bce_dma_engine {
     struct bce_queue_cmdq *cmd_cmdq;
     struct dma_pool *segment_list_pool;
     struct bce_queue_sq *int_sq_list[BCE_MAX_QUEUE_COUNT];
+    atomic_t available;
     bool is_being_removed;
 };
 
@@ -162,6 +166,9 @@ int t2bce_dma_reserve_submission(struct bce_queue_sq *sq, unsigned long *timeout
 void t2bce_dma_cancel_submission_reservation(struct bce_queue_sq *sq);
 void t2bce_dma_submit_to_device(struct bce_queue_sq *sq);
 void t2bce_dma_notify_submission_complete(struct bce_queue_sq *sq);
+void t2bce_dma_disable(struct t2bce_dma_engine *dma);
+void t2bce_dma_enable(struct t2bce_dma_engine *dma);
+void t2bce_dma_wait_command_queue_idle(struct t2bce_dma_engine *dma);
 
 void t2bce_dma_set_next_submission_single(struct bce_queue_sq *sq, dma_addr_t addr, size_t size);
 int t2bce_dma_init_segment_list_pool(struct t2bce_dma_engine *dma);

@@ -1,6 +1,7 @@
 #include "protocol.h"
 #include "protocol_bce.h"
 #include "audio.h"
+#include <linux/unaligned.h>
 
 int t2audio_msg_read_base(struct t2audio_msg *msg, struct t2audio_msg_base *base)
 {
@@ -31,12 +32,20 @@ int t2audio_msg_read_stop_io_response(struct t2audio_msg *msg)
 }
 
 int t2audio_msg_read_update_timestamp(struct t2audio_msg *msg, t2audio_device_id_t *devid,
-        u64 *timestamp, u64 *update_seed)
+        u64 *timestamp, u64 *update_seed, u64 *sample_time)
 {
-    READ_START(T2AUDIO_MSG_UPDATE_TIMESTAMP);
-    READ_DEVID_VAR(devid);
-    READ_VAR(u64, timestamp);
-    READ_VAR(u64, update_seed);
+    size_t offset = sizeof(struct t2audio_msg_header) + sizeof(struct t2audio_msg_base);
+    const u8 *data = msg->data;
+
+    /* bridgeaudiod serializes timestamp, updateSeed, then Float64 sampleTime. */
+    if (msg->size < offset + 3 * sizeof(u64) ||
+            get_unaligned_le32(data + sizeof(struct t2audio_msg_header)) !=
+            T2AUDIO_MSG_UPDATE_TIMESTAMP)
+        return -EINVAL;
+    *devid = get_unaligned_le64(data + offsetof(struct t2audio_msg_header, device_id));
+    *timestamp = get_unaligned_le64(data + offset);
+    *update_seed = get_unaligned_le64(data + offset + 8);
+    *sample_time = get_unaligned_le64(data + offset + 16);
     return 0;
 }
 
