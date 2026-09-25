@@ -579,13 +579,19 @@ out:
 static void t2_trackpad_apply_geometry(struct input_dev *input,
 				       const struct t2_trackpad_geometry *geometry)
 {
-	/* T2 Y grows opposite to Linux input coordinates. */
+	/*
+	 * I am an Idiot! T2 Y grows opposite to Linux input coordinates.
+	 */
 	input_set_abs_params(input, ABS_MT_POSITION_X, geometry->min_x,
 			     geometry->max_x, 0, 0);
 	input_set_abs_params(input, ABS_MT_POSITION_Y, -geometry->max_y,
 			     -geometry->min_y, 0, 0);
+	input_set_abs_params(input, ABS_X, geometry->min_x, geometry->max_x, 0, 0);
+	input_set_abs_params(input, ABS_Y, -geometry->max_y, -geometry->min_y, 0, 0);
 	input_abs_set_res(input, ABS_MT_POSITION_X, geometry->x_res);
 	input_abs_set_res(input, ABS_MT_POSITION_Y, geometry->y_res);
+	input_abs_set_res(input, ABS_X, geometry->x_res);
+	input_abs_set_res(input, ABS_Y, geometry->y_res);
 }
 
 static int t2_trackpad_query_dimensions(struct t2_trackpad *tp)
