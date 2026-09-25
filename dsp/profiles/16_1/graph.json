@@ -15,6 +15,18 @@
             },
             {
                 "type": "lv2",
+                "plugin": "http://lsp-plug.in/plugins/lv2/autogain_stereo",
+                "name": "Norm",
+                "control": {
+                    "level": -12.0,
+                    "max_on": 1,
+                    "max_amp": 6.0,
+                    "lkahead": 3.0,
+                    "weight": 5
+                }
+            },
+            {
+                "type": "lv2",
                 "plugin": "https://chadmed.au/bankstown",
                 "name": "VirtBass",
                 "control": {
@@ -4628,10 +4640,18 @@
         "links": [
             {
                 "output": "in_0:Out",
-                "input": "VirtBass:in_l"
+                "input": "Norm:in_l"
             },
             {
                 "output": "in_1:Out",
+                "input": "Norm:in_r"
+            },
+            {
+                "output": "Norm:out_l",
+                "input": "VirtBass:in_l"
+            },
+            {
+                "output": "Norm:out_r",
                 "input": "VirtBass:in_r"
             },
             {

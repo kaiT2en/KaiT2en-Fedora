@@ -208,6 +208,51 @@
                 }
             },
             {
+                "type": "lv2",
+                "plugin": "http://lsp-plug.in/plugins/lv2/mb_compressor_stereo",
+                "name": "UpComp_up",
+                "control": {
+                    "mode": 0,
+                    "g_in": 1.9952623149688795,
+                    "g_out": 1.0,
+                    "envb": 0,
+                    "cbe_1": 1,
+                    "sf_1": 500.0001525878906,
+                    "cbe_2": 1,
+                    "sf_2": 4500.0048828125,
+                    "cbe_3": 1,
+                    "sf_3": 20000.021484375,
+                    "ce_0": 0,
+                    "cm_0": 2,
+                    "al_0": 0.03162277660168379,
+                    "cr_0": 1.0,
+                    "bsa_0": 3.1622776601683795,
+                    "at_0": 5.0,
+                    "rt_0": 50.0,
+                    "ce_1": 1,
+                    "cm_1": 2,
+                    "al_1": 0.01,
+                    "cr_1": 2.0205893516540527,
+                    "bsa_1": 5.762593952155446,
+                    "at_1": 5.0,
+                    "rt_1": 50.0,
+                    "ce_2": 0,
+                    "cm_2": 2,
+                    "al_2": 0.027146838141998777,
+                    "cr_2": 1.0,
+                    "bsa_2": 3.1622776601683795,
+                    "at_2": 5.0,
+                    "rt_2": 50.0,
+                    "ce_3": 0,
+                    "cm_3": 2,
+                    "al_3": 0.01,
+                    "cr_3": 1.0,
+                    "bsa_3": 3.1622776601683795,
+                    "at_3": 5.0,
+                    "rt_3": 50.0
+                }
+            },
+            {
                 "type": "builtin",
                 "label": "mixer",
                 "name": "xtc_mid",
@@ -4315,18 +4360,26 @@
             },
             {
                 "output": "VirtBass:out_l",
+                "input": "UpComp_up:in_l"
+            },
+            {
+                "output": "VirtBass:out_r",
+                "input": "UpComp_up:in_r"
+            },
+            {
+                "output": "UpComp_up:out_l",
                 "input": "xtc_mid:In 1"
             },
             {
-                "output": "VirtBass:out_r",
+                "output": "UpComp_up:out_r",
                 "input": "xtc_mid:In 2"
             },
             {
-                "output": "VirtBass:out_l",
+                "output": "UpComp_up:out_l",
                 "input": "xtc_side:In 1"
             },
             {
-                "output": "VirtBass:out_r",
+                "output": "UpComp_up:out_r",
                 "input": "xtc_side:In 2"
             },
             {

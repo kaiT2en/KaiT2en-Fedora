@@ -105,6 +105,51 @@
             },
             {
                 "type": "lv2",
+                "plugin": "http://lsp-plug.in/plugins/lv2/mb_compressor_stereo",
+                "name": "UpComp_up",
+                "control": {
+                    "mode": 0,
+                    "g_in": 1.258925394516075,
+                    "g_out": 1.0,
+                    "envb": 0,
+                    "cbe_1": 1,
+                    "sf_1": 181.50076293945312,
+                    "cbe_2": 1,
+                    "sf_2": 6666.17724609375,
+                    "cbe_3": 1,
+                    "sf_3": 20000.021484375,
+                    "ce_0": 0,
+                    "cm_0": 2,
+                    "al_0": 0.03162277660168379,
+                    "cr_0": 1.0,
+                    "bsa_0": 3.1622776601683795,
+                    "at_0": 5.0,
+                    "rt_0": 200.0,
+                    "ce_1": 1,
+                    "cm_1": 2,
+                    "al_1": 0.03162277660168379,
+                    "cr_1": 2.0205893516540527,
+                    "bsa_1": 5.912862125813312,
+                    "at_1": 5.0,
+                    "rt_1": 200.0,
+                    "ce_2": 0,
+                    "cm_2": 2,
+                    "al_2": 0.027146838141998777,
+                    "cr_2": 1.0,
+                    "bsa_2": 3.1622776601683795,
+                    "at_2": 5.0,
+                    "rt_2": 200.0,
+                    "ce_3": 0,
+                    "cm_3": 2,
+                    "al_3": 0.01,
+                    "cr_3": 1.0,
+                    "bsa_3": 3.1622776601683795,
+                    "at_3": 5.0,
+                    "rt_3": 200.0
+                }
+            },
+            {
+                "type": "lv2",
                 "plugin": "https://chadmed.au/bankstown",
                 "name": "VirtBass",
                 "control": {
@@ -3237,6 +3282,176 @@
                         }
                     ]
                 }
+            },
+            {
+                "type": "lv2",
+                "plugin": "http://lsp-plug.in/plugins/lv2/mb_compressor_stereo",
+                "name": "BuzzLeft_0_1",
+                "control": {
+                    "mode": 0,
+                    "envb": 0,
+                    "cbe_1": 1,
+                    "sf_1": 135.4510565216337,
+                    "cbe_2": 1,
+                    "sf_2": 217.50412957805662,
+                    "cbe_3": 1,
+                    "sf_3": 259.8238037282749,
+                    "cbe_4": 1,
+                    "sf_4": 480.3448750753729,
+                    "cbe_5": 1,
+                    "sf_5": 561.1073077941553,
+                    "cbe_6": 1,
+                    "sf_6": 714.81770585885,
+                    "ce_0": 0,
+                    "cm_0": 0,
+                    "al_0": 0.251188643150958,
+                    "cr_0": 8.0,
+                    "at_0": 2.0,
+                    "rt_0": 50.0,
+                    "sla_0": 5.0,
+                    "ce_1": 1,
+                    "cm_1": 0,
+                    "al_1": 0.251188643150958,
+                    "cr_1": 8.0,
+                    "at_1": 2.0,
+                    "rt_1": 50.0,
+                    "sla_1": 5.0,
+                    "ce_2": 0,
+                    "cm_2": 0,
+                    "al_2": 0.251188643150958,
+                    "cr_2": 8.0,
+                    "at_2": 2.0,
+                    "rt_2": 50.0,
+                    "sla_2": 5.0,
+                    "ce_3": 1,
+                    "cm_3": 0,
+                    "al_3": 0.251188643150958,
+                    "cr_3": 8.0,
+                    "at_3": 2.0,
+                    "rt_3": 50.0,
+                    "sla_3": 5.0,
+                    "ce_4": 0,
+                    "cm_4": 0,
+                    "al_4": 0.251188643150958,
+                    "cr_4": 8.0,
+                    "at_4": 2.0,
+                    "rt_4": 50.0,
+                    "sla_4": 5.0,
+                    "ce_5": 1,
+                    "cm_5": 0,
+                    "al_5": 0.251188643150958,
+                    "cr_5": 8.0,
+                    "at_5": 2.0,
+                    "rt_5": 50.0,
+                    "sla_5": 5.0,
+                    "ce_6": 0,
+                    "cm_6": 0,
+                    "al_6": 0.251188643150958,
+                    "cr_6": 8.0,
+                    "at_6": 2.0,
+                    "rt_6": 50.0,
+                    "sla_6": 5.0
+                }
+            },
+            {
+                "type": "lv2",
+                "plugin": "http://lsp-plug.in/plugins/lv2/mb_compressor_stereo",
+                "name": "BuzzRight_2_3",
+                "control": {
+                    "mode": 0,
+                    "envb": 0,
+                    "cbe_1": 1,
+                    "sf_1": 135.4510565216337,
+                    "cbe_2": 1,
+                    "sf_2": 217.50412957805662,
+                    "cbe_3": 1,
+                    "sf_3": 259.8238037282749,
+                    "cbe_4": 1,
+                    "sf_4": 480.3448750753729,
+                    "cbe_5": 1,
+                    "sf_5": 561.1073077941553,
+                    "cbe_6": 1,
+                    "sf_6": 714.81770585885,
+                    "ce_0": 0,
+                    "cm_0": 0,
+                    "al_0": 0.251188643150958,
+                    "cr_0": 8.0,
+                    "at_0": 2.0,
+                    "rt_0": 50.0,
+                    "sla_0": 5.0,
+                    "ce_1": 1,
+                    "cm_1": 0,
+                    "al_1": 0.251188643150958,
+                    "cr_1": 8.0,
+                    "at_1": 2.0,
+                    "rt_1": 50.0,
+                    "sla_1": 5.0,
+                    "ce_2": 0,
+                    "cm_2": 0,
+                    "al_2": 0.251188643150958,
+                    "cr_2": 8.0,
+                    "at_2": 2.0,
+                    "rt_2": 50.0,
+                    "sla_2": 5.0,
+                    "ce_3": 1,
+                    "cm_3": 0,
+                    "al_3": 0.251188643150958,
+                    "cr_3": 8.0,
+                    "at_3": 2.0,
+                    "rt_3": 50.0,
+                    "sla_3": 5.0,
+                    "ce_4": 0,
+                    "cm_4": 0,
+                    "al_4": 0.251188643150958,
+                    "cr_4": 8.0,
+                    "at_4": 2.0,
+                    "rt_4": 50.0,
+                    "sla_4": 5.0,
+                    "ce_5": 1,
+                    "cm_5": 0,
+                    "al_5": 0.251188643150958,
+                    "cr_5": 8.0,
+                    "at_5": 2.0,
+                    "rt_5": 50.0,
+                    "sla_5": 5.0,
+                    "ce_6": 0,
+                    "cm_6": 0,
+                    "al_6": 0.251188643150958,
+                    "cr_6": 8.0,
+                    "at_6": 2.0,
+                    "rt_6": 50.0,
+                    "sla_6": 5.0
+                }
+            },
+            {
+                "type": "lv2",
+                "plugin": "http://lsp-plug.in/plugins/lv2/limiter_stereo",
+                "name": "ControlFreakLeft_0_1",
+                "control": {
+                    "mode": 0,
+                    "alr": 0,
+                    "ovs": 0,
+                    "g_in": 1.0,
+                    "th": 0.7943282347242815,
+                    "lk": 0.5,
+                    "at": 0.25,
+                    "rt": 10.0
+                }
+            },
+            {
+                "type": "lv2",
+                "plugin": "http://lsp-plug.in/plugins/lv2/limiter_stereo",
+                "name": "ControlFreakRight_2_3",
+                "control": {
+                    "mode": 0,
+                    "alr": 0,
+                    "ovs": 0,
+                    "g_in": 1.0,
+                    "th": 0.7943282347242815,
+                    "lk": 0.5,
+                    "at": 0.25,
+                    "rt": 10.0
+                }
             }
         ],
         "links": [
@@ -3250,10 +3465,18 @@
             },
             {
                 "output": "Tone1_c0_f0_0:Out",
-                "input": "VirtBass:in_l"
+                "input": "UpComp_up:in_l"
             },
             {
                 "output": "Tone1_c1_f0_0:Out",
+                "input": "UpComp_up:in_r"
+            },
+            {
+                "output": "UpComp_up:out_l",
+                "input": "VirtBass:in_l"
+            },
+            {
+                "output": "UpComp_up:out_r",
                 "input": "VirtBass:in_r"
             },
             {
@@ -3571,6 +3794,38 @@
             {
                 "output": "Tone3_c3_f12_0:Out",
                 "input": "Tone3_c3_f15_0:In"
+            },
+            {
+                "output": "Tone3_c0_f16_0:Out",
+                "input": "BuzzLeft_0_1:in_l"
+            },
+            {
+                "output": "Tone3_c1_f16_0:Out",
+                "input": "BuzzLeft_0_1:in_r"
+            },
+            {
+                "output": "Tone3_c2_f15_0:Out",
+                "input": "BuzzRight_2_3:in_l"
+            },
+            {
+                "output": "Tone3_c3_f15_0:Out",
+                "input": "BuzzRight_2_3:in_r"
+            },
+            {
+                "output": "BuzzLeft_0_1:out_l",
+                "input": "ControlFreakLeft_0_1:in_l"
+            },
+            {
+                "output": "BuzzLeft_0_1:out_r",
+                "input": "ControlFreakLeft_0_1:in_r"
+            },
+            {
+                "output": "BuzzRight_2_3:out_l",
+                "input": "ControlFreakRight_2_3:in_l"
+            },
+            {
+                "output": "BuzzRight_2_3:out_r",
+                "input": "ControlFreakRight_2_3:in_r"
             }
         ],
         "inputs": [
@@ -3578,10 +3833,10 @@
             "in_1:In"
         ],
         "outputs": [
-            "Tone3_c0_f16_0:Out",
-            "Tone3_c1_f16_0:Out",
-            "Tone3_c2_f15_0:Out",
-            "Tone3_c3_f15_0:Out"
+            "ControlFreakLeft_0_1:out_l",
+            "ControlFreakRight_2_3:out_l",
+            "ControlFreakLeft_0_1:out_r",
+            "ControlFreakRight_2_3:out_r"
         ]
     },
     "capture.props": {

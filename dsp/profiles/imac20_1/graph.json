@@ -14,6 +14,18 @@
                 "name": "in_1"
             },
             {
+                "type": "lv2",
+                "plugin": "http://lsp-plug.in/plugins/lv2/autogain_stereo",
+                "name": "Norm",
+                "control": {
+                    "level": -12.0,
+                    "max_on": 1,
+                    "max_amp": 5.5561370849609375,
+                    "lkahead": 0.0,
+                    "weight": 5
+                }
+            },
+            {
                 "type": "builtin",
                 "label": "bq_raw",
                 "name": "Tone1_c0_f0_0",
@@ -281,20 +293,6 @@
                             "a2": 0.0
                         }
                     ]
-                }
-            },
-            {
-                "type": "lv2",
-                "plugin": "https://chadmed.au/bankstown",
-                "name": "VirtBass",
-                "control": {
-                    "bypass": 0,
-                    "amt": 3.0,
-                    "sat_second": 1.5,
-                    "sat_third": 1.5,
-                    "blend": 0.75,
-                    "floor": 40.0,
-                    "ceil": 150.0
                 }
             },
             {
@@ -3313,28 +3311,6 @@
                 }
             },
             {
-                "type": "builtin",
-                "label": "delay",
-                "name": "Delay_2",
-                "config": {
-                    "max-delay": 0.05
-                },
-                "control": {
-                    "Delay (s)": 0.005
-                }
-            },
-            {
-                "type": "builtin",
-                "label": "delay",
-                "name": "Delay_3",
-                "config": {
-                    "max-delay": 0.05
-                },
-                "control": {
-                    "Delay (s)": 0.005
-                }
-            },
-            {
                 "type": "lv2",
                 "plugin": "http://lsp-plug.in/plugins/lv2/limiter_stereo",
                 "name": "ControlFreakLF_0_1",
@@ -3368,6 +3344,14 @@
         "links": [
             {
                 "output": "in_0:Out",
+                "input": "Norm:in_l"
+            },
+            {
+                "output": "in_1:Out",
+                "input": "Norm:in_r"
+            },
+            {
+                "output": "Norm:out_l",
                 "input": "Tone1_c0_f0_0:In"
             },
             {
@@ -3379,7 +3363,7 @@
                 "input": "Tone1_c0_f0_2:In"
             },
             {
-                "output": "in_1:Out",
+                "output": "Norm:out_r",
                 "input": "Tone1_c1_f0_0:In"
             },
             {
@@ -3392,14 +3376,6 @@
             },
             {
                 "output": "Tone1_c0_f0_2:Out",
-                "input": "VirtBass:in_l"
-            },
-            {
-                "output": "Tone1_c1_f0_2:Out",
-                "input": "VirtBass:in_r"
-            },
-            {
-                "output": "VirtBass:out_l",
                 "input": "Tone2_c0_f0_0:In"
             },
             {
@@ -3423,7 +3399,7 @@
                 "input": "Tone2_c0_f6_0:In"
             },
             {
-                "output": "VirtBass:out_r",
+                "output": "Tone1_c1_f0_2:Out",
                 "input": "Tone2_c1_f0_0:In"
             },
             {
@@ -3671,14 +3647,6 @@
                 "input": "Tone3_c3_f8_0:In"
             },
             {
-                "output": "Tone3_c2_f8_0:Out",
-                "input": "Delay_2:In"
-            },
-            {
-                "output": "Tone3_c3_f8_0:Out",
-                "input": "Delay_3:In"
-            },
-            {
                 "output": "Tone3_c0_f16_0:Out",
                 "input": "ControlFreakLF_0_1:in_l"
             },
@@ -3687,11 +3655,11 @@
                 "input": "ControlFreakLF_0_1:in_r"
             },
             {
-                "output": "Delay_2:Out",
+                "output": "Tone3_c2_f8_0:Out",
                 "input": "ControlFreakHF_2_3:in_l"
             },
             {
-                "output": "Delay_3:Out",
+                "output": "Tone3_c3_f8_0:Out",
                 "input": "ControlFreakHF_2_3:in_r"
             }
         ],

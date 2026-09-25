@@ -28,6 +28,18 @@
                 }
             },
             {
+                "type": "lv2",
+                "plugin": "http://lsp-plug.in/plugins/lv2/autogain_stereo",
+                "name": "UpComp",
+                "control": {
+                    "level": -12.0,
+                    "max_on": 1,
+                    "max_amp": 6.0,
+                    "lkahead": 3.0,
+                    "weight": 5
+                }
+            },
+            {
                 "type": "builtin",
                 "label": "bq_raw",
                 "name": "Tone2_c0_f0_0",
@@ -4227,6 +4239,14 @@
             },
             {
                 "output": "VirtBass:out_l",
+                "input": "UpComp:in_l"
+            },
+            {
+                "output": "VirtBass:out_r",
+                "input": "UpComp:in_r"
+            },
+            {
+                "output": "UpComp:out_l",
                 "input": "Tone2_c0_f0_0:In"
             },
             {
@@ -4326,7 +4346,7 @@
                 "input": "Tone2_c0_f12_0:In"
             },
             {
-                "output": "VirtBass:out_r",
+                "output": "UpComp:out_r",
                 "input": "Tone2_c1_f0_0:In"
             },
             {

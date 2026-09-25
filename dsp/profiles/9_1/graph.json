@@ -208,6 +208,18 @@
                 }
             },
             {
+                "type": "lv2",
+                "plugin": "http://lsp-plug.in/plugins/lv2/autogain_stereo",
+                "name": "UpComp",
+                "control": {
+                    "level": -12.0,
+                    "max_on": 1,
+                    "max_amp": 6.0,
+                    "lkahead": 3.0,
+                    "weight": 5
+                }
+            },
+            {
                 "type": "builtin",
                 "label": "bq_raw",
                 "name": "Tone2_c0_f0_0",
@@ -4645,6 +4657,58 @@
             },
             {
                 "type": "lv2",
+                "plugin": "http://lsp-plug.in/plugins/lv2/mb_compressor_stereo",
+                "name": "Buzz_0_1",
+                "control": {
+                    "mode": 0,
+                    "envb": 0,
+                    "cbe_1": 1,
+                    "sf_1": 68.282070160224,
+                    "cbe_2": 1,
+                    "sf_2": 136.56414032044802,
+                    "cbe_3": 1,
+                    "sf_3": 224.45477997908,
+                    "cbe_4": 1,
+                    "sf_4": 536.328380380987,
+                    "ce_0": 0,
+                    "cm_0": 0,
+                    "al_0": 0.251188643150958,
+                    "cr_0": 8.0,
+                    "at_0": 2.0,
+                    "rt_0": 50.0,
+                    "sla_0": 15.0,
+                    "ce_1": 1,
+                    "cm_1": 0,
+                    "al_1": 0.251188643150958,
+                    "cr_1": 8.0,
+                    "at_1": 2.0,
+                    "rt_1": 50.0,
+                    "sla_1": 15.0,
+                    "ce_2": 0,
+                    "cm_2": 0,
+                    "al_2": 0.251188643150958,
+                    "cr_2": 8.0,
+                    "at_2": 2.0,
+                    "rt_2": 50.0,
+                    "sla_2": 15.0,
+                    "ce_3": 1,
+                    "cm_3": 0,
+                    "al_3": 0.251188643150958,
+                    "cr_3": 8.0,
+                    "at_3": 2.0,
+                    "rt_3": 50.0,
+                    "sla_3": 15.0,
+                    "ce_4": 0,
+                    "cm_4": 0,
+                    "al_4": 0.251188643150958,
+                    "cr_4": 8.0,
+                    "at_4": 2.0,
+                    "rt_4": 50.0,
+                    "sla_4": 15.0
+                }
+            },
+            {
+                "type": "lv2",
                 "plugin": "http://lsp-plug.in/plugins/lv2/limiter_stereo",
                 "name": "ControlFreak_0_1",
                 "control": {
@@ -4686,6 +4750,14 @@
             },
             {
                 "output": "Tone1_c0_f1_1:Out",
+                "input": "UpComp:in_l"
+            },
+            {
+                "output": "Tone1_c1_f1_1:Out",
+                "input": "UpComp:in_r"
+            },
+            {
+                "output": "UpComp:out_l",
                 "input": "Tone2_c0_f0_0:In"
             },
             {
@@ -4769,7 +4841,7 @@
                 "input": "Tone2_c0_f11_0:In"
             },
             {
-                "output": "Tone1_c1_f1_1:Out",
+                "output": "UpComp:out_r",
                 "input": "Tone2_c1_f0_0:In"
             },
             {
@@ -5126,10 +5198,18 @@
             },
             {
                 "output": "out_0:Out",
-                "input": "ControlFreak_0_1:in_l"
+                "input": "Buzz_0_1:in_l"
             },
             {
                 "output": "out_1:Out",
+                "input": "Buzz_0_1:in_r"
+            },
+            {
+                "output": "Buzz_0_1:out_l",
+                "input": "ControlFreak_0_1:in_l"
+            },
+            {
+                "output": "Buzz_0_1:out_r",
                 "input": "ControlFreak_0_1:in_r"
             }
         ],
