@@ -5,8 +5,6 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib.sh"
 require_root
 require_repo_root
 require_fedora
-# Validate commands inside their owning steps. Missing npm must not prevent
-# unrelated Rust applications from being installed.
 
 OBSOLETE_UNITS=(
 	kait2en-t2-smc-charge-limit.service

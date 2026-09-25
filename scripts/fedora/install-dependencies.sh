@@ -43,20 +43,12 @@ packages=(
 	gtk4-devel \
 	libadwaita-devel \
 	glib2-devel \
-	systemd-devel \
-	libdrm-devel \
-	cairo-devel \
-	librsvg2-devel \
 	libplist-devel \
 	fprintd \
 	fprintd-pam \
 	libfprint \
 	checkpolicy \
-	policycoreutils-python-utils \
-	nodejs \
-	npm \
-	brightnessctl \
-	cava
+	policycoreutils-python-utils
 )
 
 failed_packages=()
