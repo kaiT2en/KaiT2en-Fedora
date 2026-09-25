@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
-//! Broadcasts the fingerprint prompt state on the D-Bus system bus so the Touch
-//! Bar (react-drm) can show a "touch to unlock" animation. It is best effort:
+//! Broadcasts the fingerprint prompt state on the D-Bus system bus so a Touch
+//! Bar client can show a "touch to unlock" animation. It is best effort:
 //! if the bus or the name is unavailable the bridge carries on unaffected, the
 //! animation simply does not play.
 

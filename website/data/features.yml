@@ -268,19 +268,6 @@ items:
       The butterfly keyboard backlight came back on at 0% after resume, and now
       uses the same LED naming as the magic keyboards.
 
-  - id: react-drm-control-center
-    title: "Touch Bar control center (react-drm)"
-    state: available
-    upstream: downstream
-    project: KAIT2EN Fedora
-    subsystem: t2bdrm / react-drm
-    authors:
-      - deqrocks
-    updated: "2026-08-03"
-    notes: >-
-      Replaces the standard Touch Bar interface: function keys, media and
-      brightness controls, application-aware panels and system information.
-
   - id: force-click
     title: "Force Click trackpad controls"
     state: available

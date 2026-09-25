@@ -18,7 +18,6 @@ This fork is part of a set of fixes that make suspend/resume work on T2 Macs. De
 
 - `t2bce`
 - `t2smc`
-- `react-drm`
 
 ## Build and install
 

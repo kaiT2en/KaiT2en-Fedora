@@ -99,10 +99,3 @@ discrete-GPU boot mode remains available as a recovery option.
 Provides a graphical workflow for building customized Fedora kernels with the
 required T2 configuration and selected patch groups. Completed builds can be
 installed or removed through restricted privileged helpers.
-
-## react-drm / Touch Bar Configurator
-
-Replaces the standard Touch Bar interface with a configurable control center.
-It provides function and media keys, brightness and volume controls,
-application-aware actions, system information, and optional widgets.
-Touchbar Configurator is a GUI app that can be used for in-depth customization.

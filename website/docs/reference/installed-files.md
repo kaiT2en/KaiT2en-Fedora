@@ -301,19 +301,3 @@ markers below `$XDG_CACHE_HOME/t2-kernel-builder/build` (normally
 Kernels installed through the app add their normal files below `/boot` and
 `/lib/modules/<kernel>/`; package-managed builds are installed through DNF.
 
-`react-drm` is installed for the desktop user only when the DMI product name is
-one of `MacBookPro15,1`, `MacBookPro15,2`, `MacBookPro15,3`, `MacBookPro15,4`,
-`MacBookPro16,1`, `MacBookPro16,2`, `MacBookPro16,3` or `MacBookPro16,4`:
-
-```text
-~/react-drm/
-~/.config/systemd/user/react-drm.service
-~/.local/share/applications/react-drm-config-gui.desktop
-/etc/udev/rules.d/99-react-drm.rules
-```
-
-The installer adds that user to the `video` and `input` groups. When the active
-desktop reported by the user's systemd environment contains `gnome`, it also
-installs Window Monitor Pro below `~/.local/share/gnome-shell/extensions/` for
-application-aware controls. Every other DMI product name exits this step before
-installing react-drm dependencies or files.
