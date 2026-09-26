@@ -223,6 +223,7 @@ hda_module="$kernel_tree/sound/hda/controllers/snd-hda-intel.ko"
 staging="$workdir/modules"
 install -Dpm 0644 "$amdgpu_module" "$staging/amdgpu.ko"
 install -Dpm 0644 "$hda_module" "$staging/snd-hda-intel.ko"
+strip --strip-debug "$staging/amdgpu.ko" "$staging/snd-hda-intel.ko"
 xz --check=crc32 --lzma2=dict=1MiB -f \
 	"$staging/amdgpu.ko" "$staging/snd-hda-intel.ko"
 
