@@ -455,6 +455,9 @@ class Lifecycle:
         self.save()
 
     def summary(self):
+        if not self.errors:
+            print(f"[{self.component}] completed without errors")
+            return
         print(f"[{self.component}] completed with {len(self.errors)} errors/warnings")
         for error in self.errors:
             print(f"  - {error}")
