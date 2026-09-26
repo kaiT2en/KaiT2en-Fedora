@@ -7550,7 +7550,7 @@
                             "b2": 0.658747261708398,
                             "a0": 1.0,
                             "a1": -0.95902793581531,
-                            "a2": 0.45451432897888094
+                            "a2": 0.45451432897888083
                         },
                         {
                             "rate": 88200,
@@ -7910,7 +7910,7 @@
                             "b2": 0.658747261708398,
                             "a0": 1.0,
                             "a1": -0.95902793581531,
-                            "a2": 0.45451432897888094
+                            "a2": 0.45451432897888083
                         },
                         {
                             "rate": 88200,
@@ -8085,43 +8085,18 @@
                     "cr_0": 8.0,
                     "at_0": 2.0,
                     "rt_0": 50.0,
-                    "sla_0": 8.0,
                     "ce_1": 1,
                     "cm_1": 0,
                     "al_1": 0.251188643150958,
                     "cr_1": 8.0,
                     "at_1": 2.0,
                     "rt_1": 50.0,
-                    "sla_1": 8.0,
                     "ce_2": 0,
                     "cm_2": 0,
                     "al_2": 0.251188643150958,
                     "cr_2": 8.0,
                     "at_2": 2.0,
-                    "rt_2": 50.0,
-                    "sla_2": 8.0
-                }
-            },
-            {
-                "type": "builtin",
-                "label": "delay",
-                "name": "Delay_2",
-                "config": {
-                    "max-delay": 0.05
-                },
-                "control": {
-                    "Delay (s)": 0.008
-                }
-            },
-            {
-                "type": "builtin",
-                "label": "delay",
-                "name": "Delay_3",
-                "config": {
-                    "max-delay": 0.05
-                },
-                "control": {
-                    "Delay (s)": 0.008
+                    "rt_2": 50.0
                 }
             },
             {
@@ -8885,14 +8860,6 @@
                 "input": "Buzz_0_1:in_r"
             },
             {
-                "output": "NBandEQLeftHigh_2:Out",
-                "input": "Delay_2:In"
-            },
-            {
-                "output": "NBandEQRightHigh_2:Out",
-                "input": "Delay_3:In"
-            },
-            {
                 "output": "Buzz_0_1:out_l",
                 "input": "ControlFreakLF_0_1:in_l"
             },
@@ -8901,11 +8868,11 @@
                 "input": "ControlFreakLF_0_1:in_r"
             },
             {
-                "output": "Delay_2:Out",
+                "output": "NBandEQLeftHigh_2:Out",
                 "input": "ControlFreakHF_2_3:in_l"
             },
             {
-                "output": "Delay_3:Out",
+                "output": "NBandEQRightHigh_2:Out",
                 "input": "ControlFreakHF_2_3:in_r"
             }
         ],

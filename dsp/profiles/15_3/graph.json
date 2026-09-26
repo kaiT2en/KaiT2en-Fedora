@@ -4249,57 +4249,30 @@
                     "cr_0": 8.0,
                     "at_0": 2.0,
                     "rt_0": 50.0,
-                    "sla_0": 5.0,
                     "ce_1": 1,
                     "cm_1": 0,
                     "al_1": 0.251188643150958,
                     "cr_1": 8.0,
                     "at_1": 2.0,
                     "rt_1": 50.0,
-                    "sla_1": 5.0,
                     "ce_2": 0,
                     "cm_2": 0,
                     "al_2": 0.251188643150958,
                     "cr_2": 8.0,
                     "at_2": 2.0,
                     "rt_2": 50.0,
-                    "sla_2": 5.0,
                     "ce_3": 1,
                     "cm_3": 0,
                     "al_3": 0.251188643150958,
                     "cr_3": 8.0,
                     "at_3": 2.0,
                     "rt_3": 50.0,
-                    "sla_3": 5.0,
                     "ce_4": 0,
                     "cm_4": 0,
                     "al_4": 0.251188643150958,
                     "cr_4": 8.0,
                     "at_4": 2.0,
-                    "rt_4": 50.0,
-                    "sla_4": 5.0
-                }
-            },
-            {
-                "type": "builtin",
-                "label": "delay",
-                "name": "Delay_2",
-                "config": {
-                    "max-delay": 0.05
-                },
-                "control": {
-                    "Delay (s)": 0.005
-                }
-            },
-            {
-                "type": "builtin",
-                "label": "delay",
-                "name": "Delay_3",
-                "config": {
-                    "max-delay": 0.05
-                },
-                "control": {
-                    "Delay (s)": 0.005
+                    "rt_4": 50.0
                 }
             },
             {
@@ -4767,14 +4740,6 @@
                 "input": "Buzz_0_1:in_r"
             },
             {
-                "output": "Tone3_c2_f22_0:Out",
-                "input": "Delay_2:In"
-            },
-            {
-                "output": "Tone3_c3_f22_0:Out",
-                "input": "Delay_3:In"
-            },
-            {
                 "output": "Buzz_0_1:out_l",
                 "input": "ControlFreakLF_0_1:in_l"
             },
@@ -4783,11 +4748,11 @@
                 "input": "ControlFreakLF_0_1:in_r"
             },
             {
-                "output": "Delay_2:Out",
+                "output": "Tone3_c2_f22_0:Out",
                 "input": "ControlFreakHF_2_3:in_l"
             },
             {
-                "output": "Delay_3:Out",
+                "output": "Tone3_c3_f22_0:Out",
                 "input": "ControlFreakHF_2_3:in_r"
             }
         ],
