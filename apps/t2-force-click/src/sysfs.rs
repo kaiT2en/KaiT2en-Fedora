@@ -28,6 +28,10 @@ pub fn write_force_click_threshold_percent(value: u32) -> Result<()> {
     write_param("force_click_threshold_percent", &value.to_string())
 }
 
+pub fn write_force_click_enabled(value: bool) -> Result<()> {
+    write_param("force_click_enabled", if value { "Y" } else { "N" })
+}
+
 fn read_param_u8(name: &str) -> Option<u8> {
     read_param(name)?.parse().ok()
 }

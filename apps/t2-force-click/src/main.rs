@@ -239,16 +239,6 @@ fn daemon_main() -> error::Result<()> {
                         if let Err(error) = config.save() {
                             eprintln!("t2-force-click: failed to save config: {error}");
                         }
-                        if let Err(error) = service::set_autostart(config.autostart_enabled) {
-                            eprintln!("t2-force-click: {error}");
-                        }
-                        let _ = ipc::write_response(&stream, &state_from_config(&config));
-                    }
-                    Ok(Request::SetAutostart(enabled)) => {
-                        config.autostart_enabled = enabled;
-                        if let Err(error) = service::set_autostart(enabled) {
-                            eprintln!("t2-force-click: {error}");
-                        }
                         let _ = ipc::write_response(&stream, &state_from_config(&config));
                     }
                     Err(error) => {
@@ -285,11 +275,16 @@ fn wait_for_input(device: &evdev::Device) -> io::Result<bool> {
 
 fn apply_thresholds(config: &AppConfig) {
     /* MTForceThresholding::getClickThresholdMultiplier maps click strength.
-     * force_click_threshold_percent controls the downstream second threshold. */
+     * force_click_threshold_percent controls the downstream second threshold.
+     * force_click_enabled gates that second press independently, so the
+     * plain click (click_strength) keeps working when it is turned off. */
     if let Err(error) = sysfs::write_click_strength(config.click_strength) {
         eprintln!("t2-force-click: {error}");
     }
     if let Err(error) = sysfs::write_force_click_threshold_percent(config.force_click_threshold_percent) {
+        eprintln!("t2-force-click: {error}");
+    }
+    if let Err(error) = sysfs::write_force_click_enabled(!config.force_click_disabled) {
         eprintln!("t2-force-click: {error}");
     }
 }
@@ -301,7 +296,7 @@ fn state_from_config(config: &AppConfig) -> DaemonState {
         click_strength: sysfs::read_click_strength().unwrap_or(config.click_strength),
         force_click_threshold_percent: sysfs::read_force_click_threshold_percent()
             .unwrap_or(config.force_click_threshold_percent),
-        autostart_enabled: config.autostart_enabled,
+        force_click_disabled: config.force_click_disabled,
         action_kind: config.action_kind.as_str().to_owned(),
         key_combo: config.key_combo.clone(),
         command: config.command.clone(),
@@ -435,9 +430,15 @@ fn build_ui(app: &Application) {
         move |_| record_shortcut(&window, &key_combo, &record_shortcut_button)
     ));
 
-    let autostart_check = CheckButton::with_label("Start automatically at boot");
-    autostart_check.set_margin_top(6);
-    root.append(&autostart_check);
+    let disable_force_click_check =
+        CheckButton::with_label("Disable Force Click");
+    disable_force_click_check.set_margin_top(6);
+    root.append(&disable_force_click_check);
+    disable_force_click_check.connect_toggled(glib::clone!(
+        #[strong]
+        force_scale,
+        move |check| force_scale.set_sensitive(!check.is_active())
+    ));
 
     let button_row = GtkBox::new(Orientation::Horizontal, 8);
     let apply_button = Button::with_label("Apply");
@@ -473,7 +474,7 @@ fn build_ui(app: &Application) {
         let key_combo = key_combo.clone();
         let record_shortcut_button = record_shortcut_button.clone();
         let command_entry = command_entry.clone();
-        let autostart_check = autostart_check.clone();
+        let disable_force_click_check = disable_force_click_check.clone();
         let action_details = action_details.clone();
         let update_field_visibility = update_field_visibility.clone();
         let apply_button = apply_button.clone();
@@ -498,14 +499,14 @@ fn build_ui(app: &Application) {
                     },
                 );
                 command_entry.set_text(&state.command);
-                autostart_check.set_active(state.autostart_enabled);
+                disable_force_click_check.set_active(state.force_click_disabled);
 
                 /* driver_loaded gates writes to kernel module parameters. */
                 click_scale.set_sensitive(state.driver_loaded);
-                force_scale.set_sensitive(state.driver_loaded);
+                force_scale.set_sensitive(state.driver_loaded && !state.force_click_disabled);
                 action_dropdown.set_sensitive(state.driver_loaded);
                 action_details.set_sensitive(state.driver_loaded);
-                autostart_check.set_sensitive(state.driver_loaded);
+                disable_force_click_check.set_sensitive(state.driver_loaded);
                 apply_button.set_sensitive(state.driver_loaded);
             }
             Err(_error) => {
@@ -513,7 +514,7 @@ fn build_ui(app: &Application) {
                 force_scale.set_sensitive(false);
                 action_dropdown.set_sensitive(false);
                 action_details.set_sensitive(false);
-                autostart_check.set_sensitive(false);
+                disable_force_click_check.set_sensitive(false);
                 apply_button.set_sensitive(false);
             }
         }
@@ -532,7 +533,7 @@ fn build_ui(app: &Application) {
         #[strong]
         command_entry,
         #[strong]
-        autostart_check,
+        disable_force_click_check,
         #[strong]
         apply_button,
         move |_| {
@@ -540,7 +541,7 @@ fn build_ui(app: &Application) {
             let config = AppConfig {
                 click_strength: click_scale.value().round() as u8,
                 force_click_threshold_percent: force_scale.value().round() as u32,
-                autostart_enabled: autostart_check.is_active(),
+                force_click_disabled: disable_force_click_check.is_active(),
                 action_kind,
                 key_combo: if action_kind == ActionKind::KeyCombo {
                     key_combo.borrow().clone()

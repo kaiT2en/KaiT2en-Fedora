@@ -128,6 +128,17 @@ module_param(force_click_threshold_percent, uint, 0644);
 MODULE_PARM_DESC(force_click_threshold_percent,
 	"force click (actuator) threshold as a percent of the plain click threshold (default 175)");
 
+/*
+ * Independent of the threshold above: some users disable tap-to-click in
+ * their desktop and rely on the plain physical click alone, so force click
+ * needs an actual off switch that cannot misfire under any pressure, rather
+ * than a threshold merely raised out of reach.
+ */
+static bool force_click_enabled = true;
+module_param(force_click_enabled, bool, 0644);
+MODULE_PARM_DESC(force_click_enabled,
+	"whether the second, harder force click press is detected at all (default Y)");
+
 /* Bounded raw-frame observation for Force Touch reconstruction. */
 static unsigned int force_trace_frames;
 module_param(force_trace_frames, uint, 0644);
@@ -446,12 +457,12 @@ static void t2_trackpad_analyze_and_manage_strongest_forces(
 	}
 
 	if (!force->force_click_activated) {
-		if (strongest_slot >= 0 && strongest_force >= fc_activation_q16) {
+		if (force_click_enabled && strongest_slot >= 0 && strongest_force >= fc_activation_q16) {
 			force->force_click_activated = true;
 			t2_trackpad_fire_actuator(tp->hdev, T2_ACTUATOR_WAVEFORM_CLICK,
 						  click_strength);
 		}
-	} else if (strongest_slot < 0 || strongest_force < fc_release_q16) {
+	} else if (!force_click_enabled || strongest_slot < 0 || strongest_force < fc_release_q16) {
 		force->force_click_activated = false;
 	}
 }

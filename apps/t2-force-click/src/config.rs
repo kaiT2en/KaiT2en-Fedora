@@ -41,7 +41,12 @@ impl ActionKind {
 pub struct AppConfig {
     pub click_strength: u8,
     pub force_click_threshold_percent: u32,
-    pub autostart_enabled: bool,
+    /// Keeps the plain click (click_strength) working while making the
+    /// second, harder Force Click press unreachable. Needed when a user
+    /// disables tap-to-click in their desktop and relies on the physical
+    /// click alone: fully turning off the trackpad driver would leave them
+    /// unable to click at all.
+    pub force_click_disabled: bool,
     pub action_kind: ActionKind,
     /// e.g. "leftctrl+leftalt+t". Plus-separated evdev key names, held
     /// together and released, synthesized through a uinput device the
@@ -56,7 +61,7 @@ impl Default for AppConfig {
         Self {
             click_strength: CLICK_STRENGTH_MEDIUM,
             force_click_threshold_percent: 175,
-            autostart_enabled: true,
+            force_click_disabled: false,
             action_kind: ActionKind::None,
             key_combo: String::new(),
             command: String::new(),
@@ -86,11 +91,11 @@ impl AppConfig {
 
     fn to_disk_format(&self) -> String {
         format!(
-            "config_version={}\nclick_strength={}\nforce_click_threshold_percent={}\nautostart_enabled={}\naction_kind={}\nkey_combo={}\ncommand={}\n",
+            "config_version={}\nclick_strength={}\nforce_click_threshold_percent={}\nforce_click_disabled={}\naction_kind={}\nkey_combo={}\ncommand={}\n",
             CONFIG_VERSION,
             self.click_strength,
             self.force_click_threshold_percent,
-            self.autostart_enabled,
+            self.force_click_disabled,
             self.action_kind.as_str(),
             self.key_combo,
             self.command,
@@ -135,7 +140,7 @@ fn parse_config(raw: &str) -> Option<AppConfig> {
                     .ok()?
                     .clamp(MIN_FORCE_CLICK_PERCENT, MAX_FORCE_CLICK_PERCENT)
             }
-            "autostart_enabled" => config.autostart_enabled = value.parse().ok()?,
+            "force_click_disabled" => config.force_click_disabled = value.parse().ok()?,
             "action_kind" => config.action_kind = ActionKind::from_str(value),
             "key_combo" => config.key_combo = value.to_owned(),
             "command" => config.command = value.to_owned(),
@@ -157,7 +162,7 @@ mod tests {
         let config = AppConfig {
             click_strength: CLICK_STRENGTH_FIRM,
             force_click_threshold_percent: 200,
-            autostart_enabled: false,
+            force_click_disabled: true,
             action_kind: ActionKind::KeyCombo,
             key_combo: "leftctrl+leftalt+t".to_owned(),
             command: String::new(),
@@ -165,7 +170,7 @@ mod tests {
         let parsed = parse_config(&config.to_disk_format()).unwrap();
         assert_eq!(parsed.click_strength, CLICK_STRENGTH_FIRM);
         assert_eq!(parsed.force_click_threshold_percent, 200);
-        assert!(!parsed.autostart_enabled);
+        assert!(parsed.force_click_disabled);
         assert_eq!(parsed.action_kind, ActionKind::KeyCombo);
         assert_eq!(parsed.key_combo, "leftctrl+leftalt+t");
     }

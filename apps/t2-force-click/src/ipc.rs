@@ -19,7 +19,7 @@ pub struct DaemonState {
     pub device_found: bool,
     pub click_strength: u8,
     pub force_click_threshold_percent: u32,
-    pub autostart_enabled: bool,
+    pub force_click_disabled: bool,
     pub action_kind: String,
     pub key_combo: String,
     pub command: String,
@@ -29,7 +29,6 @@ pub struct DaemonState {
 pub enum Request {
     GetState,
     SetConfig(AppConfig),
-    SetAutostart(bool),
 }
 
 pub fn bind_listener() -> Result<UnixListener> {
@@ -72,12 +71,11 @@ fn encode_request(request: &Request) -> String {
             "SET_CONFIG {} {} {} {} {} {}\n",
             config.click_strength,
             config.force_click_threshold_percent,
-            config.autostart_enabled,
+            config.force_click_disabled,
             config.action_kind.as_str(),
             urlencode(&config.key_combo),
             urlencode(&config.command),
         ),
-        Request::SetAutostart(enabled) => format!("SET_AUTOSTART {enabled}\n"),
     }
 }
 
@@ -85,9 +83,6 @@ pub fn handle_request_line(line: &str) -> Result<Request> {
     let line = line.trim();
     if line == "GET_STATE" {
         return Ok(Request::GetState);
-    }
-    if let Some(value) = line.strip_prefix("SET_AUTOSTART ") {
-        return Ok(Request::SetAutostart(parse_bool_flag(value)?));
     }
     if let Some(value) = line.strip_prefix("SET_CONFIG ") {
         let mut fields = value.splitn(6, ' ');
@@ -101,9 +96,9 @@ pub fn handle_request_line(line: &str) -> Result<Request> {
             .and_then(|v| v.parse::<u32>().ok())
             .ok_or_else(|| protocol_error("missing force_click_threshold_percent".to_owned()))?
             .clamp(MIN_FORCE_CLICK_PERCENT, MAX_FORCE_CLICK_PERCENT);
-        let autostart_enabled = fields
+        let force_click_disabled = fields
             .next()
-            .ok_or_else(|| protocol_error("missing autostart_enabled".to_owned()))
+            .ok_or_else(|| protocol_error("missing force_click_disabled".to_owned()))
             .and_then(parse_bool_flag)?;
         let action_kind = ActionKind::from_str(
             fields.next().ok_or_else(|| protocol_error("missing action_kind".to_owned()))?,
@@ -113,7 +108,7 @@ pub fn handle_request_line(line: &str) -> Result<Request> {
         return Ok(Request::SetConfig(AppConfig {
             click_strength,
             force_click_threshold_percent,
-            autostart_enabled,
+            force_click_disabled,
             action_kind,
             key_combo,
             command,
@@ -160,7 +155,7 @@ pub fn write_response(mut stream: &UnixStream, state: &DaemonState) -> Result<()
     push_field(&mut body, "device_found", if state.device_found { "1" } else { "0" });
     push_field(&mut body, "click_strength", &state.click_strength.to_string());
     push_field(&mut body, "force_click_threshold_percent", &state.force_click_threshold_percent.to_string());
-    push_field(&mut body, "autostart_enabled", if state.autostart_enabled { "1" } else { "0" });
+    push_field(&mut body, "force_click_disabled", if state.force_click_disabled { "1" } else { "0" });
     push_field(&mut body, "action_kind", &state.action_kind);
     push_field(&mut body, "key_combo", &state.key_combo);
     push_field(&mut body, "command", &state.command);
@@ -196,7 +191,7 @@ fn decode_response(reader: BufReader<UnixStream>) -> Result<DaemonState> {
             "force_click_threshold_percent" => {
                 state.force_click_threshold_percent = value.parse().unwrap_or_default()
             }
-            "autostart_enabled" => state.autostart_enabled = value == "1",
+            "force_click_disabled" => state.force_click_disabled = value == "1",
             "action_kind" => state.action_kind = value.to_owned(),
             "key_combo" => state.key_combo = value.to_owned(),
             "command" => state.command = value.to_owned(),

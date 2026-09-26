@@ -12,6 +12,8 @@ The required kernel drivers are in this repository under
 - Slider for click pressure (`click_strength`: light/medium/firm)
 - Slider for force click pressure, relative to the click threshold
   (`force_click_threshold_percent`)
+- Checkbox to turn force click off entirely (`force_click_enabled`) while
+  keeping the plain click working, for desktops with tap-to-click disabled
 - Force click is exposed as a `BTN_TASK` key event on the trackpad's input
   device for any third-party tool (DE shortcuts, `xbindkeys`, `evtest`,
   `libinput debug-events`) to bind independently of this app
@@ -71,4 +73,5 @@ the daemon owns are exposed while the trackpad driver is loaded at:
 ```text
 /sys/module/t2_precision_trackpad/parameters/click_strength
 /sys/module/t2_precision_trackpad/parameters/force_click_threshold_percent
+/sys/module/t2_precision_trackpad/parameters/force_click_enabled
 ```

@@ -250,12 +250,13 @@ only the fixed operations exposed by their UI.
 
 T2 Force Click persists its settings at `/etc/t2-force-click/config.txt`; its
 root daemon listens at `/run/t2-force-click/daemon.sock`, which is runtime
-state and disappears at shutdown. While the driver is loaded, its two
-user-facing pressure controls are:
+state and disappears at shutdown. While the driver is loaded, its user-facing
+controls are:
 
 ```text
 /sys/module/t2_precision_trackpad/parameters/click_strength
 /sys/module/t2_precision_trackpad/parameters/force_click_threshold_percent
+/sys/module/t2_precision_trackpad/parameters/force_click_enabled
 ```
 
 ## T2 trackpad actuator playback

@@ -2,8 +2,6 @@ use std::process::Command;
 
 use crate::error::{ForceClickError, Result};
 
-const SERVICE_NAME: &str = "t2-force-click.service";
-
 #[derive(Clone, Debug)]
 pub struct ActiveSession {
     pub uid: u32,
@@ -47,27 +45,6 @@ fn loginctl_value(session: &str, property: &str) -> Result<String> {
         return Err(command_failed("loginctl show-session", &output));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
-}
-
-pub fn set_autostart(enabled: bool) -> Result<()> {
-    if enabled {
-        run_systemctl(["enable", SERVICE_NAME])
-    } else {
-        run_systemctl(["disable", SERVICE_NAME])
-    }
-}
-
-fn run_systemctl<const N: usize>(args: [&str; N]) -> Result<()> {
-    let output = Command::new("systemctl")
-        .args(args)
-        .output()
-        .map_err(ForceClickError::ProcessSpawn)?;
-
-    if output.status.success() {
-        return Ok(());
-    }
-
-    Err(command_failed(&format!("systemctl {}", args.join(" ")), &output))
 }
 
 fn command_failed(command: &str, output: &std::process::Output) -> ForceClickError {
