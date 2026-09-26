@@ -163,7 +163,10 @@ run_initial_install() {
 		offer_reboot
 		exit 0
 	fi
-	run_project_installer initial
+	# run_project_installer already explains a failure and exits non-zero;
+	# letting that reach the generic ERR trap would bury that explanation
+	# under a misleading "just retry" message.
+	run_project_installer initial || exit 1
 }
 
 [[ $# -eq 0 ]] || die 'usage: kait2en-install'
@@ -213,7 +216,7 @@ case "$phase" in
 		;;
 	complete)
 		printf 'Starting the KaiT2en updater.\n'
-		run_project_installer update
+		run_project_installer update || exit 1
 		;;
 	*)
 		die "Unknown KaiT2en installation phase: $phase"

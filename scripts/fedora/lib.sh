@@ -14,25 +14,34 @@ if [[ -z "${KAIT2EN_INSTALL_ERRORS:-}" ]]; then
 	INSTALL_REPORT_OWNER=1
 fi
 
+KAIT2EN_INSTALL_HARD_ERRORS="$KAIT2EN_INSTALL_ERRORS.hard"
+
 record_error() {
 	local message="$*"
 	printf '[kait2en] error: %s\n' "$message" >&2
 	if ! printf '%s: %s\n' "${0##*/}" "$message" >>"$KAIT2EN_INSTALL_ERRORS"; then
 		printf '[kait2en] error: cannot append to error report %s\n' "$KAIT2EN_INSTALL_ERRORS" >&2
 	fi
+	printf '%s: %s\n' "${0##*/}" "$message" >>"$KAIT2EN_INSTALL_HARD_ERRORS" || true
 }
 
 installation_summary() {
 	# The installer runs under sudo, so the report was root-owned throughout
 	# the run. Hand it to the invoking user now that nothing else writes to it.
 	if [[ ${EUID:-$(id -u)} -eq 0 && -n "${SUDO_USER:-}" ]]; then
-		chown "$SUDO_USER" "$KAIT2EN_INSTALL_ERRORS" 2>/dev/null || true
+		chown "$SUDO_USER" "$KAIT2EN_INSTALL_ERRORS" "$KAIT2EN_INSTALL_HARD_ERRORS" 2>/dev/null || true
 	fi
-	if [[ -s "$KAIT2EN_INSTALL_ERRORS" ]]; then
-		printf '[kait2en] installation completed with errors/warnings:\n' >&2
+	if [[ -s "$KAIT2EN_INSTALL_HARD_ERRORS" ]]; then
+		printf '[kait2en] installation completed with errors:\n' >&2
 		cat "$KAIT2EN_INSTALL_ERRORS" >&2
 		printf '[kait2en] saved report: %s\n' "$KAIT2EN_INSTALL_ERRORS" >&2
 		return 1
+	fi
+	if [[ -s "$KAIT2EN_INSTALL_ERRORS" ]]; then
+		printf '[kait2en] installation completed with warnings:\n' >&2
+		cat "$KAIT2EN_INSTALL_ERRORS" >&2
+		printf '[kait2en] saved report: %s\n' "$KAIT2EN_INSTALL_ERRORS" >&2
+		return 0
 	fi
 	info "installation completed without recorded errors"
 }

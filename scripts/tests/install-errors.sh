@@ -31,13 +31,24 @@ run_step two true
 [[ $(wc -l <"$work/cleanup") -eq 1 ]]
 
 if bash -c 'source "$TEST_LIB"; INSTALL_REPORT_OWNER=1; warn "reported warning"; printf "FINISHED\n"' >"$work/summary" 2>&1; then
-	printf 'error: installation with recorded errors returned success\n' >&2
+	printf 'error: installation with a recorded hard failure returned success\n' >&2
 	exit 1
 fi
 grep -q FINISHED "$work/summary"
 grep -q 'installation completed with errors' "$work/summary"
 grep -q 'nested failure' "$work/summary"
 grep -q 'reported warning' "$work/summary"
+
+# A lone warning (e.g. a step skipping itself on unsupported hardware) must
+# not fail the whole installation, or the auto-installer never marks it
+# complete and re-runs it forever.
+if ! KAIT2EN_INSTALL_ERRORS="$work/warn-only-errors" bash -c 'source "$TEST_LIB"; INSTALL_REPORT_OWNER=1; warn "just a warning"; printf "FINISHED\n"' >"$work/warn-only" 2>&1; then
+	printf 'error: a lone warning failed the installation\n' >&2
+	exit 1
+fi
+grep -q FINISHED "$work/warn-only"
+grep -q 'completed with warnings' "$work/warn-only"
+grep -q 'just a warning' "$work/warn-only"
 
 KAIT2EN_INSTALL_ERRORS="$work/clean-errors" bash -c 'source "$TEST_LIB"; INSTALL_REPORT_OWNER=1; run_step success true' >"$work/clean" 2>&1
 grep -q 'without recorded errors' "$work/clean"

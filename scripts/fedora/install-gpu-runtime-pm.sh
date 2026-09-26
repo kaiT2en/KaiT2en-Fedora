@@ -110,7 +110,7 @@ fi
 
 load_patch_series
 build_id=$(
-	sha256sum "$PATCH_SERIES" "${PATCH_FILES[@]}" |
+	sha256sum "$PATCH_SERIES" "${PATCH_FILES[@]}" "${BASH_SOURCE[0]}" |
 		sha256sum | awk '{ print $1 }'
 )
 if [[ -f "$MODULE_DIR/amdgpu.ko.xz" &&
@@ -144,7 +144,7 @@ dnf install -y \
 	patch \
 	tar \
 	xz
-require_command cpio curl git install make nproc patch rpm2cpio sed tar xz
+require_command cpio curl git install make nproc patch rpm2cpio sed strip tar xz
 
 if ((local_kernel_tree == 0)); then
 	build_tree="/usr/src/kernels/$KVER"
@@ -223,7 +223,8 @@ hda_module="$kernel_tree/sound/hda/controllers/snd-hda-intel.ko"
 staging="$workdir/modules"
 install -Dpm 0644 "$amdgpu_module" "$staging/amdgpu.ko"
 install -Dpm 0644 "$hda_module" "$staging/snd-hda-intel.ko"
-strip --strip-debug "$staging/amdgpu.ko" "$staging/snd-hda-intel.ko"
+strip --strip-debug "$staging/amdgpu.ko" "$staging/snd-hda-intel.ko" ||
+	warn "could not strip debug info; installing larger, unstripped modules"
 xz --check=crc32 --lzma2=dict=1MiB -f \
 	"$staging/amdgpu.ko" "$staging/snd-hda-intel.ko"
 

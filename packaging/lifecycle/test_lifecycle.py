@@ -190,6 +190,16 @@ class Tests(unittest.TestCase):
         self.assertTrue(custom.exists())
         self.assertFalse((self.root / "var/lib/kait2en/migration/t2-dsp").exists())
 
+    def test_dsp_unowned_asset_change_archives_instead_of_repeating_forever(self):
+        self.put("/usr/share/t2-dsp/profiles/15_4/graph.json", '{"target.object":"new","filter.graph":{"gain": 2}}')
+        old = self.put("/usr/share/kait2en/audio-dsp/15_4/graph.json", '{"target.object":"old-pci","filter.graph":{"gain": 1}}')
+        engine = self.engine("t2-dsp")
+        engine.migrate_dsp()
+        self.assertFalse(old.exists())
+        self.assertEqual(sum("archived, not discarded" in error for error in engine.errors), 1)
+        engine.migrate_dsp()
+        self.assertEqual(sum("archived, not discarded" in error for error in engine.errors), 1)
+
     def test_failure_reported_and_independent_cleanup_continues(self):
         engine = self.engine()
         engine.state["policy"] = "owned"

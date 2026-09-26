@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 #
-# Removes the system integration installed by react-drm.
-# Project files, dependencies and user group memberships are left unchanged.
+# Removes everything react-drm installed for the invoking user: its service,
+# udev rules, GNOME extension and copied project files. System packages and
+# video/input group memberships are left unchanged, since those are shared
+# system state that other software may also depend on.
 #
 # Author: André Eikmeyer (dev@deqrocks)
 # Date: 2026-06-14
@@ -14,10 +16,13 @@ set -Eeuo pipefail
 shopt -s nullglob
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+REACT_DRM_DIR="$HOME/react-drm"
 SERVICE_FILE="$HOME/.config/systemd/user/react-drm.service"
 UDEV_RULE="/etc/udev/rules.d/99-react-drm.rules"
 LEGACY_UDEV_RULE="/etc/udev/rules.d/99-react-drm-uinput.rules"
 CONFIG_GUI_LAUNCHER="$HOME/.local/share/applications/react-drm-config-gui.desktop"
+EXTENSION_UUID="window-monitor-pro@muhammed.hussien2030.gmail.com"
+EXTENSION_DIR="$HOME/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
 
 GUI_MODE=0
 
@@ -68,9 +73,29 @@ on_error_trap() {
   else
     printf '[uninstall] fatal: line %s: %s\n' "$line" "$cmd" >&2
   fi
-  exit 1
+  # Does not exit: inside a run_step subshell, errexit itself already stops
+  # that one step; exiting here as well would also kill the outer script and
+  # abort every step still queued behind it. Outside run_step (preflight
+  # checks before any step runs) errexit still terminates the whole script.
 }
 trap 'on_error_trap "$LINENO" "$BASH_COMMAND"' ERR
+
+# A failing cleanup step must not abort the rest: leaving some react-drm
+# leftovers is recoverable, stopping halfway through is not.
+FAILED_STEPS=()
+
+run_step() {
+  local label=$1
+  shift
+  set +e
+  ( "$@" )
+  local status=$?
+  set -e
+  if (( status != 0 )); then
+    FAILED_STEPS+=("$label")
+    info "warning: $label did not complete; continuing with the remaining cleanup"
+  fi
+}
 
 confirm_uninstall() {
   local answer cmd
@@ -88,11 +113,11 @@ confirm_uninstall() {
   fi
   command -v sudo >/dev/null 2>&1 || fail "required command is missing: sudo"
   cat <<'EOF'
-This removes the react-drm user service and udev rules and restores the
-firmware Touch Bar interface.
+This removes the react-drm user service, udev rules, GNOME extension and
+copied project files (~/react-drm), and restores the firmware Touch Bar
+interface.
 
-Project files, npm dependencies, system packages and video/input group
-memberships are not removed.
+System packages and video/input group memberships are not removed.
 EOF
   printf '\nType UNINSTALL to continue, or anything else to cancel: '
   IFS= read -r answer || fail "uninstallation cancelled"
@@ -124,9 +149,9 @@ remove_service() {
     fail "a manually started react-drm control center is still running"
 
   info "Restoring the firmware Touch Bar interface"
-  [[ -x "$SCRIPT_DIR/system/react-drm-tb-detach" ]] ||
-    fail "system/react-drm-tb-detach is missing or not executable"
-  "$SCRIPT_DIR/system/react-drm-tb-detach" ||
+  [[ -x "$REACT_DRM_DIR/system/react-drm-tb-detach" ]] ||
+    fail "react-drm installation not found or damaged: $REACT_DRM_DIR/system/react-drm-tb-detach is missing or not executable"
+  "$REACT_DRM_DIR/system/react-drm-tb-detach" ||
     fail "unable to restore the firmware Touch Bar interface"
 
   rm -f "$SERVICE_FILE"
@@ -147,6 +172,21 @@ remove_config_gui_launcher() {
   rm -f "$CONFIG_GUI_LAUNCHER"
 }
 
+remove_gnome_extension() {
+  [[ -e "$EXTENSION_DIR" ]] || return 0
+  info "Removing the Window Monitor Pro GNOME extension"
+  if command -v gnome-extensions >/dev/null 2>&1; then
+    gnome-extensions disable "$EXTENSION_UUID" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$EXTENSION_DIR"
+}
+
+remove_project_files() {
+  [[ -e "$REACT_DRM_DIR" ]] || return 0
+  info "Removing the copied react-drm project files"
+  rm -rf "$REACT_DRM_DIR"
+}
+
 launch_wizard() {
   [[ $EUID -ne 0 ]] || fail "run this script as your regular user, not as root"
   [[ -x "$SCRIPT_DIR/node_modules/.bin/electron" && -f "$SCRIPT_DIR/install-gui/dist/main/main.js" ]] ||
@@ -161,12 +201,21 @@ main() {
       [[ "${2:-}" == --gui ]] && GUI_MODE=1
       gui_phase uninstall start
       confirm_uninstall
-      remove_service
-      remove_udev_rules
-      remove_config_gui_launcher
-      info "Uninstallation completed successfully"
+      run_step "stopping the service and restoring the firmware Touch Bar" remove_service
+      run_step "removing udev rules" remove_udev_rules
+      run_step "removing the GNOME extension" remove_gnome_extension
+      run_step "removing the config editor launcher" remove_config_gui_launcher
+      run_step "removing the copied project files" remove_project_files
+      if (( ${#FAILED_STEPS[@]} > 0 )); then
+        info "Uninstallation finished, but these steps had problems: ${FAILED_STEPS[*]}"
+      else
+        info "Uninstallation completed successfully"
+      fi
       gui_phase uninstall done
       [[ $GUI_MODE -eq 1 ]] && printf '{"type":"done"}\n'
+      if (( ${#FAILED_STEPS[@]} > 0 )); then
+        exit 1
+      fi
       ;;
     wizard) launch_wizard ;;
     *) printf 'usage: %s [uninstall|wizard]\n' "${0##*/}" >&2; return 2 ;;

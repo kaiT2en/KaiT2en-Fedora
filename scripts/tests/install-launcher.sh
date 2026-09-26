@@ -47,6 +47,8 @@ EOF
 cat >"$fake_bin/sudo" <<'EOF'
 #!/usr/bin/env bash
 printf 'sudo cwd=%s command=%s\n' "$PWD" "$*" >>"$KAIT2EN_TEST_LOG"
+[[ "${KAIT2EN_TEST_INSTALL_FAILS:-0}" == 1 && "$*" == "bash ./scripts/fedora/install.sh" ]] && exit 1
+exit 0
 EOF
 chmod 0755 "$fake_bin"/*
 
@@ -150,3 +152,30 @@ grep -Fq "git $git_prefix remote set-url origin $canonical_url" "$log"
 grep -Fxq "$canonical_url" "$origin_url_file"
 grep -Fq "git $git_prefix pull --ff-only origin main" "$log"
 grep -Fq "sudo cwd=$fake_repo command=bash ./scripts/fedora/install.sh" "$log"
+
+# A step reporting errors must not also trip the generic ERR trap. That
+# would bury run_project_installer's own explanation under a misleading
+# "just retry" message, and still needs to fail without marking it complete.
+: >"$log"
+printf 'phase=reboot_pending\ntarget_kernel=%s\n' "$target" >"$fake_state/state"
+failure_output="$work/failure-output.log"
+if printf 'n\n' |
+	env \
+		HOME="$fake_home" \
+		XDG_RUNTIME_DIR="$work" \
+		PATH="$fake_bin:/usr/bin:/bin" \
+		KAIT2EN_STATE_DIR="$fake_state" \
+		KAIT2EN_REPOSITORY="$fake_repo" \
+		KAIT2EN_TEST_TARGET="$target" \
+		KAIT2EN_TEST_REPOSITORY="$fake_repo" \
+		KAIT2EN_TEST_ORIGIN_URL_FILE="$origin_url_file" \
+		KAIT2EN_TEST_LOG="$log" \
+		KAIT2EN_TEST_INSTALL_FAILS=1 \
+		bash "$launcher" >"$failure_output" 2>&1; then
+	printf 'error: kait2en-install returned success after a reported install failure\n' >&2
+	exit 1
+fi
+grep -Fq 'reported errors' "$failure_output"
+grep -Fq 'not marked complete' "$failure_output"
+! grep -Fq 'installation stopped at line' "$failure_output"
+! grep -Fq 'kait2en-prepare --complete' "$log"

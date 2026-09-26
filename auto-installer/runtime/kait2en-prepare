@@ -142,8 +142,12 @@ bootstrap_repository() {
 		repair_origin_url
 		[[ $(git -c safe.directory="$repository" -C "$repository" branch --show-current) == main ]] ||
 			die "$repository is not on the main branch"
-		[[ -z $(git -c safe.directory="$repository" -C "$repository" status --porcelain) ]] ||
-			die "$repository has local changes; they were not discarded"
+		# This is a system-managed checkout, not a user workspace: force it
+		# clean instead of dying on stray build artifacts (e.g. leftovers from
+		# an older module's build, or a nested .git it dropped) and telling
+		# the user to go fix a git checkout by hand.
+		git -c safe.directory="$repository" -C "$repository" reset --hard
+		git -c safe.directory="$repository" -C "$repository" clean -ffd
 		git -c safe.directory="$repository" -C "$repository" fetch origin main
 		git -c safe.directory="$repository" -C "$repository" merge --ff-only origin/main
 		chown -R "$uid:$gid" "$repository"

@@ -7,21 +7,6 @@ require_repo_root
 require_fedora
 require_command chmod grubby grep install sed
 
-has_intel_pci_device() {
-	local device path wanted
-
-	for path in /sys/bus/pci/devices/*; do
-		[[ -r "$path/vendor" && -r "$path/device" ]] || continue
-		[[ $(<"$path/vendor") == 0x8086 ]] || continue
-		device="$(<"$path/device")"
-		for wanted in "$@"; do
-			[[ "$device" == "$wanted" ]] && return 0
-		done
-	done
-
-	return 1
-}
-
 repair_empty_grub_cmdline() {
 	local arg cmdline escaped
 	local -a args kept_args=()
@@ -60,6 +45,7 @@ repair_empty_grub_cmdline() {
 REMOVE_ARGS=(
 	"'acpi_osi=Windows 2012'"
 	"acpi_osi='Windows 2012'"
+	acpi_osi
 	intel_iommu
 	iommu
 	pm_async
@@ -71,7 +57,6 @@ REMOVE_ARGS=(
 	nvme_core.default_ps_max_latency_us
 	apple_gmux.force_igd
 	t2gmux.force_igd
-	amdgpu.aspm
 	i915.enable_guc
 	mem_sleep_default
 	initcall_blacklist
@@ -79,6 +64,7 @@ REMOVE_ARGS=(
 )
 
 ADD_ARGS=(
+	"amdgpu.aspm"
 	"i915.enable_guc=2"
 	"intel_iommu=on"
 	"iommu=pt"
@@ -108,16 +94,6 @@ MODULE_BLACKLIST="module_blacklist=$(IFS=,; printf '%s' "${BLACKLIST_MODULES[*]}
 SILENT_BLACKLIST_CONF="/etc/modprobe.d/kait2en-silent-blacklist.conf"
 
 ADD_ARGS+=("$INITCALL_BLACKLIST" "$MODULE_BLACKLIST")
-
-if has_intel_pci_device 0x15e8 0x15eb; then
-	info "Titan Ridge detected; removing obsolete ACPI OSI overrides"
-	REMOVE_ARGS+=(acpi_osi)
-elif has_intel_pci_device 0x8a0d 0x8a17; then
-	info "Ice Lake Thunderbolt detected; removing obsolete ACPI OSI overrides"
-	REMOVE_ARGS+=(acpi_osi)
-else
-	warn "unknown Thunderbolt generation; leaving ACPI OSI arguments unchanged"
-fi
 
 KERNEL_ARGS="${ADD_ARGS[*]}"
 OLD_KERNEL_ARGS="${REMOVE_ARGS[*]}"
