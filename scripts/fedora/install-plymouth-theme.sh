@@ -22,7 +22,7 @@ for command_name in install plymouth-set-default-theme rm; do
 		missing_requirements+=("command $command_name")
 done
 for asset in kait2en.plymouth kait2en.script watermark.png \
-		boot.png box.png bullet.png entry.png lock.png progress_bar.png progress_box.png; do
+		boot.png boot-small.png box.png bullet.png entry.png lock.png progress_bar.png progress_box.png; do
 	[[ -r "$THEME_SRC/$asset" ]] || missing_requirements+=("asset $asset")
 done
 
