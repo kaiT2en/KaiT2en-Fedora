@@ -450,77 +450,93 @@ static void gmux_index_write32(struct apple_gmux_data *gmux_data, int port,
 	mutex_unlock(&gmux_data->index_lock);
 }
 
-static int gmux_mmio_wait(struct apple_gmux_data *gmux_data)
+/* AppleMuxControl2 returns this when the mailbox stays busy. */
+#define GMUX_MMIO_BUSY_VALUE	0xdeadbeef
+#define GMUX_MMIO_WAIT_TRIES	200
+
+/*
+ * Like AppleMuxControl2: poll the command register once per millisecond for
+ * up to 200 ms. Returns true while the mailbox is still busy.
+ */
+static bool gmux_mmio_busy(struct apple_gmux_data *gmux_data)
 {
-	int i = 200;
-	u8 gwr = ioread8(gmux_data->iomem_base + GMUX_MMIO_COMMAND_SEND);
+	u8 busy = ioread8(gmux_data->iomem_base + GMUX_MMIO_COMMAND_SEND);
+	int tries = 0;
 
-	while (i && gwr) {
-		gwr = ioread8(gmux_data->iomem_base + GMUX_MMIO_COMMAND_SEND);
-		udelay(100);
-		i--;
+	while (busy && tries < GMUX_MMIO_WAIT_TRIES) {
+		usleep_range(1000, 1100);
+		busy = ioread8(gmux_data->iomem_base + GMUX_MMIO_COMMAND_SEND);
+		tries++;
 	}
+	if (tries > 50)
+		pr_warn_ratelimited("mux register access took %d ms\n", tries);
 
-	return !!i;
+	return busy;
+}
+
+/* Like AppleMuxControl2, skip the access while the mailbox is busy. */
+static u32 gmux_mmio_read(struct apple_gmux_data *gmux_data, int port,
+			  int size)
+{
+	u32 val = GMUX_MMIO_BUSY_VALUE;
+
+	mutex_lock(&gmux_data->index_lock);
+	if (!gmux_mmio_busy(gmux_data)) {
+		iowrite8(port & 0xff, gmux_data->iomem_base + GMUX_MMIO_PORT_SELECT);
+		iowrite8(GMUX_MMIO_READ | size,
+			 gmux_data->iomem_base + GMUX_MMIO_COMMAND_SEND);
+		if (gmux_mmio_busy(gmux_data))
+			pr_warn_ratelimited("read command timeout on port 0x%x\n",
+					    port);
+		if (size == 4)
+			val = ioread32be(gmux_data->iomem_base);
+		else
+			val = ioread8(gmux_data->iomem_base);
+	}
+	mutex_unlock(&gmux_data->index_lock);
+
+	return val;
+}
+
+static void gmux_mmio_write(struct apple_gmux_data *gmux_data, int port,
+			    u32 val, int size)
+{
+	mutex_lock(&gmux_data->index_lock);
+	if (!gmux_mmio_busy(gmux_data)) {
+		if (size == 4)
+			iowrite32be(val, gmux_data->iomem_base);
+		else
+			iowrite8(val, gmux_data->iomem_base);
+		iowrite8(port & 0xff, gmux_data->iomem_base + GMUX_MMIO_PORT_SELECT);
+		iowrite8(GMUX_MMIO_WRITE | size,
+			 gmux_data->iomem_base + GMUX_MMIO_COMMAND_SEND);
+		if (gmux_mmio_busy(gmux_data))
+			pr_warn_ratelimited("write command timeout on port 0x%x\n",
+					    port);
+	}
+	mutex_unlock(&gmux_data->index_lock);
 }
 
 static u8 gmux_mmio_read8(struct apple_gmux_data *gmux_data, int port)
 {
-	u8 val;
-
-	mutex_lock(&gmux_data->index_lock);
-	gmux_mmio_wait(gmux_data);
-	iowrite8((port & 0xff), gmux_data->iomem_base + GMUX_MMIO_PORT_SELECT);
-	iowrite8(GMUX_MMIO_READ | sizeof(val),
-		gmux_data->iomem_base + GMUX_MMIO_COMMAND_SEND);
-	gmux_mmio_wait(gmux_data);
-	val = ioread8(gmux_data->iomem_base);
-	mutex_unlock(&gmux_data->index_lock);
-
-	return val;
+	return gmux_mmio_read(gmux_data, port, 1);
 }
 
 static void gmux_mmio_write8(struct apple_gmux_data *gmux_data, int port,
 			      u8 val)
 {
-	mutex_lock(&gmux_data->index_lock);
-	gmux_mmio_wait(gmux_data);
-	iowrite8(val, gmux_data->iomem_base);
-
-	iowrite8(port & 0xff, gmux_data->iomem_base + GMUX_MMIO_PORT_SELECT);
-	iowrite8(GMUX_MMIO_WRITE | sizeof(val),
-		gmux_data->iomem_base + GMUX_MMIO_COMMAND_SEND);
-
-	gmux_mmio_wait(gmux_data);
-	mutex_unlock(&gmux_data->index_lock);
+	gmux_mmio_write(gmux_data, port, val, 1);
 }
 
 static u32 gmux_mmio_read32(struct apple_gmux_data *gmux_data, int port)
 {
-	u32 val;
-
-	mutex_lock(&gmux_data->index_lock);
-	gmux_mmio_wait(gmux_data);
-	iowrite8((port & 0xff), gmux_data->iomem_base + GMUX_MMIO_PORT_SELECT);
-	iowrite8(GMUX_MMIO_READ | sizeof(val),
-		gmux_data->iomem_base + GMUX_MMIO_COMMAND_SEND);
-	gmux_mmio_wait(gmux_data);
-	val = ioread32be(gmux_data->iomem_base);
-	mutex_unlock(&gmux_data->index_lock);
-
-	return val;
+	return gmux_mmio_read(gmux_data, port, 4);
 }
 
 static void gmux_mmio_write32(struct apple_gmux_data *gmux_data, int port,
 			       u32 val)
 {
-	mutex_lock(&gmux_data->index_lock);
-	iowrite32be(val, gmux_data->iomem_base);
-	iowrite8(port & 0xff, gmux_data->iomem_base + GMUX_MMIO_PORT_SELECT);
-	iowrite8(GMUX_MMIO_WRITE | sizeof(val),
-		gmux_data->iomem_base + GMUX_MMIO_COMMAND_SEND);
-	gmux_mmio_wait(gmux_data);
-	mutex_unlock(&gmux_data->index_lock);
+	gmux_mmio_write(gmux_data, port, val, 4);
 }
 
 static u8 gmux_read8(struct apple_gmux_data *gmux_data, int port)
