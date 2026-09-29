@@ -1205,7 +1205,9 @@ static int gmux_resume(struct device *dev)
 	gmux_enable_interrupts(gmux_data);
 	gmux_start_interrupts(gmux_data);
 	gmux_write_switch_state(gmux_data);
-	if (gmux_data->power_state == VGA_SWITCHEROO_OFF)
+	/* Like AppleMuxControl2, only power down a dGPU that came back powered. */
+	if (gmux_data->power_state == VGA_SWITCHEROO_OFF &&
+	    (gmux_read8(gmux_data, GMUX_PORT_DISCRETE_POWER) & 3) == 3)
 		gmux_set_discrete_state(gmux_data, gmux_data->power_state);
 	return 0;
 }
