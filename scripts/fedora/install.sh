@@ -28,17 +28,17 @@ ask_touchbar() {
 T2 Touch Bar (optional)
 
   T2 Touch Bar replaces Apple's built-in Touch Bar row with its own
-  dark-first display: the bar stays black until you touch it or press Fn,
+  dark-first display. The bar stays black until you touch it or press Fn,
   learns how long to stay lit, offers a media row and an F-key row (hold Fn
   to switch), shows a fingerprint prompt for Touch ID and gives haptic
   feedback on key presses. It saves power because the bar is off most of
-  the time.
+  the time. Multitouch is supported. Two-finger swipe on a dark bar changes
+  volume, two-finger swipe on a lit bar switches the row. Three-finger
+  swipe on a dark bar changes display brightness.
 
-  Without it, the Touch Bar keeps working: Apple's native firmware row with
+  Without it, the Touch Bar keeps working. Apple's native firmware row with
   esc, brightness, volume and media keys (F-keys while Fn is held) stays
   active.
-
-  You can remove it later with: sudo ./apps/t2-touchbar/uninstall.sh
 
 TEXT
 	read -r -p "Install kait2en-touchbar? [Y/n] " answer || answer=

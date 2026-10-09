@@ -20,6 +20,44 @@ kait2en-install
 This updates the KAIT2EN Git checkout and runs the regular project installer.
 Review its output and reboot after it completes successfully.
 
+If that fails for whatever reason, you can always clone our repo directly to
+a folder of your choice and run the main install script directly.
+So for example, open a terminal and type `cd`. This will take you to your
+username's home directory. Then type 
+
+```bash
+git clone https://github.com/kaiT2en/KaiT2en-Fedora.git
+```
+
+This will create a folder `KaiT2en-Fedora` in your home dir which contains our latest code.
+Then simply type:
+
+```bash
+cd KaiT2en-Fedora/scripts/fedora
+sudo ./install.sh
+```
+
+This will run the installer and update your KAIT2EN installation just like
+`kait2en-install` would do.
+
+### Hybrid graphics and kernel updates
+
+On a MacBookPro15,1, 16,1 or 16,4, the patched graphics driver is rebuilt
+during every kernel update. dnf does not show its output, so the update simply
+takes a few minutes longer. Reboot only after dnf has finished. The build log
+is written to `/var/log/kait2en-gpu-runtime-pm.log`.
+
+If the build failed, rebuild the driver for the new kernel and reboot:
+
+```bash
+cd /usr/local/src/KaiT2en-Fedora/scripts/fedora
+sudo ./install-gpu-runtime-pm.sh install <kernel>
+```
+
+`<kernel>` is the version of the new kernel, for example the output of
+`uname -r` after booting it. `kait2en-install` rebuilds the driver for the
+running kernel as part of its normal run.
+
 ## Updating Fedora
 
 You just update Fedora like everyone else. DKMS will notice and recompile our modules against the

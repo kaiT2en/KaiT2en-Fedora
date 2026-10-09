@@ -6,11 +6,13 @@ provide transparency to users and devs.
 
 ## Repo location and updater
 
-The guided installer creates a clean checkout of the `main` branch at:
+The guided installer creates a clean git checkout of the `main` branch at:
 
 ```text
 /usr/local/src/KaiT2en-Fedora
 ```
+
+**Never change files in this directory manually unless you are told to.**
 
 `kait2en-install` fast-forwards this checkout and runs
 `scripts/fedora/install.sh`. It refuses to overwrite local changes or use a

@@ -19,7 +19,7 @@ brings in the next one from the right, sliding and fading). A 600 ms Fn hold
 switches between media keys and the other layer used last. The last layer is
 remembered.
 
-Up to three personal keys can fill the free space on the third layer. They live in
+Up to four personal keys can fill the free space on the third layer. They live in
 `$XDG_CONFIG_HOME/kait2en-touchbar/keys.toml`, which updates and uninstalls 
 never touch. The daemon creates it with commented examples on its
 first start. Each key has a text label and either sends a key
