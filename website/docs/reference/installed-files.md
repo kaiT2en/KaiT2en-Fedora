@@ -178,8 +178,10 @@ checks for a Broadcom PCI device with vendor ID `0x14e4` and device ID `0x5f69`,
   `brcmfmac` and `hci_bcm4377` in that order. After resume it loads `brcmfmac`
   and `brcmfmac_wcc`, waits five seconds, then loads `hci_bcm4377`.
 
-If the controller is absent, the service logs that the fix is not needed and
-does not unload a module. State files for modules successfully unloaded by
+Without a BCM4377, it checks for the BCM4350 WLAN chip (device ID `0x43a3`).
+
+If neither controller is present, the service logs that the fix is not needed
+and does not unload a module. State files for modules successfully unloaded by
 the helper exist only until resume below `/run/kait2en-suspend/`.
 
 The installer checks the running kernel log for two known Apple ACPI firmware
