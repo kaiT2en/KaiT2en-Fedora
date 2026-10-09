@@ -478,18 +478,23 @@ if [[ ! -f $WORK/.prepared ]]; then
 			"$TREE/scripts/config" --file "$TREE/.config" --module "$symbol"
 		done
 
+		# localmodconfig can promote the HDA driver to built-in. Built in, it
+		# fails to probe the CS8409 codec on the MacBookPro14,1. The runtime-PM
+		# installer also replaces the HDA modules with builds from this tree.
+		"$TREE/scripts/config" --file "$TREE/.config" \
+			--module SND_HDA_INTEL \
+			--module SND_HDA_CODEC_HDMI
+
 		if ((HAS_AMD_DGPU)); then
 			# Keep i915 and apple_gmux at the same linkage level. localmodconfig
 			# can promote the currently active i915 driver to built-in, but the
 			# patched i915 calls apple_gmux directly and cannot link against it as
 			# a module. apple_gmux must remain modular so t2gmux can replace it.
-			# The runtime-PM installer also replaces the AMD and HDA modules with
-			# builds from this tree. Preserve their complete Kconfig dependency
-			# graph even if localmodconfig ran while the discrete GPU was off.
+			# The runtime-PM installer also replaces the AMD modules with builds
+			# from this tree. Preserve their complete Kconfig dependency graph
+			# even if localmodconfig ran while the discrete GPU was off.
 			"$TREE/scripts/config" --file "$TREE/.config" \
-				--module DRM_AMDGPU \
-				--module SND_HDA_INTEL \
-				--module SND_HDA_CODEC_HDMI
+				--module DRM_AMDGPU
 		fi
 	fi
 	make -C "$TREE" olddefconfig
