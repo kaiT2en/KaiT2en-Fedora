@@ -165,6 +165,7 @@ audio behavior and diagnostics.
 | NetworkManager profile `Apple T2 Bridge` | IPv6 link-local connection to the T2 over its internal CDC-NCM interface, bound to the interface's MAC address. Replaces the earlier `t2_ncm` udev rule |
 | `/etc/modprobe.d/kait2en-silent-blacklist.conf` | Silently ignores attempts to load drivers replaced by KAIT2EN modules |
 | `/usr/share/plymouth/themes/kait2en/` | macOS-style boot splash with a KAIT2EN logo |
+| `/etc/plymouth/plymouthd.conf` | Selects the KAIT2EN theme, pins `DeviceScale=1` and sets `UseSimpledrm=0` so the splash does not resize when i915 replaces the 2880x1800 EFI framebuffer |
 | `/usr/share/pixmaps/kait2en-gdm-logo.png` | White and red KAIT2EN logo shown by GDM |
 | `/etc/dconf/db/gdm.d/00-kait2en` | Configures the GDM logo and solid black login background |
 | `/usr/share/backgrounds/kait2en/gdm-black.png` | Black GDM background image |
