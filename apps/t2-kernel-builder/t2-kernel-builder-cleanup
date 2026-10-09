@@ -16,7 +16,6 @@ REQUIRED_MODULES = (
     "acpi_tad", "rtc_cmos", "applesmc",
     "hid_apple", "hid_appletb_bl", "hid_appletb_kbd",
     "hid_magicmouse", "appletbdrm", "apple_mfi_fastcharge",
-    "t2bce_core", "t2bce_dma", "t2bce_vhci", "t2hid",
 )
 MACSMC_MODULES = (
     "macsmc_core", "macsmc_acpi", "macsmc_hwmon", "macsmc_light",
@@ -46,6 +45,19 @@ def run(command, cancel_file=None, **kwargs):
         raise subprocess.CalledProcessError(process.returncode, command)
     return process
 
+# The T2 exposes Apple PCI functions 106b:1801 and 106b:1802. Macs without it
+# need neither the BCE stack nor the T2 input modules in the initramfs.
+def detect_t2_chip():
+    for device in pathlib.Path("/sys/bus/pci/devices").iterdir():
+        try:
+            vendor = (device / "vendor").read_text().strip()
+            product = (device / "device").read_text().strip()
+        except OSError:
+            continue
+        if vendor == "0x106b" and product in ("0x1801", "0x1802"):
+            return True
+    return False
+
 if os.geteuid() != 0: fail("must run as root")
 
 if len(sys.argv) in (4, 5) and sys.argv[1] == "install-kernel":
@@ -68,10 +80,11 @@ if len(sys.argv) in (4, 5) and sys.argv[1] == "install-kernel":
     actual = subprocess.run(["make", "-s", "-C", str(tree), "kernelrelease"],
                             text=True, capture_output=True)
     if actual.returncode or actual.stdout.strip() != release: fail("kernel release validation failed")
+    has_t2_chip = detect_t2_chip()
     # t2bce_ave in the t2bce_stack DKMS build links against v4l2-mem2mem.
     # Refuse before touching the system instead of rolling back after DKMS.
-    if not re.search(r"^CONFIG_V4L2_MEM2MEM_DEV=[ym]$",
-                     (tree / ".config").read_text(encoding="utf-8"), re.MULTILINE):
+    if has_t2_chip and not re.search(r"^CONFIG_V4L2_MEM2MEM_DEV=[ym]$",
+                                     (tree / ".config").read_text(encoding="utf-8"), re.MULTILINE):
         fail("kernel config lacks CONFIG_V4L2_MEM2MEM_DEV required by t2bce_ave, "
              "rebuild it with the current kernel builder")
     module_dir = pathlib.Path("/lib/modules") / release
@@ -134,6 +147,8 @@ if len(sys.argv) in (4, 5) and sys.argv[1] == "install-kernel":
         run(["dkms", "autoinstall", "-k", release], cancel_file)
         run(["depmod", "-a", release], cancel_file)
         required_modules = list(REQUIRED_MODULES)
+        if has_t2_chip:
+            required_modules.extend(INPUT_MODULES)
         config = tree / ".config"
         config_text = config.read_text(encoding="utf-8")
         if re.search(r"^CONFIG_MACSMC_ACPI=[ym]$", config_text, re.MULTILINE):
@@ -148,13 +163,14 @@ if len(sys.argv) in (4, 5) and sys.argv[1] == "install-kernel":
             if found.returncode or not found.stdout.strip():
                 fail(f"required kernel module is missing for {release}: {module}")
 
-        DRACUT_CONFIG.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
-        DRACUT_CONFIG.write_text(
-            "# Managed by scripts/fedora/rebuild-initramfs.sh\n"
-            f'force_drivers+=" {" ".join(INPUT_MODULES)} "\n',
-            encoding="utf-8",
-        )
-        os.chmod(DRACUT_CONFIG, 0o644)
+        if has_t2_chip:
+            DRACUT_CONFIG.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+            DRACUT_CONFIG.write_text(
+                "# Managed by scripts/fedora/rebuild-initramfs.sh\n"
+                f'force_drivers+=" {" ".join(INPUT_MODULES)} "\n',
+                encoding="utf-8",
+            )
+            os.chmod(DRACUT_CONFIG, 0o644)
 
         print("[kait2en-progress] phase=install-boot", flush=True)
         run(["make", "-C", str(tree), "install"], cancel_file)
@@ -163,12 +179,13 @@ if len(sys.argv) in (4, 5) and sys.argv[1] == "install-kernel":
         initramfs = pathlib.Path("/boot") / f"initramfs-{release}.img"
         if not initramfs.is_file():
             fail(f"kernel installation did not create {initramfs}")
-        listing = subprocess.run(
-            ["lsinitrd", str(initramfs)], text=True, capture_output=True, check=True,
-        ).stdout
-        for module in INPUT_MODULES:
-            if not re.search(rf"(?:^|/){re.escape(module)}\.ko(?:\.[a-z0-9]+)?(?:\s|$)", listing, re.MULTILINE):
-                fail(f"rebuilt initramfs is missing required module: {module}")
+        if has_t2_chip:
+            listing = subprocess.run(
+                ["lsinitrd", str(initramfs)], text=True, capture_output=True, check=True,
+            ).stdout
+            for module in INPUT_MODULES:
+                if not re.search(rf"(?:^|/){re.escape(module)}\.ko(?:\.[a-z0-9]+)?(?:\s|$)", listing, re.MULTILINE):
+                    fail(f"rebuilt initramfs is missing required module: {module}")
     except BaseException:
         if module_dir.exists(): shutil.rmtree(module_dir)
         generated_boot_paths = [pathlib.Path("/boot") / name for name in
