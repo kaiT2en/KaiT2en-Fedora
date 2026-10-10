@@ -23,7 +23,7 @@ nav:
   - {label: Home, href: index.html}
   - {label: Documentation, href: documentation.html}
   - {label: Blog, href: blog.html}
-  - {label: Donate, href: 'index.html#donate'}
+  - {label: Funding, href: 'index.html#donate'}
 
 hero:
   image: img/hero-touchbar.jpg

@@ -161,13 +161,13 @@
 
 {% block modal_toc %}
             <div class="nav-modal-section">
-                {% for group in sidebar %}
-                <h4>{{ group.title }}</h4>
+                <h4>Page Navi</h4>
                 <div class="nav-modal-toc">
+                    {% for group in sidebar %}
                     {% for entry in group.entries %}
                     <a href="#{{ entry.id }}" onclick="closeMenu()">{{ entry.title }}</a>
                     {% endfor %}
+                    {% endfor %}
                 </div>
-                {% endfor %}
             </div>
 {% endblock %}

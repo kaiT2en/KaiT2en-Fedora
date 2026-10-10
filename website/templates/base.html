@@ -128,7 +128,7 @@
         <div class="nav-modal-content">
 {% block modal_toc %}{% endblock %}
             <div class="nav-modal-section">
-                <h4>Navigation</h4>
+                <h4>Site Navi</h4>
                 <div class="nav-modal-links">
                     {% for item in nav %}
                     <a href="{{ base }}{{ item.href }}"{% if item.href == page_url %} class="active"{% endif %}>{{ item.label }}</a>
