@@ -15,10 +15,12 @@ The installation starts in macOS and continues in Fedora:
    KAIT2EN setup installs the remaining drivers and system integration.
 9. After another reboot, you can enjoy KAIT2EN on top of vanilla Fedora.
 
+The USB drive is a live installer. It only carries the drivers needed to install KAIT2EN.
+
 The installer currently supports Fedora Workstation, Fedora KDE Desktop and
 Fedora COSMIC Spin. We strongly recommend installing Workstation (Gnome)
-because that is what we devs use ourselves. KDE and Cosmic are generally more
-problematic. We can't help you with that because we don't use it.
+because that is what KAIT2EN devs use. We still rely on your feedback on
+other DE's. But if you want the most flawless experience, Gnome is the way.
 
 ## Before you start
 

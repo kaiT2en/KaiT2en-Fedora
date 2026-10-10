@@ -94,8 +94,7 @@ index:
         and verifies the official Fedora image, collects the Apple firmware from
         your Mac and writes a bootable installer.
       actions:
-        - {label: Full installation guide, href: 'documentation.html#installation', style: primary}
-        - {label: Before you start, href: 'documentation.html#before-you-start', style: secondary}
+        - {label: Full installation guide, href: 'documentation.html#overview', style: primary}
     - id: community
       title: Community
       subtitle: Ask before you break something, or tell us how you broke it.
@@ -108,9 +107,9 @@ documentation:
   title: Documentation
   description: Install KAIT2EN on a T2 Mac, then set up audio, GPUs and updates.
   groups:
-    - title: Getting started
+    - title: Install
       pages:
-        - {file: installation.md, split: h2}
+        - {file: installation.md, split: h2, title: Overview}
     - title: Post-install
       pages:
         - {file: post-install/kait2en-applications.md, title: KAIT2EN applications}
@@ -131,7 +130,7 @@ blog:
 # Old MkDocs URLs that already exist in the wild, kept alive as redirects.
 redirects:
   "features/": "index.html#features"
-  "installation/": "documentation.html#installation"
+  "installation/": "documentation.html#overview"
   "post-install/audio-dsp/": "documentation.html#audio-dsp"
   "post-install/configuring-gpus/": "documentation.html#configure-gpus"
   "post-install/hardware-video-decoding/": "documentation.html#hardware-video-decoding"

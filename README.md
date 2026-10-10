@@ -14,7 +14,7 @@ You will receive kernel updates directly from Fedora and the latest T2 modules f
 
 ## Install
 
-Follow the [installation guide](https://kait2en.org/documentation.html#installation).
+Follow the [installation guide](https://kait2en.org/documentation.html#overview).
 
 Some Rust apps are built during installation, and their Cargo target folders
 are cleaned by default. Set `KAIT2EN_CARGO_CLEAN=0` to keep them.
