@@ -7,3 +7,4 @@
 0007-drm-amd-display-skip-panel-power-savings-on-eDP-links-without-a-panel.patch
 0008-drm-amd-pm-cap-UCLK-below-750-MHz-on-the-Navi-14-of-MacBookPro16-1.patch
 0009-drm-amd-pm-let-Apple-Navi-boards-lower-the-power-limit-to-40-percent.patch
+0010-fix-power.patch
