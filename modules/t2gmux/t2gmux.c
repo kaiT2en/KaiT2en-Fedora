@@ -192,6 +192,133 @@ static void gmux_set_bridges_state(struct apple_gmux_data *gmux_data,
 			bridges[i]->current_state = state;
 }
 
+/*
+ * A config access to a bridge that PWRD turned off makes the CPU raise
+ * CATERR. Keep the PCIe port driver off every bridge above the Navi 14 and
+ * drop config accesses to those bridges while they are in D3cold. The PCI
+ * core cannot be told either from a module, so take them away from pcieport
+ * with a driver override and wrap the config ops of the buses they sit on.
+ */
+#define GMUX_NAVI14_DEVICE_ID 0x7340
+
+struct gmux_quirk_bus {
+	struct pci_bus *bus;
+	struct pci_ops *ops;
+};
+
+static struct pci_dev *gmux_quirk_bridges[GMUX_DGPU_MAX_BRIDGES];
+static int gmux_quirk_bridge_count;
+static struct gmux_quirk_bus gmux_quirk_buses[GMUX_DGPU_MAX_BRIDGES];
+static int gmux_quirk_bus_count;
+
+static struct pci_ops *gmux_quirk_orig_ops(struct pci_bus *bus)
+{
+	int i;
+
+	for (i = 0; i < gmux_quirk_bus_count; i++)
+		if (gmux_quirk_buses[i].bus == bus)
+			return gmux_quirk_buses[i].ops;
+
+	return NULL;
+}
+
+static bool gmux_quirk_ignore_access(struct pci_bus *bus, unsigned int devfn)
+{
+	int i;
+
+	for (i = 0; i < gmux_quirk_bridge_count; i++) {
+		struct pci_dev *bridge = gmux_quirk_bridges[i];
+
+		if (bridge->bus == bus && bridge->devfn == devfn)
+			return READ_ONCE(bridge->current_state) == PCI_D3cold;
+	}
+
+	return false;
+}
+
+static int gmux_quirk_read(struct pci_bus *bus, unsigned int devfn, int where,
+			   int size, u32 *val)
+{
+	if (gmux_quirk_ignore_access(bus, devfn)) {
+		PCI_SET_ERROR_RESPONSE(val);
+		return PCIBIOS_SUCCESSFUL;
+	}
+
+	return gmux_quirk_orig_ops(bus)->read(bus, devfn, where, size, val);
+}
+
+static int gmux_quirk_write(struct pci_bus *bus, unsigned int devfn, int where,
+			    int size, u32 val)
+{
+	if (gmux_quirk_ignore_access(bus, devfn))
+		return PCIBIOS_SUCCESSFUL;
+
+	return gmux_quirk_orig_ops(bus)->write(bus, devfn, where, size, val);
+}
+
+static struct pci_ops gmux_quirk_ops = {
+	.read = gmux_quirk_read,
+	.write = gmux_quirk_write,
+};
+
+static void gmux_quirk_wrap_bus(struct pci_bus *bus)
+{
+	if (gmux_quirk_orig_ops(bus))
+		return;
+
+	gmux_quirk_buses[gmux_quirk_bus_count].bus = bus;
+	gmux_quirk_buses[gmux_quirk_bus_count].ops = bus->ops;
+	gmux_quirk_bus_count++;
+	pci_bus_set_ops(bus, &gmux_quirk_ops);
+}
+
+static void gmux_quirk_dgpu_bridges(void)
+{
+	struct pci_dev *gpu, *bridge;
+	int i;
+
+	gpu = pci_get_device(PCI_VENDOR_ID_ATI, GMUX_NAVI14_DEVICE_ID, NULL);
+	if (!gpu)
+		return;
+
+	bridge = gpu;
+	while (gmux_quirk_bridge_count < GMUX_DGPU_MAX_BRIDGES &&
+	       (bridge = pci_upstream_bridge(bridge))) {
+		gmux_quirk_bridges[gmux_quirk_bridge_count++] = pci_dev_get(bridge);
+
+		device_set_driver_override(&bridge->dev, "none");
+		if (bridge->dev.driver) {
+			pci_info(bridge, "releasing %s\n", bridge->dev.driver->name);
+			device_release_driver(&bridge->dev);
+		}
+	}
+
+	for (i = 0; i < gmux_quirk_bridge_count; i++)
+		gmux_quirk_wrap_bus(gmux_quirk_bridges[i]->bus);
+
+	pci_dev_put(gpu);
+}
+
+/*
+ * The bridges stay without a driver, binding pcieport again while the dGPU
+ * is off is what the quirk prevents.
+ */
+static void gmux_unquirk_dgpu_bridges(void)
+{
+	int i;
+
+	for (i = 0; i < gmux_quirk_bus_count; i++)
+		pci_bus_set_ops(gmux_quirk_buses[i].bus, gmux_quirk_buses[i].ops);
+	gmux_quirk_bus_count = 0;
+
+	while (gmux_quirk_bridge_count) {
+		struct pci_dev *bridge = gmux_quirk_bridges[--gmux_quirk_bridge_count];
+
+		device_set_driver_override(&bridge->dev, NULL);
+		pci_dev_put(bridge);
+	}
+}
+
 /* The GPU's HDA function, caller must pci_dev_put() it. */
 static struct pci_dev *gmux_get_dgpu_hda(struct apple_gmux_data *gmux_data)
 {
@@ -335,9 +462,10 @@ static int gmux_restore_dgpu_state(struct apple_gmux_data *gmux_data)
 	u32 id;
 	int i, ms, ret;
 
+	/* Back in D0 first, config accesses to bridges in D3cold are dropped. */
+	gmux_set_bridges_state(gmux_data, PCI_D0);
 	for (i = count - 1; i >= 0; i--)
 		pci_restore_state(bridges[i]);
-	gmux_set_bridges_state(gmux_data, PCI_D0);
 	pr_debug("power up: %d bridges restored\n", count);
 
 	for (ms = 0; ms < GMUX_DGPU_CFG_WAIT_MS; ms++) {
@@ -410,6 +538,11 @@ struct apple_gmux_config {
 
 /* kMux_GPUPowerState in AppleMuxControl2, 3 when the discrete GPU is powered. */
 #define GMUX_PORT_GPU_POWER_STATE	0x3f
+#define GMUX_PORT_FSS			0x12
+
+static int boot_gpu = -1;
+module_param(boot_gpu, int, 0);
+MODULE_PARM_DESC(boot_gpu, "Configure the boot gpu (-1 = auto, 0 = iGPU, 1 = dGPU)");
 
 #define GMUX_INTERRUPT_ENABLE		0xff
 #define GMUX_INTERRUPT_DISABLE		0x00
@@ -756,6 +889,11 @@ static const struct backlight_ops gmux_bl_ops = {
  * switch the panel and the external DP connector and allocates a framebuffer
  * for the selected GPU.
  *
+ * There is iGPU present on iMac's aswell, and we can enable it using apple-set-os.
+ * But there arent any display lines going from the iGPU to the display. iGPU is only
+ * used for offloading then, it makes sense as iMac's display are massive (4K or 5K).
+ * A integrated GPU wont be able to handle that.
+ *
  * .. _US 8,687,007 B2: https://pimg-fpiw.uspto.gov/fdd/07/870/086/0.pdf
  * .. _NXP CBTL06141:   https://www.nxp.com/documents/data_sheet/CBTL06141.pdf
  * .. _NXP CBTL06142:   https://www.nxp.com/documents/data_sheet/CBTL06141.pdf
@@ -802,6 +940,35 @@ static void gmux_write_switch_state(struct apple_gmux_data *gmux_data)
 		gmux_write8(gmux_data, GMUX_PORT_SWITCH_EXTERNAL, 3);
 }
 
+#define APPLE_GPU_VARS_GUID EFI_GUID(0xfa4ce28d, 0xb62f, 0x4c99, \
+				     0x9c, 0xc3, 0x68, 0x15, 0x68, 0x6e, 0x30, 0xf9)
+
+static efi_char16_t gmux_gpu_active_name[] = L"gpu-active";
+
+/*
+ * AppleMuxControl2 stores the GPU driving the panel in gpu-active before
+ * sleep and power-off: 1 for the integrated GPU, 0 for the discrete one.
+ */
+static void gmux_write_gpu_active(struct apple_gmux_data *gmux_data)
+{
+	efi_guid_t guid = APPLE_GPU_VARS_GUID;
+	u32 active = gmux_data->switch_state_display == VGA_SWITCHEROO_IGD;
+	efi_status_t status;
+
+	if (!efivar_is_available())
+		return;
+
+	status = efivar_set_variable(gmux_gpu_active_name, &guid,
+				     EFI_VARIABLE_NON_VOLATILE |
+				     EFI_VARIABLE_BOOTSERVICE_ACCESS |
+				     EFI_VARIABLE_RUNTIME_ACCESS,
+				     sizeof(active), &active);
+	if (status != EFI_SUCCESS)
+		pr_warn("writing gpu-active failed: 0x%lx\n", status);
+	else
+		pr_debug("gpu-active: %u\n", active);
+}
+
 static int gmux_switchto(enum vga_switcheroo_client_id id)
 {
 	apple_gmux_data->switch_state_ddc = id;
@@ -810,6 +977,9 @@ static int gmux_switchto(enum vga_switcheroo_client_id id)
 		apple_gmux_data->switch_state_external = id;
 
 	gmux_write_switch_state(apple_gmux_data);
+	/* The T2 reads gpu-active, write it on every switch like macOS. */
+	if (apple_gmux_data->iomem_base)
+		gmux_write_gpu_active(apple_gmux_data);
 
 	return 0;
 }
@@ -1280,35 +1450,6 @@ static void gmux_fini_debugfs(struct apple_gmux_data *gmux_data)
 	debugfs_remove_recursive(gmux_data->debug_dentry);
 }
 
-#define APPLE_GPU_VARS_GUID EFI_GUID(0xfa4ce28d, 0xb62f, 0x4c99, \
-				     0x9c, 0xc3, 0x68, 0x15, 0x68, 0x6e, 0x30, 0xf9)
-
-static efi_char16_t gmux_gpu_active_name[] = L"gpu-active";
-
-/*
- * AppleMuxControl2 stores the GPU driving the panel in gpu-active before
- * sleep and power-off: 1 for the integrated GPU, 0 for the discrete one.
- */
-static void gmux_write_gpu_active(struct apple_gmux_data *gmux_data)
-{
-	efi_guid_t guid = APPLE_GPU_VARS_GUID;
-	u32 active = gmux_data->switch_state_display == VGA_SWITCHEROO_IGD;
-	efi_status_t status;
-
-	if (!efivar_is_available())
-		return;
-
-	status = efivar_set_variable(gmux_gpu_active_name, &guid,
-				     EFI_VARIABLE_NON_VOLATILE |
-				     EFI_VARIABLE_BOOTSERVICE_ACCESS |
-				     EFI_VARIABLE_RUNTIME_ACCESS,
-				     sizeof(active), &active);
-	if (status != EFI_SUCCESS)
-		pr_warn("writing gpu-active failed: 0x%lx\n", status);
-	else
-		pr_debug("gpu-active: %u\n", active);
-}
-
 static int gmux_suspend(struct device *dev)
 {
 	struct pnp_dev *pnp = to_pnp_dev(dev);
@@ -1521,6 +1662,17 @@ get_version:
 	gmux_start_interrupts(gmux_data);
 	gmux_read_switch_state(gmux_data);
 
+	if (boot_gpu == 0)
+		gmux_switchto(VGA_SWITCHEROO_IGD);
+	else if (boot_gpu == 1)
+		gmux_switchto(VGA_SWITCHEROO_DIS);
+
+	if (type == APPLE_GMUX_TYPE_MMIO && gmux_read8(gmux_data, GMUX_PORT_FSS) & 1)
+		pr_warn("FSS Failure, display tearing expected\n");
+
+	if (gmux_data->use_pwrd_power_sequence)
+		gmux_quirk_dgpu_bridges();
+
 	/*
 	 * Retina MacBook Pros cannot switch the panel's AUX separately
 	 * and need eDP pre-calibration. They are distinguishable from
@@ -1539,6 +1691,7 @@ get_version:
 	return 0;
 
 err_register_handler:
+	gmux_unquirk_dgpu_bridges();
 	gmux_stop_interrupts(gmux_data);
 	apple_gmux_data = NULL;
 	if (gmux_data->gpe >= 0) {
@@ -1566,6 +1719,7 @@ static void gmux_remove(struct pnp_dev *pnp)
 
 	gmux_fini_debugfs(gmux_data);
 	vga_switcheroo_unregister_handler();
+	gmux_unquirk_dgpu_bridges();
 	gmux_stop_interrupts(gmux_data);
 	if (gmux_data->gpe >= 0) {
 		acpi_remove_gpe_handler(NULL, gmux_data->gpe, gmux_gpe_handler);
