@@ -25,6 +25,7 @@
 #include <linux/vga_switcheroo.h>
 #include <linux/debugfs.h>
 #include <linux/efi.h>
+#include <linux/pm_runtime.h>
 #include <acpi/video.h>
 #include <asm/io.h>
 
@@ -80,6 +81,7 @@ struct apple_gmux_data {
 	/* Serializes power sequences and interrupt handling like the AGC workloop. */
 	struct mutex power_lock;
 	struct work_struct interrupt_work;
+	bool external_state;
 	bool external_switchable;
 	enum vga_switcheroo_client_id switch_state_display;
 	enum vga_switcheroo_client_id switch_state_ddc;
@@ -1341,6 +1343,7 @@ static void gmux_interrupt_work(struct work_struct *work)
 {
 	struct apple_gmux_data *gmux_data =
 		container_of(work, struct apple_gmux_data, interrupt_work);
+	bool turn_on_gpu = false;
 	u8 status;
 
 	mutex_lock(&gmux_data->power_lock);
@@ -1369,11 +1372,33 @@ static void gmux_interrupt_work(struct work_struct *work)
 			complete(&gmux_data->powerchange_done);
 		if (status & GMUX_INTERRUPT_STATUS_FAILED)
 			pr_warn("interrupt failed: status 0x%x\n", status);
+		if (status & GMUX_INTERRUPT_STATUS_HOTPLUG) {
+			/*
+			 * There is an interrupt on every connect and disconnect,
+			 * but GET_DISPLAY only tells whether any display is
+			 * connected, so wake the dGPU on every hotplug.
+			 */
+			bool external_state = !!gmux_read8(gmux_data,
+						GMUX_PORT_SWITCH_GET_DISPLAY);
+
+			if (external_state != gmux_data->external_state) {
+				gmux_data->external_state = external_state;
+				pr_debug("hotplug: display %s\n",
+					 external_state ? "connected" :
+							  "disconnected");
+			}
+			if (!gmux_data->external_switchable)
+				turn_on_gpu = true;
+		}
 		status = gmux_interrupt_get_status(gmux_data);
 	}
 
 	gmux_enable_interrupts(gmux_data);
 	mutex_unlock(&gmux_data->power_lock);
+
+	/* Outside power_lock, the resume powers the dGPU up through gmux. */
+	if (turn_on_gpu && gmux_data->discrete_pdev)
+		pm_runtime_resume(&gmux_data->discrete_pdev->dev);
 }
 
 /**
