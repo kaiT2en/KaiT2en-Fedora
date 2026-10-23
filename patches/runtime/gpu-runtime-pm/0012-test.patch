@@ -1,0 +1,12 @@
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c
+index d68ceee16..5dcfe0efb 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c
+@@ -1972,6 +1972,7 @@ int smu_v11_0_set_single_dpm_table(struct smu_context *smu,
+ 			dev_err(smu->adev->dev, "[%s] failed to get dpm freq by index!\n", __func__);
+ 			return ret;
+ 		}
++		dev_info(smu->adev->dev, "clk_type %u, clk: %u", clk_type, clk);
+ 
+ 		single_dpm_table->dpm_levels[i].value = clk;
+ 		single_dpm_table->dpm_levels[i].enabled = true;

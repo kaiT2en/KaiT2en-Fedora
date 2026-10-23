@@ -9,4 +9,4 @@
 0009-drm-amd-pm-let-Apple-Navi-boards-lower-the-power-limit-to-40-percent.patch
 0010-Revert-drm-amdgpu-check-ASPM-on-the-dGPU-host-link.patch
 0011-drm-amd-pm-remove-UMC-CDR-workaround-for-Apple-systems.patch
-0012-amdgpu-overwrite-values-reported-by-smu-in-0x40-and-.patch
+0012-test.patch
