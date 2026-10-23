@@ -1,0 +1,49 @@
+From 6d946cad2a120a110440b9f91cefb218c7716d74 Mon Sep 17 00:00:00 2001
+From: Atharva Tiwari <atharvatiwarilinuxdev@gmail.com>
+Date: Fri, 23 Oct 2026 13:23:51 -0400
+Subject: [PATCH] amdgpu: overwrite values reported by smu in 0x40 and 0x43
+
+Signed-off-by: Atharva Tiwari <atharvatiwarilinuxdev@gmail.com>
+---
+ .../gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c    | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
+index a47ca15d2..bbe64cba8 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
+@@ -1012,6 +1012,22 @@ static int navi10_set_default_dpm_table(struct smu_context *smu)
+ 						     dpm_table);
+ 		if (ret)
+ 			return ret;
++
++		if (amdgpu_ip_version(adev, MP1_HWIP, 0) == IP_VERSION(11, 0, 5) &&
++		    adev->pdev->subsystem_vendor == PCI_VENDOR_ID_APPLE &&
++		    (adev->pdev->revision == 0x40 ||
++		     adev->pdev->revision == 0x43)) {
++			for (i = 0; i < dpm_table->count; i++) {
++				switch (dpm_table->dpm_levels[i].value) {
++				case 750:
++					dpm_table->dpm_levels[i].value = 736;
++					break;
++				case 736:
++					dpm_table->dpm_levels[i].value = 598;
++					break;
++				}
++			}
++		}
+ 		if (!driver_ppt->DpmDescriptor[PPCLK_UCLK].SnapToDiscrete)
+ 			dpm_table->flags |= SMU_DPM_TABLE_FINE_GRAINED;
+ 	} else {
+@@ -1597,7 +1613,7 @@ static uint32_t navi10_apple_uclk_max(struct smu_context *smu, uint32_t freq)
+ 	    (adev->pdev->revision != 0x40 && adev->pdev->revision != 0x43))
+ 		return freq;
+ 
+-	return min(freq, 740U);
++	return freq;
+ }
+ 
+ static int navi10_init_max_sustainable_clocks(struct smu_context *smu)
+-- 
+2.55.0
+
