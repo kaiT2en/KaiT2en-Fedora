@@ -16,6 +16,8 @@ pub enum Action {
     Key(Key),
     /// Index into the personal keys from keys.toml.
     Custom(usize),
+    /// Index into the keys of the focused app's profile from apps.toml.
+    App(usize),
 }
 
 #[derive(Clone, Copy)]
@@ -75,7 +77,8 @@ impl Layout {
     }
 
     /// Like `new`, but the special row also shows `custom` labels in its
-    /// free space next to esc, as many as fit.
+    /// free space next to esc, as many as fit. The app row shows `custom`
+    /// as its keys.
     pub fn with_custom(
         mode: Mode,
         width: u16,
@@ -133,6 +136,7 @@ impl Layout {
                     (Glyph::Icon(Icon::Volume(true)), Key::VolumeUp),
                 ],
             ]),
+            Mode::App => {}
             Mode::Special => groups.extend([
                 vec![(Glyph::Text("print"), Key::Sysrq)],
                 vec![
@@ -163,14 +167,28 @@ impl Layout {
             start = right + GROUP_GAP;
         }
 
+        if mode == Mode::App {
+            // App keys keep the media key width and run from esc to the
+            // right, as many as fit.
+            let cell = Self::media_cell(width, physical_escape);
+            let fit = usize::from((width.saturating_sub(start) + KEY_GAP) / (cell + KEY_GAP));
+            let mut left = start;
+            for (index, label) in custom.iter().enumerate().take(fit) {
+                buttons.push(Button {
+                    left,
+                    right: left + cell,
+                    glyph: Glyph::Text(label),
+                    action: Action::App(index),
+                });
+                left += cell + KEY_GAP;
+            }
+            return Self { buttons };
+        }
+
         if mode == Mode::Special {
             // Fewer keys than fit: keep the media key width and align them
             // to the right edge, leaving the space next to esc free.
-            let media = Self::new(Mode::Media, width, physical_escape);
-            let cell = media
-                .buttons
-                .last()
-                .map_or(width / 14, |button| button.right - button.left);
+            let cell = Self::media_cell(width, physical_escape);
             let mut right = width.saturating_sub(KEY_GAP);
             let mut placed = Vec::new();
             for group in groups.into_iter().rev() {
@@ -230,6 +248,14 @@ impl Layout {
             left += GROUP_GAP - KEY_GAP;
         }
         Self { buttons }
+    }
+
+    /// Width of a media key, the size the shorter rows reuse.
+    fn media_cell(width: u16, physical_escape: bool) -> u16 {
+        Self::new(Mode::Media, width, physical_escape)
+            .buttons
+            .last()
+            .map_or(width / 14, |button| button.right - button.left)
     }
 
     pub fn hit(&self, x: f64, y: f64, height: u16) -> Option<usize> {
@@ -1094,6 +1120,27 @@ mod tests {
         for pair in special.buttons.windows(2) {
             assert!(pair[0].right < pair[1].left);
         }
+    }
+
+    #[test]
+    fn app_keys_follow_esc_with_the_media_width() {
+        let media = Layout::new(Mode::Media, 2170, false);
+        let last = media.buttons[media.buttons.len() - 1];
+        let media_cell = last.right - last.left;
+        let labels: Vec<&'static str> = vec!["k"; 40];
+        let app = Layout::with_custom(Mode::App, 2170, false, &labels);
+        assert_eq!(app.buttons[0].action, Action::Key(Key::Esc));
+        assert_eq!(app.buttons[1].action, Action::App(0));
+        assert!(app.buttons.len() < labels.len(), "only as many as fit");
+        for button in &app.buttons[1..] {
+            assert_eq!(button.right - button.left, media_cell);
+            assert!(button.right <= 2170);
+        }
+        for pair in app.buttons.windows(2) {
+            assert!(pair[0].right < pair[1].left);
+        }
+        // Without a profile the row holds only esc.
+        assert_eq!(Layout::new(Mode::App, 2170, false).buttons.len(), 1);
     }
 
     #[test]

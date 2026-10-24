@@ -45,6 +45,34 @@ such as `-`, `[`, `` ` `` or `\`, `iso` for the extra key next to the left
 shift, and names like `space`, `tab`, `enter`, `left` or `delete`. Restart the
 service after editing: `systemctl --user restart kait2en-touchbar`.
 
+App profiles give single apps a row of their own. They live in
+`$XDG_CONFIG_HOME/kait2en-touchbar/apps.toml`, next to the personal keys and
+just as safe from updates. Each profile names the app by its window class and
+lists keys like `keys.toml` does:
+
+```toml
+[[app]]
+name = "Blender"
+wm_class = "blender"
+
+[[app.key]]
+label = "render"
+send = "f12"
+
+[[app.key]]
+label = "anim"
+send = "ctrl+f12"
+```
+
+While an app with a profile has the focus, its keys form an app row after the
+special row, and the bar switches to it. Leaving the app returns to the row
+shown before. On the dark bar the switch only takes effect on the next wake.
+The app row is not remembered across restarts. The focused window comes from
+the [Focused Window D-Bus](https://extensions.gnome.org/extension/5592/focused-window-d-bus/)
+GNOME Shell extension, which must be installed and enabled. The template the
+daemon writes on its first start shows how to print the class of the focused
+window. Restart the service after editing, like for the personal keys.
+
 A two-finger swipe on the dark bar changes the volume without waking it: right
 is louder, left is quieter. A three-finger swipe there changes the
 display brightness the same way. The esc slot works on the dark bar too and

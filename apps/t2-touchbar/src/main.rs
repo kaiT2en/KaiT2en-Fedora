@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+mod apps;
 mod backlight;
 mod config;
 mod display;
+mod focus;
 mod gesture;
 mod haptic;
 mod kbdlight;
@@ -40,6 +42,7 @@ use input::{
 use input_linux::Key;
 use libc::{O_ACCMODE, O_RDONLY, O_RDWR, O_WRONLY, pollfd};
 
+use apps::AppProfile;
 use backlight::Backlight;
 use config::{Config, state_path};
 use display::Display;
@@ -263,12 +266,17 @@ struct Runtime {
     /// Personal keys from keys.toml, shown in the special row.
     custom_keys: Vec<CustomKey>,
     custom_labels: Vec<&'static str>,
+    /// App profiles from apps.toml and the one of the focused window.
+    app_profiles: Vec<AppProfile>,
+    app_active: Option<usize>,
+    /// The row to return to when the focus leaves a profiled app.
+    mode_before_app: Mode,
     animation_start_ms: u64,
     next_animation_ms: Option<u64>,
 }
 
 impl Runtime {
-    fn new(config: Config, state: PersistentState) -> Result<Self> {
+    fn new(config: Config, mut state: PersistentState) -> Result<Self> {
         let mut display = Display::open()?;
         let (width, height) = display.dimensions();
         let canvas = Canvas::new(width, height, config.key_color())?;
@@ -278,10 +286,19 @@ impl Runtime {
         let physical_escape = has_physical_escape();
         let custom_keys = keys::load();
         let custom_labels: Vec<&'static str> = custom_keys.iter().map(|key| key.label).collect();
+        let app_profiles = apps::load();
+        // The virtual keyboard declares its keys once, so it covers the keys
+        // of every profile up front.
         let custom_codes: Vec<Key> = custom_keys
             .iter()
+            .chain(app_profiles.iter().flat_map(|profile| &profile.keys))
             .flat_map(|key| key.keys().iter().copied())
             .collect();
+        // No window is known yet. The focus listener brings the app row
+        // back if the focused app still has a profile.
+        if state.mode == Mode::App {
+            state.mode = Mode::Media;
+        }
         let layout = Layout::with_custom(state.mode, width, physical_escape, &custom_labels);
         let haptic = Haptic::open(config.haptic_feedback, config.haptic_touch_up);
         let (level_reader, level_wake) = LevelReader::spawn()?;
@@ -355,6 +372,9 @@ impl Runtime {
             physical_escape,
             custom_keys,
             custom_labels,
+            app_profiles,
+            app_active: None,
+            mode_before_app: Mode::Media,
             animation_start_ms: 0,
             next_animation_ms: None,
         })
@@ -371,12 +391,15 @@ impl Runtime {
     }
 
     fn present_keys(&mut self) -> Result<()> {
-        self.layout = Layout::with_custom(
-            self.state.mode,
-            self.canvas.width,
-            self.physical_escape,
-            &self.custom_labels,
-        );
+        let labels: &[&'static str] = match self.state.mode {
+            Mode::Special => &self.custom_labels,
+            Mode::App => self
+                .app_active
+                .map_or(&[], |index| &self.app_profiles[index].labels),
+            Mode::Media | Mode::Function => &[],
+        };
+        self.layout =
+            Layout::with_custom(self.state.mode, self.canvas.width, self.physical_escape, labels);
         self.canvas.keys(&self.layout, self.active_button);
         if self.layer_fade.is_some() {
             return self.present_layer_fade(self.now_ms());
@@ -1292,6 +1315,15 @@ impl Runtime {
                 Some(CustomAction::Run(command)) => CustomKey::run(command),
                 None => {}
             },
+            Action::App(key) => match self
+                .app_active
+                .and_then(|profile| self.app_profiles[profile].keys.get(key))
+                .map(|key| &key.action)
+            {
+                Some(CustomAction::Send(keys)) => self.keyboard.tap_combination(keys)?,
+                Some(CustomAction::Run(command)) => CustomKey::run(command),
+                None => {}
+            },
         }
         self.haptic.key_press();
         self.active_button = Some(index);
@@ -1448,12 +1480,13 @@ impl Runtime {
             SwipeKind::Mode => {
                 // The rows follow the fingers: swiping left brings in the
                 // next row from the right. The ring wraps around.
+                let app = self.app_active.is_some();
                 let mode = if steps < 0 {
-                    self.state.mode.next()
+                    self.state.mode.next(app)
                 } else {
-                    self.state.mode.previous()
+                    self.state.mode.previous(app)
                 };
-                self.switch_mode(mode, now)?;
+                self.switch_mode(mode, now, true)?;
                 if let Some(fade) = self.layer_fade.as_mut() {
                     fade.confirm = true;
                 }
@@ -1605,10 +1638,11 @@ impl Runtime {
             return Ok(());
         }
         self.fn_toggled = true;
-        self.switch_mode(self.state.mode.toggled(self.state.alternate), now)
+        self.switch_mode(self.state.mode.toggled(self.state.alternate), now, true)
     }
 
-    fn switch_mode(&mut self, mode: Mode, now: u64) -> Result<()> {
+    /// Slides to `mode`. `persist` keeps it for the next start.
+    fn switch_mode(&mut self, mode: Mode, now: u64, persist: bool) -> Result<()> {
         self.keyboard.release()?;
         self.active_button = None;
         // Fade from whatever is on screen, even from a running fade.
@@ -1618,7 +1652,7 @@ impl Runtime {
         };
         // Forward around the ring comes in from the right, like a swipe to
         // the left; Fn hold picks its direction the same way.
-        let direction = if mode == self.state.mode.next() {
+        let direction = if mode == self.state.mode.next(self.app_active.is_some()) {
             1
         } else {
             -1
@@ -1637,9 +1671,45 @@ impl Runtime {
             confirm: false,
         });
         self.state.set_mode(mode);
-        self.save();
+        if persist {
+            self.save();
+        }
         self.deadline_ms = Some(now + self.state.learned(self.state.mode).timeout_ms);
         self.present_keys()
+    }
+
+    /// Shows the app row when the focused app has a profile, and returns to
+    /// the previous row when the focus leaves it. The dark bar only takes
+    /// note, and the next wake shows the row. Focus changes are not saved:
+    /// the app row is not remembered across restarts.
+    fn focus_changed(&mut self, window: focus::Window) -> Result<()> {
+        let active = apps::find(&self.app_profiles, &window);
+        if active == self.app_active {
+            return Ok(());
+        }
+        let previous = std::mem::replace(&mut self.app_active, active);
+        let target = match active {
+            Some(_) => {
+                if previous.is_none() && self.state.mode != Mode::App {
+                    self.mode_before_app = self.state.mode;
+                }
+                Mode::App
+            }
+            None if self.state.mode == Mode::App => self.mode_before_app,
+            None => return Ok(()),
+        };
+        if !self.visible || self.touch_id != TouchIdState::Idle {
+            self.state.set_mode(target);
+            return Ok(());
+        }
+        let now = self.now_ms();
+        if target == self.state.mode {
+            // Another profiled app: same row, new keys.
+            self.keyboard.release()?;
+            self.active_button = None;
+            return self.present_keys();
+        }
+        self.switch_mode(target, now, false)
     }
 
     fn touch_id_changed(&mut self, state: TouchIdState) -> Result<()> {
@@ -1938,6 +2008,14 @@ fn main() -> Result<()> {
     } else {
         None
     };
+    // Only profiles need to know the focused window.
+    let focus = if runtime.app_profiles.is_empty() {
+        None
+    } else {
+        let (receiver, wake) = focus::watch()?;
+        wake.set_nonblocking(true)?;
+        Some((receiver, wake))
+    };
     let mut touch_device: Option<InputDevice> = None;
 
     while !STOP.load(Ordering::Relaxed) {
@@ -1970,6 +2048,11 @@ fn main() -> Result<()> {
             pollfd {
                 // poll ignores negative descriptors.
                 fd: tracks.as_ref().map_or(-1, |(_, wake)| wake.as_raw_fd()),
+                events: libc::POLLIN,
+                revents: 0,
+            },
+            pollfd {
+                fd: focus.as_ref().map_or(-1, |(_, wake)| wake.as_raw_fd()),
                 events: libc::POLLIN,
                 revents: 0,
             },
@@ -2006,6 +2089,17 @@ fn main() -> Result<()> {
             while (&*wake).read(&mut discard).is_ok() {}
             while let Ok(track) = receiver.try_recv() {
                 runtime.track_changed(track)?;
+            }
+        }
+
+        if poll_fds[6].revents & libc::POLLIN != 0
+            && let Some((receiver, wake)) = &focus
+        {
+            let mut discard = [0u8; 64];
+            while (&*wake).read(&mut discard).is_ok() {}
+            // Only the newest window matters after a burst of changes.
+            if let Some(window) = receiver.try_iter().last() {
+                runtime.focus_changed(window)?;
             }
         }
 

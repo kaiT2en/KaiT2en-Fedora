@@ -34,9 +34,10 @@ struct File {
     key: Vec<Entry>,
 }
 
+/// One key as written in keys.toml and apps.toml.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Entry {
+pub struct Entry {
     label: String,
     send: Option<String>,
     run: Option<String>,
@@ -81,7 +82,8 @@ impl CustomKey {
     }
 }
 
-pub fn path() -> PathBuf {
+/// `$XDG_CONFIG_HOME/kait2en-touchbar`, home of the personal files.
+pub fn config_dir() -> PathBuf {
     env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
@@ -90,7 +92,11 @@ pub fn path() -> PathBuf {
                 .unwrap_or_else(|| PathBuf::from("."))
                 .join(".config")
         })
-        .join("kait2en-touchbar/keys.toml")
+        .join("kait2en-touchbar")
+}
+
+pub fn path() -> PathBuf {
+    config_dir().join("keys.toml")
 }
 
 /// Written once when no keys file exists, so the format is discoverable
@@ -133,11 +139,16 @@ const TEMPLATE: &str = r#"# Personal keys for the free space of the third Touch 
 /// Creates the commented template if there is no keys file yet. Never
 /// overwrites an existing file.
 fn create_template(path: &Path) {
+    write_template(path, TEMPLATE);
+}
+
+/// Writes `template` to `path` unless a file is already there.
+pub fn write_template(path: &Path, template: &str) {
     let created = path
         .parent()
         .map_or(Ok(()), fs::create_dir_all)
         .and_then(|()| OpenOptions::new().write(true).create_new(true).open(path))
-        .and_then(|mut file| file.write_all(TEMPLATE.as_bytes()));
+        .and_then(|mut file| file.write_all(template.as_bytes()));
     if let Err(error) = created {
         eprintln!(
             "kait2en-touchbar: could not create {}: {error}",
@@ -173,14 +184,20 @@ pub fn load() -> Vec<CustomKey> {
 
 fn parse(body: &str) -> Result<Vec<CustomKey>> {
     let file: File = toml::from_str(body).context("invalid keys file")?;
+    Ok(entries("key", file.key))
+}
+
+/// Turns entries into keys. A broken entry is reported with `context` and
+/// skipped.
+pub fn entries(context: &str, entries: Vec<Entry>) -> Vec<CustomKey> {
     let mut keys = Vec::new();
-    for (index, entry) in file.key.into_iter().enumerate() {
+    for (index, entry) in entries.into_iter().enumerate() {
         match entry_key(entry) {
             Ok(key) => keys.push(key),
-            Err(error) => eprintln!("kait2en-touchbar: key {}: {error:#}", index + 1),
+            Err(error) => eprintln!("kait2en-touchbar: {context} {}: {error:#}", index + 1),
         }
     }
-    Ok(keys)
+    keys
 }
 
 fn entry_key(entry: Entry) -> Result<CustomKey> {

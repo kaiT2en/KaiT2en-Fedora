@@ -15,6 +15,9 @@ pub enum Mode {
     Function,
     /// Keys a MacBook keyboard lacks or hides: print, insert, delete, ...
     Special,
+    /// Keys of the focused app's profile from apps.toml. Part of the ring
+    /// only while such an app has the focus.
+    App,
 }
 
 impl Mode {
@@ -24,24 +27,28 @@ impl Mode {
         match self {
             Self::Media if alternate != Self::Media => alternate,
             Self::Media => Self::Function,
-            Self::Function | Self::Special => Self::Media,
+            Self::Function | Self::Special | Self::App => Self::Media,
         }
     }
 
-    /// The rows form a ring, so every row is one swipe away.
-    pub fn next(self) -> Self {
+    /// The rows form a ring, so every row is one swipe away. The app row
+    /// joins the ring after the special row while `app` is true.
+    pub fn next(self, app: bool) -> Self {
         match self {
             Self::Media => Self::Function,
             Self::Function => Self::Special,
-            Self::Special => Self::Media,
+            Self::Special if app => Self::App,
+            Self::Special | Self::App => Self::Media,
         }
     }
 
-    pub fn previous(self) -> Self {
+    pub fn previous(self, app: bool) -> Self {
         match self {
+            Self::Media if app => Self::App,
             Self::Media => Self::Special,
             Self::Function => Self::Media,
             Self::Special => Self::Function,
+            Self::App => Self::Special,
         }
     }
 }
@@ -72,6 +79,7 @@ pub struct PersistentState {
     pub media: LearnedTimeout,
     pub function: LearnedTimeout,
     pub special: LearnedTimeout,
+    pub app: LearnedTimeout,
 }
 
 impl PersistentState {
@@ -107,6 +115,7 @@ impl PersistentState {
             Mode::Media => &self.media,
             Mode::Function => &self.function,
             Mode::Special => &self.special,
+            Mode::App => &self.app,
         }
     }
 
@@ -115,19 +124,27 @@ impl PersistentState {
             Mode::Media => &mut self.media,
             Mode::Function => &mut self.function,
             Mode::Special => &mut self.special,
+            Mode::App => &mut self.app,
         }
     }
 
     /// Switches rows and remembers the last non-media one.
     pub fn set_mode(&mut self, mode: Mode) {
         self.mode = mode;
-        if mode != Mode::Media {
+        // The app row comes and goes with the focus, so an Fn hold never
+        // targets it.
+        if !matches!(mode, Mode::Media | Mode::App) {
             self.alternate = mode;
         }
     }
 
     fn clamp(&mut self, config: &Config) {
-        for learned in [&mut self.media, &mut self.function, &mut self.special] {
+        for learned in [
+            &mut self.media,
+            &mut self.function,
+            &mut self.special,
+            &mut self.app,
+        ] {
             learned.timeout_ms = learned
                 .timeout_ms
                 .clamp(config.minimum_timeout_ms, config.maximum_timeout_ms);
@@ -285,6 +302,20 @@ mod tests {
         assert_eq!(state.mode.toggled(state.alternate), Mode::Special);
         state.set_mode(Mode::Special);
         assert_eq!(state.mode.toggled(state.alternate), Mode::Media);
+        // The app row is never the Fn hold target.
+        state.set_mode(Mode::App);
+        assert_eq!(state.alternate, Mode::Special);
+        assert_eq!(state.mode.toggled(state.alternate), Mode::Media);
+    }
+
+    #[test]
+    fn app_row_joins_the_ring_only_with_a_profile() {
+        assert_eq!(Mode::Special.next(false), Mode::Media);
+        assert_eq!(Mode::Media.previous(false), Mode::Special);
+        assert_eq!(Mode::Special.next(true), Mode::App);
+        assert_eq!(Mode::App.next(true), Mode::Media);
+        assert_eq!(Mode::Media.previous(true), Mode::App);
+        assert_eq!(Mode::App.previous(true), Mode::Special);
     }
 
     fn config() -> Config {
