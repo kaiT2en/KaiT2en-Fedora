@@ -27,6 +27,9 @@ pub struct Config {
     pub activity_backlight: bool,
     pub activity_timeout_ms: u64,
     pub show_track_changes: bool,
+    /// Keep the saved row lit while the keyboard or trackpad is in use,
+    /// like macOS does, instead of waking it only on a touch or Fn.
+    pub stay_lit: bool,
 }
 
 impl Default for Config {
@@ -48,6 +51,7 @@ impl Default for Config {
             activity_backlight: true,
             activity_timeout_ms: 30_000,
             show_track_changes: true,
+            stay_lit: false,
         }
     }
 }
@@ -95,6 +99,12 @@ impl Config {
         anyhow::ensure!(
             (5_000..=300_000).contains(&self.activity_timeout_ms),
             "activity_timeout_ms must be 5000..300000"
+        );
+        // The idle timeout is what darkens a bar that stays lit, so the
+        // OLED panel never shows the same keys for hours.
+        anyhow::ensure!(
+            !self.stay_lit || self.activity_backlight,
+            "stay_lit needs activity_backlight = true"
         );
         parse_color(&self.key_color)
             .with_context(|| format!("key_color {:?} must be #rrggbb", self.key_color))?;
@@ -147,4 +157,26 @@ pub fn state_path() -> PathBuf {
                 .join(".local/state")
         })
         .join("kait2en-touchbar/state.toml")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stay_lit_needs_the_idle_timeout() {
+        let mut config = Config {
+            stay_lit: true,
+            ..Config::default()
+        };
+        assert!(config.validate().is_ok());
+        config.activity_backlight = false;
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn shipped_config_is_valid() {
+        let mut config: Config = toml::from_str(include_str!("../config/touchbar.toml")).unwrap();
+        assert!(config.validate().is_ok());
+    }
 }

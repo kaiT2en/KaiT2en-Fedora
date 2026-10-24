@@ -442,6 +442,16 @@ impl Runtime {
             .present(&self.blended, self.canvas.width, self.canvas.height)
     }
 
+    /// How long the lit row stays without a touch: learned per row, or
+    /// with `stay_lit` until the keyboard and trackpad are idle.
+    fn lit_timeout_ms(&self) -> u64 {
+        if self.config.stay_lit {
+            self.config.activity_timeout_ms
+        } else {
+            self.state.learned(self.state.mode).timeout_ms
+        }
+    }
+
     fn wake(&mut self, quarantine_touch: bool) -> Result<()> {
         if self.touch_id != TouchIdState::Idle {
             return Ok(());
@@ -464,7 +474,7 @@ impl Runtime {
         if quarantine_touch {
             self.touches_armed = false;
         }
-        self.deadline_ms = Some(now + self.state.learned(self.state.mode).timeout_ms);
+        self.deadline_ms = Some(now + self.lit_timeout_ms());
         self.present_keys()?;
         self.backlight.set(self.config.active_brightness)?;
         Ok(())
@@ -707,7 +717,7 @@ impl Runtime {
                     seeking_since: None,
                     player: None,
                 });
-                self.deadline_ms = Some(now + self.state.learned(self.state.mode).timeout_ms);
+                self.deadline_ms = Some(now + self.lit_timeout_ms());
                 Ok(())
             }
             Some(index) => {
@@ -1057,9 +1067,13 @@ impl Runtime {
             }
         }
         if self.visible {
-            self.deadline_ms = Some(now + self.state.learned(self.state.mode).timeout_ms);
+            self.deadline_ms = Some(now + self.lit_timeout_ms());
         } else if show_esc && self.touch_id == TouchIdState::Idle {
-            self.show_activity_esc()?;
+            if self.config.stay_lit {
+                self.wake(false)?;
+            } else {
+                self.show_activity_esc()?;
+            }
         }
         Ok(())
     }
@@ -1297,7 +1311,7 @@ impl Runtime {
             self.keyboard.release()?;
         }
         hold.next_ms = now + SEEK_INTERVAL_MS;
-        self.deadline_ms = Some(now + self.state.learned(self.state.mode).timeout_ms);
+        self.deadline_ms = Some(now + self.lit_timeout_ms());
         self.media_hold = Some(hold);
         Ok(())
     }
@@ -1333,7 +1347,7 @@ impl Runtime {
         {
             self.save();
         }
-        self.deadline_ms = Some(now + self.state.learned(self.state.mode).timeout_ms);
+        self.deadline_ms = Some(now + self.lit_timeout_ms());
         self.present_keys()
     }
 
@@ -1624,7 +1638,7 @@ impl Runtime {
             self.fn_down_ms = None;
             self.fn_toggled = false;
             if self.visible {
-                self.deadline_ms = Some(now + self.state.learned(self.state.mode).timeout_ms);
+                self.deadline_ms = Some(now + self.lit_timeout_ms());
             }
         }
         Ok(())
@@ -1674,7 +1688,7 @@ impl Runtime {
         if persist {
             self.save();
         }
-        self.deadline_ms = Some(now + self.state.learned(self.state.mode).timeout_ms);
+        self.deadline_ms = Some(now + self.lit_timeout_ms());
         self.present_keys()
     }
 
@@ -1722,7 +1736,11 @@ impl Runtime {
         self.deadline_ms = None;
         if state == TouchIdState::Idle {
             self.next_animation_ms = None;
-            return self.go_dark_to_activity_esc(false);
+            self.go_dark_to_activity_esc(false)?;
+            if self.config.stay_lit {
+                self.wake(false)?;
+            }
+            return Ok(());
         }
         self.visible = true;
         let now = self.now_ms();
@@ -1836,7 +1854,8 @@ impl Runtime {
             && self.visible
             && self.deadline_ms.is_some_and(|deadline| now >= deadline)
         {
-            self.go_dark_to_activity_esc(true)?;
+            // A bar kept lit has no learned timeout to adjust.
+            self.go_dark_to_activity_esc(!self.config.stay_lit)?;
         }
         if self.learner.settle(now, &mut self.state, &self.config) {
             self.save();
@@ -1983,6 +2002,9 @@ fn main() -> Result<()> {
     let state = PersistentState::load(&state_file, &config);
     let mut runtime = Runtime::new(config, state)?;
     runtime.go_dark(false)?;
+    if runtime.config.stay_lit {
+        runtime.wake(false)?;
+    }
 
     unsafe {
         libc::signal(libc::SIGINT, stop as *const () as libc::sighandler_t);

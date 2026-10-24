@@ -114,6 +114,12 @@ Set `activity_backlight = false` to turn this
 behavior off, or change `activity_timeout_ms` (5,000–300,000 ms) to adjust the
 idle period.
 
+Set `stay_lit = true` for a bar that behaves like on macOS: keyboard and
+trackpad activity wake the whole saved row instead of only the escape key,
+and the row stays lit until that idle period passes, with no learned timeout.
+It needs `activity_backlight = true`, so the OLED panel still goes dark when
+the Mac is left alone.
+
 ## Installation
 
 For a standalone Fedora installation from the repository, run:

@@ -39,6 +39,11 @@ follow_keyboard_backlight = true
 activity_backlight = true
 activity_timeout_ms = 30000
 
+# Keep the saved row lit while the keyboard or trackpad is in use, like macOS,
+# instead of showing only esc until the bar is touched. The bar still goes
+# dark after activity_timeout_ms without input. Needs activity_backlight.
+stay_lit = false
+
 # Show "Artist – Title" on the dark bar for five seconds when a media player
 # (MPRIS) starts a new track, with previous/next keys at both ends.
 show_track_changes = true
