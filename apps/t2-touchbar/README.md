@@ -72,6 +72,8 @@ the [Focused Window D-Bus](https://extensions.gnome.org/extension/5592/focused-w
 GNOME Shell extension, which must be installed and enabled. The template the
 daemon writes on its first start shows how to print the class of the focused
 window. Restart the service after editing, like for the personal keys.
+[Touch Bar Settings](../t2-touchbar-settings) edits the profiles in a window
+and restarts the service on save.
 
 A two-finger swipe on the dark bar changes the volume without waking it: right
 is louder, left is quieter. A three-finger swipe there changes the

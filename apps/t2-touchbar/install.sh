@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 APP_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+SETTINGS_DIR="$APP_DIR/../t2-touchbar-settings"
 source "$APP_DIR/../../scripts/fedora/lib.sh"
 
 require_root
@@ -51,7 +52,7 @@ device_access_ready() {
 }
 
 install_dependencies() {
-	dnf install -y adwaita-sans-fonts cargo gcc libinput-devel make pkgconf-pkg-config rust systemd-devel
+	dnf install -y adwaita-sans-fonts cargo gcc gtk4-devel libadwaita-devel libinput-devel make pkgconf-pkg-config rust systemd-devel
 	require_command cargo make
 }
 
@@ -63,6 +64,12 @@ prepare_device_access() {
 build_and_install() {
 	build_cargo_project "$APP_DIR" "$target_user"
 	make -C "$APP_DIR" install
+	# The settings app is optional: the Touch Bar works without it.
+	if build_cargo_project "$SETTINGS_DIR" "$target_user"; then
+		make -C "$SETTINGS_DIR" install || warn "Touch Bar Settings installation failed"
+	else
+		warn "Touch Bar Settings build failed; app rows can still be edited in apps.toml"
+	fi
 }
 
 configure_system() {

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Touch Bar Settings
+Comment=Give apps their own Touch Bar row of keys
+Exec=/usr/local/bin/kait2en-touchbar-settings
+TryExec=/usr/local/bin/kait2en-touchbar-settings
+Icon=org.kait2entouchbar.gtk
+Terminal=false
+Categories=System;Settings;HardwareSettings;
+Keywords=touch bar;touchbar;shortcut;keys;app;T2;Mac;
+StartupNotify=true

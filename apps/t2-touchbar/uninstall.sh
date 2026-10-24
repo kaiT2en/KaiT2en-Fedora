@@ -7,6 +7,7 @@
 set -Eeuo pipefail
 
 APP_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+SETTINGS_DIR="$APP_DIR/../t2-touchbar-settings"
 source "$APP_DIR/../../scripts/fedora/lib.sh"
 
 require_root
@@ -54,6 +55,7 @@ restore_firmware_row() {
 
 remove_files() {
 	make -C "$APP_DIR" uninstall
+	make -C "$SETTINGS_DIR" uninstall || true
 	rm -f /etc/kait2en/touchbar.toml
 	rmdir --ignore-fail-on-non-empty /etc/kait2en 2>/dev/null || true
 	systemctl daemon-reload

@@ -150,7 +150,8 @@ Keeps the Touch Bar dark until it is touched or Fn is pressed.
   `~/.config/kait2en-touchbar/keys.toml`.
 - App profiles in `~/.config/kait2en-touchbar/apps.toml` add a row of keys
   per app. It appears while that app has the focus. This needs the
-  "Focused Window D-Bus" GNOME Shell extension.
+  "Focused Window D-Bus" GNOME Shell extension. The Touch Bar Settings app
+  edits them without touching the file.
 
 Reboot once after the first install.
 
