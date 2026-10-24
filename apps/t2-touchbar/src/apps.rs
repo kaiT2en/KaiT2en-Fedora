@@ -2,7 +2,8 @@
 
 //! App profiles: a row of keys per app, read from
 //! `$XDG_CONFIG_HOME/kait2en-touchbar/apps.toml`. While an app with a profile
-//! has the focus, its keys form the app row.
+//! has the focus, its keys form the app row. A profile with
+//! `wm_class = "*"` is the default row, for every app without its own.
 //!
 //! ```toml
 //! [[app]]
@@ -55,9 +56,19 @@ impl AppProfile {
     }
 }
 
-/// Index of the first profile for `window`.
+/// Matches every app that has no profile of its own.
+pub const DEFAULT_CLASS: &str = "*";
+
+/// Index of the first profile for `window`, else of the default row.
 pub fn find(profiles: &[AppProfile], window: &crate::focus::Window) -> Option<usize> {
-    profiles.iter().position(|profile| profile.matches(window))
+    profiles
+        .iter()
+        .position(|profile| profile.wm_class != DEFAULT_CLASS && profile.matches(window))
+        .or_else(|| {
+            profiles
+                .iter()
+                .position(|profile| profile.wm_class == DEFAULT_CLASS)
+        })
 }
 
 pub fn path() -> PathBuf {
@@ -76,6 +87,8 @@ const TEMPLATE: &str = r#"# App profiles: a Touch Bar row per app. While an app 
 #     --method org.gnome.shell.extensions.FocusedWindow.Get
 #
 # Keys take the same send or run actions as keys.toml.
+#
+# wm_class = "*" makes a default row for every app without its own profile.
 #
 # [[app]]
 # name = "Blender"
@@ -215,6 +228,29 @@ mod tests {
         assert_eq!(find(&profiles, &window("blender", "")), Some(0));
         assert_eq!(find(&profiles, &window("Other", "BLENDER")), Some(0));
         assert_eq!(find(&profiles, &window("blender-thumbnailer", "")), None);
+    }
+
+    #[test]
+    fn the_default_row_covers_apps_without_a_profile() {
+        let profiles = parse(
+            r#"
+            [[app]]
+            wm_class = "*"
+            [[app.key]]
+            label = "all"
+            send = "f1"
+
+            [[app]]
+            wm_class = "blender"
+            [[app.key]]
+            label = "render"
+            send = "f12"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(find(&profiles, &window("blender", "")), Some(1), "own profile first");
+        assert_eq!(find(&profiles, &window("firefox", "")), Some(0));
+        assert_eq!(find(&profiles, &window("", "")), Some(0), "no window at all");
     }
 
     #[test]

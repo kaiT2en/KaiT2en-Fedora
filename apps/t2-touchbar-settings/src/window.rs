@@ -18,6 +18,7 @@ pub struct Ui {
     pub nav: adw::NavigationView,
     save: gtk4::Button,
     apps: gtk4::ListBox,
+    default_row: adw::ActionRow,
     pub file: RefCell<model::File>,
     saved: RefCell<model::File>,
     path: PathBuf,
@@ -40,7 +41,17 @@ impl Ui {
     fn refresh_apps(self: &Rc<Self>) {
         self.apps.remove_all();
         let file = self.file.borrow();
-        if file.app.is_empty() {
+        let default_keys = file
+            .app
+            .iter()
+            .find(|app| app.is_default())
+            .map_or(0, |app| app.key.len());
+        self.default_row.set_subtitle(&match default_keys {
+            0 => "Not set: apps without a row keep the usual rows".to_owned(),
+            1 => "1 key".to_owned(),
+            count => format!("{count} keys"),
+        });
+        if !file.app.iter().any(|app| !app.is_default()) {
             let row = adw::ActionRow::builder()
                 .title("No apps yet")
                 .subtitle("Add one with the + button")
@@ -50,6 +61,9 @@ impl Ui {
             return;
         }
         for (index, app) in file.app.iter().enumerate() {
+            if app.is_default() {
+                continue;
+            }
             let problems = app.key.iter().filter(|key| key.problem().is_some()).count();
             let keys = match app.key.len() {
                 1 => "1 key".to_owned(),
@@ -79,6 +93,18 @@ impl Ui {
             row.connect_activated(move |_| app_page::open(&ui, index));
             self.apps.append(&row);
         }
+    }
+
+    /// Opens the default row, adding it first if there is none.
+    fn open_default(self: &Rc<Self>) {
+        let existing = self.file.borrow().app.iter().position(|app| app.is_default());
+        let index = existing.unwrap_or_else(|| {
+            let mut file = self.file.borrow_mut();
+            file.app.push(model::App::default_row());
+            file.app.len() - 1
+        });
+        self.changed();
+        app_page::open(self, index);
     }
 
     /// Opens the profile for `class`, adding it first if there is none.
@@ -200,8 +226,28 @@ pub fn build(app: &adw::Application) {
         )
         .build();
     apps_group.add(&apps);
+
+    let default_row = adw::ActionRow::builder()
+        .title("All Other Apps")
+        .activatable(true)
+        .build();
+    let default_icon = gtk4::Image::from_icon_name("view-app-grid-symbolic");
+    default_icon.set_pixel_size(32);
+    default_row.add_prefix(&default_icon);
+    default_row.add_suffix(&gtk4::Image::from_icon_name("go-next-symbolic"));
+    let default_list = gtk4::ListBox::new();
+    default_list.add_css_class("boxed-list");
+    default_list.set_selection_mode(gtk4::SelectionMode::None);
+    default_list.append(&default_row);
+    let default_group = adw::PreferencesGroup::builder()
+        .title("Default Row")
+        .description("Shown like an app row while an app without its own row has the focus.")
+        .build();
+    default_group.add(&default_list);
+
     let prefs = adw::PreferencesPage::new();
     prefs.add(&apps_group);
+    prefs.add(&default_group);
 
     let toolbar = adw::ToolbarView::new();
     toolbar.add_top_bar(&header);
@@ -249,6 +295,7 @@ pub fn build(app: &adw::Application) {
         nav,
         save,
         apps,
+        default_row: default_row.clone(),
         saved: RefCell::new(file.clone()),
         file: RefCell::new(file),
         path,
@@ -260,6 +307,9 @@ pub fn build(app: &adw::Application) {
         ui_.save();
     });
     window.add_action(&action);
+
+    let ui_ = ui.clone();
+    default_row.connect_activated(move |_| ui_.open_default());
 
     let action = gio::SimpleAction::new("detect", None);
     let ui_ = ui.clone();

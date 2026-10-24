@@ -125,10 +125,10 @@ fn icon_button(icon: &str, tooltip: &str) -> gtk4::Button {
 }
 
 pub fn open(ui: &Shared, index: usize) {
-    let (name, class) = {
+    let (name, class, is_default) = {
         let file = ui.file.borrow();
         let app = &file.app[index];
-        (app.name.clone(), app.wm_class.clone())
+        (app.name.clone(), app.wm_class.clone(), app.is_default())
     };
 
     let preview = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
@@ -147,7 +147,11 @@ pub fn open(ui: &Shared, index: usize) {
     overflow.add_css_class("caption");
     let preview_group = adw::PreferencesGroup::builder()
         .title("Touch Bar")
-        .description("The row appears after the special keys while the app has the focus.")
+        .description(if is_default {
+            "The row appears after the special keys while an app without its own row has the focus."
+        } else {
+            "The row appears after the special keys while the app has the focus."
+        })
         .build();
     preview_group.add(&scroller);
     preview_group.add(&overflow);
@@ -178,7 +182,9 @@ pub fn open(ui: &Shared, index: usize) {
         .build();
     keys_group.add(&keys);
 
-    let remove = adw::ButtonRow::builder().title("Remove App").build();
+    let remove = adw::ButtonRow::builder()
+        .title(if is_default { "Remove Default Row" } else { "Remove App" })
+        .build();
     remove.add_css_class("destructive-action");
     let remove_list = gtk4::ListBox::new();
     remove_list.add_css_class("boxed-list");
@@ -189,7 +195,10 @@ pub fn open(ui: &Shared, index: usize) {
 
     let prefs = adw::PreferencesPage::new();
     prefs.add(&preview_group);
-    prefs.add(&app_group);
+    // The default row has no app to name.
+    if !is_default {
+        prefs.add(&app_group);
+    }
     prefs.add(&keys_group);
     prefs.add(&remove_group);
 

@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 /// stay off the bar.
 pub const KEYS_THAT_FIT: usize = 11;
 pub const LABEL_MAX: usize = 12;
+/// The window class of the default row, for every app without its own.
+pub const DEFAULT_CLASS: &str = "*";
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -33,8 +35,22 @@ pub struct App {
 }
 
 impl App {
+    pub fn default_row() -> Self {
+        Self {
+            name: String::new(),
+            wm_class: DEFAULT_CLASS.to_owned(),
+            key: Vec::new(),
+        }
+    }
+
+    pub fn is_default(&self) -> bool {
+        self.wm_class.trim() == DEFAULT_CLASS
+    }
+
     pub fn title(&self) -> &str {
-        if self.name.trim().is_empty() {
+        if self.is_default() {
+            "All Other Apps"
+        } else if self.name.trim().is_empty() {
             self.wm_class.trim()
         } else {
             self.name.trim()

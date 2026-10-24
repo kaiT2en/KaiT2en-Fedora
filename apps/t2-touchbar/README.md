@@ -65,7 +65,8 @@ send = "ctrl+f12"
 ```
 
 While an app with a profile has the focus, its keys form an app row after the
-special row, and the bar switches to it. Leaving the app returns to the row
+special row, and the bar switches to it. A profile with `wm_class = "*"` is
+the default row: it covers every app without a profile of its own. Leaving the app returns to the row
 shown before. On the dark bar the switch only takes effect on the next wake.
 The app row is not remembered across restarts. The focused window comes from
 the [Focused Window D-Bus](https://extensions.gnome.org/extension/5592/focused-window-d-bus/)
