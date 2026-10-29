@@ -3,3 +3,4 @@
 0003-wifi-brcmfmac-use-a-200-ms-power-save-timeout-by-default.patch
 0004-wifi-brcmfmac-match-firmware-capabilities-as-whole-words.patch
 0005-wifi-brcmfmac-leave-the-AP-4-way-handshake-to-the-host-on-Apple-chips.patch
+0006-wifi-brcmfmac-add-an-AWDL-interface-for-the-Apple-firmware.patch

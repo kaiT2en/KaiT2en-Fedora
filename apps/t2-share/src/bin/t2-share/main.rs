@@ -4,6 +4,8 @@
 //! `t2share daemon` user service and its notifications. Started with files,
 //! for example from a file manager, it opens the send window for them.
 
+mod airdrop;
+mod bluetooth;
 mod send_window;
 
 use std::cell::RefCell;
