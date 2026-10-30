@@ -34,9 +34,10 @@ mode_swipe_px = 160
 # readable minimum while the keyboard backlight is off.
 follow_keyboard_backlight = true
 
-# Show the escape key and restore the keyboard backlight on keyboard,
-# trackpad or Touch Bar activity. Both go dark after this idle period.
-activity_backlight = true
+# Show the escape key on the dark bar on keyboard, trackpad or Touch Bar
+# activity. It fades out after this idle period. The keyboard backlight has
+# its own daemon, configured in /etc/kait2en/kbd-backlight.toml.
+activity_escape = true
 activity_timeout_ms = 30000
 
 # Show "Artist – Title" on the dark bar for five seconds when a media player

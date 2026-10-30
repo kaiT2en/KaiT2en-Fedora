@@ -24,7 +24,7 @@ pub struct Config {
     pub brightness_swipe_step_px: u32,
     pub mode_swipe_px: u32,
     pub follow_keyboard_backlight: bool,
-    pub activity_backlight: bool,
+    pub activity_escape: bool,
     pub activity_timeout_ms: u64,
     pub show_track_changes: bool,
 }
@@ -45,7 +45,7 @@ impl Default for Config {
             brightness_swipe_step_px: 40,
             mode_swipe_px: 160,
             follow_keyboard_backlight: true,
-            activity_backlight: true,
+            activity_escape: true,
             activity_timeout_ms: 30_000,
             show_track_changes: true,
         }

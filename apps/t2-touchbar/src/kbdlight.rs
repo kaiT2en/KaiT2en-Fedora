@@ -5,7 +5,7 @@
 use std::{fs, io::Write, os::unix::net::UnixStream, path::PathBuf, thread, time::Duration};
 
 use anyhow::{Context, Result};
-use zbus::blocking::{Connection, MessageIterator, Proxy};
+use zbus::blocking::{Connection, MessageIterator};
 use zbus::{MatchRule, message::Type};
 
 /// Keys never get darker than this share of full luminance, so the bar stays
@@ -23,43 +23,6 @@ pub fn key_level() -> Option<u32> {
     let max = read("max_brightness").filter(|max| *max > 0.0)?;
     let luminance = (read("brightness")? / max).clamp(MINIMUM_LUMINANCE, 1.0);
     Some((luminance.powf(1.0 / DISPLAY_GAMMA) * 100.0).round() as u32)
-}
-
-pub fn brightness() -> Result<u32> {
-    let connection = Connection::system().context("connect to the system bus")?;
-    let proxy = Proxy::new(
-        &connection,
-        "org.freedesktop.UPower",
-        "/org/freedesktop/UPower/KbdBacklight",
-        "org.freedesktop.UPower.KbdBacklight",
-    )?;
-    let brightness: i32 = proxy.call("GetBrightness", &())?;
-    u32::try_from(brightness).context("UPower returned a negative keyboard brightness")
-}
-
-pub fn maximum_brightness() -> Result<u32> {
-    let connection = Connection::system().context("connect to the system bus")?;
-    let proxy = Proxy::new(
-        &connection,
-        "org.freedesktop.UPower",
-        "/org/freedesktop/UPower/KbdBacklight",
-        "org.freedesktop.UPower.KbdBacklight",
-    )?;
-    let maximum: i32 = proxy.call("GetMaxBrightness", &())?;
-    u32::try_from(maximum).context("UPower returned a negative maximum keyboard brightness")
-}
-
-pub fn set_brightness(brightness: u32) -> Result<()> {
-    let connection = Connection::system().context("connect to the system bus")?;
-    let proxy = Proxy::new(
-        &connection,
-        "org.freedesktop.UPower",
-        "/org/freedesktop/UPower/KbdBacklight",
-        "org.freedesktop.UPower.KbdBacklight",
-    )?;
-    let brightness = i32::try_from(brightness).context("keyboard brightness is too large")?;
-    let _: () = proxy.call("SetBrightness", &(brightness))?;
-    Ok(())
 }
 
 fn led() -> Option<PathBuf> {

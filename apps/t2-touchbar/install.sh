@@ -60,6 +60,20 @@ prepare_device_access() {
 	usermod -aG kait2en-touchbar "$target_user"
 }
 
+# activity_backlight became activity_escape when the keyboard backlight moved
+# to t2-kbd-backlight. The daemon refuses unknown keys, so rename it in place.
+migrate_config() {
+	local file home
+	home=$(getent passwd "$target_user" | cut -d: -f6)
+	for file in /etc/kait2en/touchbar.toml "$home/.config/kait2en-touchbar/config.toml"; do
+		if [[ ! -f "$file" ]] || ! grep -Eq '^[[:space:]]*activity_backlight[[:space:]]*=' "$file"; then
+			continue
+		fi
+		info "renaming activity_backlight to activity_escape in $file"
+		sed -Ei 's/^([[:space:]]*)activity_backlight([[:space:]]*=)/\1activity_escape\2/' "$file"
+	done
+}
+
 build_and_install() {
 	build_cargo_project "$APP_DIR" "$target_user"
 	make -C "$APP_DIR" install
@@ -132,6 +146,9 @@ if (( STEP_STATUS == 0 )); then
 fi
 if (( STEP_STATUS == 0 )); then
 	run_step "build and install kait2en-touchbar" build_and_install
+fi
+if (( STEP_STATUS == 0 )); then
+	run_step "migrate kait2en-touchbar configuration" migrate_config
 fi
 if (( STEP_STATUS == 0 )); then
 	run_step "configure kait2en-touchbar integration" configure_system
