@@ -156,11 +156,26 @@ pub struct Awdl {
     master: Option<Election>,
     pub peers: HashMap<[u8; 6], Peer>,
     peer_ops: Vec<[u8; 6]>,
+    /// slot_bss as macOS sends it, with SDB, on chips other than the BCM4364
+    sdb: bool,
+}
+
+/// PCI device id of the BCM4364
+const BCM4364: u16 = 0x4464;
+
+/// The PCI device id of the chip behind the network interface `ifindex`.
+fn pci_device(ifindex: u32) -> Option<u16> {
+    let name = ifname(ifindex).ok()?;
+    let id = std::fs::read_to_string(format!("/sys/class/net/{name}/device/device")).ok()?;
+    u16::from_str_radix(id.trim().trim_start_matches("0x"), 16).ok()
 }
 
 impl Awdl {
     /// Creates the AWDL interface and starts AWDL with the firmware.
     pub fn up(mut genl: Genl, primary: u32, mac: [u8; 6], host: String) -> Result<Self> {
+        let device = pci_device(primary);
+        let sdb = device != Some(BCM4364);
+        info!("Wi-Fi chip {:04x}, slot_bss {}", device.unwrap_or(0), if sdb { "with SDB" } else { "without SDB" });
         let ifindex = genl.up(primary, mac)?;
         let ifname = ifname(ifindex)?;
         let mut awdl = Awdl {
@@ -174,6 +189,7 @@ impl Awdl {
             master: None,
             peers: HashMap::new(),
             peer_ops: Vec::new(),
+            sdb,
         };
         if let Err(err) = awdl.enable() {
             awdl.down();
@@ -289,11 +305,14 @@ impl Awdl {
         self.refresh()
     }
 
-    /// slot_bss in its SDB off form: byte 0x0c 9, every chanspec in slice 0.
-    /// The SDB on form macOS sent for the BCM4377 traps the BCM4364
-    /// firmware while the station is on 5 GHz.
+    /// slot_bss as macOS sent it for the BCM4377, with SDB. The BCM4364 gets
+    /// the SDB off form: byte 0x0c 9, every chanspec in slice 0. The SDB on
+    /// form traps the BCM4364 firmware while the station is on 5 GHz.
     fn slot_bss(&self) -> Vec<u8> {
         let mut buf = self.template(SLOT_BSS);
+        if self.sdb {
+            return buf;
+        }
         buf[0x0c] = 9;
         for i in (0..32).step_by(2) {
             let (s0, s1) = (0x4c + i, 0x78 + i);
