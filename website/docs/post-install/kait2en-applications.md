@@ -15,6 +15,7 @@ them easy to find. The updater is called KaiT2en Update.
 - [T2 Debug](applications/t2-debug.md)
 - [T2 Power Tune](applications/t2-power-tune.md)
 - [T2 Force Click](applications/t2-force-click.md)
+- [T2 Keyboard Backlight](applications/t2-kbd-backlight.md)
 - [T2 Touch Bar](applications/t2-touch-bar.md)
 - [T2 Hybrid GPU Control](applications/t2-hybrid-gpu-control.md)
 - [T2 GPU Control](applications/t2-gpu-control.md)

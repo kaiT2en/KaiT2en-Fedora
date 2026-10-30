@@ -123,6 +123,7 @@ documentation:
             - {file: post-install/applications/t2-debug.md}
             - {file: post-install/applications/t2-power-tune.md}
             - {file: post-install/applications/t2-force-click.md}
+            - {file: post-install/applications/t2-kbd-backlight.md}
             - {file: post-install/applications/t2-touch-bar.md}
             - {file: post-install/applications/t2-hybrid-gpu-control.md}
             - {file: post-install/applications/t2-gpu-control.md}

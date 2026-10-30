@@ -322,7 +322,7 @@ outcome of the Bluetooth step is recorded in the installed system at:
 ## Applications
 
 `t2-fan-control`, `t2-smc-control`, `t2-power-explorer`, `t2-debug`, `t2-airshare`,
-`t2-drop`, `t2-zone-power`, `t2-journal`, `kait2en-touchbar`, `kernel-builder`,
+`t2-drop`, `t2-zone-power`, `t2-journal`, `t2-kbd-backlight`, `kait2en-touchbar`, `kernel-builder`,
 `t2-power-tune` and `kait2en-update` are installed system-wide under `/usr/local`. `kait2en-touchbar` and
 `t2-autobrightness` are optional and only installed when selected at the start
 of the installation.
@@ -348,6 +348,7 @@ All KAIT2EN desktop applications use the shared header wordmark at
 | T2 Debug | `/usr/local/bin/t2-debug`, `/usr/local/bin/t2debug`, `/usr/local/share/applications/org.t2debug.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2debug.gtk.svg` |
 | T2 AirShare | `/usr/local/bin/t2-airshare`, `/usr/local/bin/t2airshare`, `/usr/local/share/applications/org.t2airshare.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2airshare.gtk.svg`, `/usr/local/lib/systemd/user/t2-airshare.service`, `/usr/local/share/applications/org.t2airshare.send.desktop`, `/usr/local/share/kio/servicemenus/t2-airshare-send.desktop`, `/usr/local/share/nemo/actions/t2-airshare-send.nemo_action`, `/usr/local/share/nautilus-python/extensions/t2-airshare-send.py`, `/usr/local/share/licenses/t2-airshare/`, per user `~/.config/t2-airshare/config.toml`. On systems with Nautilus the package `nautilus-python` |
 | T2 Drop, the AirDrop service of T2 AirShare | `/usr/local/bin/t2drop`, `/usr/local/lib/systemd/system/t2-drop.service` (started by D-Bus activation), `/usr/share/dbus-1/system.d/org.t2drop.conf`, `/usr/local/share/dbus-1/system-services/org.t2drop.service` |
+| T2 Keyboard Backlight | `/usr/local/bin/t2-kbd-backlight`, `/usr/local/lib/systemd/system/t2-kbd-backlight.service`, `/etc/kait2en/kbd-backlight.toml`. MacBooks only |
 | T2 Touch Bar | `/usr/local/bin/kait2en-touchbar`, `/usr/local/lib/systemd/user/kait2en-touchbar.service`, `/usr/local/lib/systemd/system/kait2en-touchbar-attach.service`, `/usr/local/lib/udev/rules.d/99-zz-kait2en-touchbar.rules`, `/etc/kait2en/touchbar.toml`, `/usr/local/share/licenses/kait2en-touchbar/THIRD-PARTY-NOTICES.md` |
 | Automatic brightness | `/usr/local/bin/t2-autobrightness`, `/usr/local/lib/systemd/user/kait2en-t2-autobrightness.service` (enabled with `--global`), `/usr/local/share/gnome-shell/extensions/kait2en-autobrightness@kait2en/`, per user `~/.local/state/t2-autobrightness/curve` and, while it runs, `~/.local/state/t2-autobrightness/gnome-settings` |
 | T2 Hybrid GPU Control | `/usr/local/bin/t2-hybrid-gpu-control`, `/usr/local/libexec/t2-hybrid-gpu-control-helper`, `/usr/local/libexec/t2-hybrid-gpu-control-status`, `/usr/local/share/applications/org.t2hybridgpucontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2hybridgpucontrol.gtk.svg`, `/usr/share/polkit-1/actions/org.t2hybridgpucontrol.gtk.policy`, `/usr/share/polkit-1/actions/org.t2hybridgpucontrol.gtk.status.policy`, `/etc/environment.d/90-kait2en-gsk-renderer.conf` |
