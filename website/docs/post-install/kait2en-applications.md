@@ -18,5 +18,5 @@ them easy to find. The updater is called KaiT2en Update.
 - [T2 Touch Bar](applications/t2-touch-bar.md)
 - [T2 Hybrid GPU Control](applications/t2-hybrid-gpu-control.md)
 - [T2 GPU Control](applications/t2-gpu-control.md)
-- [T2 Share](applications/t2-share.md)
+- [T2 AirShare](applications/t2-airshare.md)
 - [T2 Kernel Builder](applications/t2-kernel-builder.md)

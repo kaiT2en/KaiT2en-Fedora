@@ -529,19 +529,57 @@ items:
       The BCM4364 firmware claims to run the WPA2 handshake for its access
       point, but never completes it, so phones were dropped after about
       8 seconds. brcmfmac now leaves the handshake to wpa_supplicant or
-      hostapd. Tested with a WPA2-PSK hotspot without PSK-SHA256.
+      hostapd.
 
-  - id: t2-share
-    title: "Send and receive files with Android phones over Quick Share"
+  - id: t2-airshare
+    title: "AirDrop and Quick Share in one app: T2 AirShare"
     state: available
     upstream: downstream
     project: KAIT2EN Fedora
-    subsystem: t2-share
+    subsystem: t2-airshare
     authors:
       - deqrocks
-    link: post-install/applications/t2-share.md
+    link: post-install/applications/t2-airshare.md
+    updated: "2026-10-30"
+    notes: >-
+      AirDrop between your T2 Mac and other Apple devices, in both
+      directions, while the Mac stays on its Wi-Fi network. The same app
+      does Quick Share with Android phones, so Apple devices and Android
+      phones share one send window, one notification to accept and one list
+      of trusted devices.
+
+  - id: brcmfmac-awdl
+    title: "Wi-Fi: AWDL for AirDrop on the Apple firmware"
+    state: available
+    upstream: downstream
+    project: KAIT2EN Fedora
+    subsystem: Wi-Fi / brcmfmac
+    authors:
+      - deqrocks
+    link: post-install/applications/t2-airshare.md
     updated: "2026-10-29"
     notes: >-
-      Quick Share between Android phones and your T2 Mac in both directions.
-      Receive files from the phone, or send them from the file manager's
-      context menu or by dropping them on the T2 Share window.
+      The Apple firmware of the Broadcom Wi-Fi chips runs AWDL itself once
+      the host sets it up. brcmfmac now creates the AWDL interface, passes
+      its firmware events to user space and carries AWDL data over awdl0.
+      The t2-drop system service drives it as macOS does: it follows the
+      AWDL master, announces the AirDrop service and removes the interface
+      before suspend.
+
+  - id: hci-bcm-le-scan
+    title: "Bluetooth LE devices show up within a second on the MacBookPro15,1"
+    state: available
+    upstream: downstream
+    project: KAIT2EN Fedora
+    subsystem: Bluetooth / hci_bcm
+    authors:
+      - deqrocks
+    updated: "2026-10-30"
+    notes: >-
+      The BCM4364 sets extra bits in the type of LE advertising reports, and
+      the kernel dropped most of them as unknown. Without a Bluetooth patch
+      file the driver also left duplicate filtering in the controller on, so
+      a device that changed its advertisement was only seen again after up
+      to 11 seconds. hci_bcm now clears the extra bits and lets the kernel
+      turn the controller's duplicate filter off. A Mac opening AirDrop is
+      now seen within a second instead of up to 30 seconds.

@@ -321,8 +321,8 @@ outcome of the Bluetooth step is recorded in the installed system at:
 
 ## Applications
 
-`t2-fan-control`, `t2-smc-control`, `t2-power-explorer`, `t2-debug`, `t2-share`,
-`t2-zone-power`, `t2-journal`, `kait2en-touchbar`, `kernel-builder`,
+`t2-fan-control`, `t2-smc-control`, `t2-power-explorer`, `t2-debug`, `t2-airshare`,
+`t2-drop`, `t2-zone-power`, `t2-journal`, `kait2en-touchbar`, `kernel-builder`,
 `t2-power-tune` and `kait2en-update` are installed system-wide under `/usr/local`. `kait2en-touchbar` and
 `t2-autobrightness` are optional and only installed when selected at the start
 of the installation.
@@ -346,14 +346,18 @@ All KAIT2EN desktop applications use the shared header wordmark at
 | T2 Force Click | `/usr/local/bin/t2-force-click`, `/usr/local/share/applications/org.t2forceclick.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2forceclick.gtk.svg`, `/usr/local/lib/systemd/system/t2-force-click.service` |
 | KaiT2en Update | `/usr/local/bin/kait2en-update`, `/usr/local/libexec/kait2en-update-helper`, `/usr/local/share/applications/org.kait2enupdate.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.kait2enupdate.gtk.svg`, `/usr/share/polkit-1/actions/org.kait2enupdate.policy` |
 | T2 Debug | `/usr/local/bin/t2-debug`, `/usr/local/bin/t2debug`, `/usr/local/share/applications/org.t2debug.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2debug.gtk.svg` |
-| T2 Share | `/usr/local/bin/t2-share`, `/usr/local/bin/t2share`, `/usr/local/share/applications/org.t2share.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2share.gtk.svg`, `/usr/local/lib/systemd/user/t2-share.service`, `/usr/local/share/applications/org.t2share.send.desktop`, `/usr/local/share/kio/servicemenus/t2-share-send.desktop`, `/usr/local/share/nemo/actions/t2-share-send.nemo_action`, `/usr/local/share/nautilus-python/extensions/t2-share-send.py`, `/usr/local/share/licenses/t2-share/`, per user `~/.config/t2-share/config.toml`. On systems with Nautilus the package `nautilus-python` |
+| T2 AirShare | `/usr/local/bin/t2-airshare`, `/usr/local/bin/t2airshare`, `/usr/local/share/applications/org.t2airshare.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2airshare.gtk.svg`, `/usr/local/lib/systemd/user/t2-airshare.service`, `/usr/local/share/applications/org.t2airshare.send.desktop`, `/usr/local/share/kio/servicemenus/t2-airshare-send.desktop`, `/usr/local/share/nemo/actions/t2-airshare-send.nemo_action`, `/usr/local/share/nautilus-python/extensions/t2-airshare-send.py`, `/usr/local/share/licenses/t2-airshare/`, per user `~/.config/t2-airshare/config.toml`. On systems with Nautilus the package `nautilus-python` |
+| T2 Drop, the AirDrop service of T2 AirShare | `/usr/local/bin/t2drop`, `/usr/local/lib/systemd/system/t2-drop.service` (started by D-Bus activation), `/usr/share/dbus-1/system.d/org.t2drop.conf`, `/usr/local/share/dbus-1/system-services/org.t2drop.service` |
 | T2 Touch Bar | `/usr/local/bin/kait2en-touchbar`, `/usr/local/lib/systemd/user/kait2en-touchbar.service`, `/usr/local/lib/systemd/system/kait2en-touchbar-attach.service`, `/usr/local/lib/udev/rules.d/99-zz-kait2en-touchbar.rules`, `/etc/kait2en/touchbar.toml`, `/usr/local/share/licenses/kait2en-touchbar/THIRD-PARTY-NOTICES.md` |
 | Automatic brightness | `/usr/local/bin/t2-autobrightness`, `/usr/local/lib/systemd/user/kait2en-t2-autobrightness.service` (enabled with `--global`), `/usr/local/share/gnome-shell/extensions/kait2en-autobrightness@kait2en/`, per user `~/.local/state/t2-autobrightness/curve` and, while it runs, `~/.local/state/t2-autobrightness/gnome-settings` |
 | T2 Hybrid GPU Control | `/usr/local/bin/t2-hybrid-gpu-control`, `/usr/local/libexec/t2-hybrid-gpu-control-helper`, `/usr/local/libexec/t2-hybrid-gpu-control-status`, `/usr/local/share/applications/org.t2hybridgpucontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2hybridgpucontrol.gtk.svg`, `/usr/share/polkit-1/actions/org.t2hybridgpucontrol.gtk.policy`, `/usr/share/polkit-1/actions/org.t2hybridgpucontrol.gtk.status.policy`, `/etc/environment.d/90-kait2en-gsk-renderer.conf` |
 | T2 GPU Control | `/usr/local/bin/t2-dgpu-control`, `/usr/local/libexec/t2-dgpu-control-helper`, `/usr/local/libexec/t2-dgpu-control-status`, `/usr/local/share/applications/org.t2dgpucontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2dgpucontrol.gtk.svg`, `/usr/local/lib/systemd/system/kait2en-dgpu-off.service`, `/usr/local/lib/systemd/system/kait2en-dgpu-suspend.service`, `/usr/local/lib/systemd/system/kait2en-amdgpu-profile.service`, `/usr/local/lib/systemd/system/kait2en-amdgpu-profile-resume.service`, `/usr/share/polkit-1/actions/org.t2dgpucontrol.gtk.policy`, `/usr/share/polkit-1/actions/org.t2dgpucontrol.gtk.status.policy` |
 
 T2 Fan Control's service starts immediately and persists fan curves across
-boot and resume. T2 Hybrid GPU Control does not install system services.
+boot and resume. `t2-drop.service` is not enabled. D-Bus starts it when
+T2 AirShare receives or sends over AirDrop, it runs as root because AWDL needs
+CAP_NET_ADMIN, stays while T2 AirShare is visible and exits a minute after
+the last caller. T2 Hybrid GPU Control does not install system services.
 T2 GPU Control enables its units only when the corresponding options are
 applied in the app. Both privileged helpers validate the GPU layout and accept
 only the fixed operations exposed by their UI.

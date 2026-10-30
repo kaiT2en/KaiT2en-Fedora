@@ -126,7 +126,7 @@ documentation:
             - {file: post-install/applications/t2-touch-bar.md}
             - {file: post-install/applications/t2-hybrid-gpu-control.md}
             - {file: post-install/applications/t2-gpu-control.md}
-            - {file: post-install/applications/t2-share.md}
+            - {file: post-install/applications/t2-airshare.md}
             - {file: post-install/applications/t2-kernel-builder.md}
         - {file: post-install/audio-dsp.md}
         - {file: post-install/automatic-brightness.md}
