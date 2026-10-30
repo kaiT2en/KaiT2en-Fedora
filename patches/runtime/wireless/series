@@ -4,3 +4,5 @@
 0004-wifi-brcmfmac-match-firmware-capabilities-as-whole-words.patch
 0005-wifi-brcmfmac-leave-the-AP-4-way-handshake-to-the-host-on-Apple-chips.patch
 0006-wifi-brcmfmac-add-an-AWDL-interface-for-the-Apple-firmware.patch
+0007-Bluetooth-hci_bcm-clear-vendor-bits-in-LE-advertising-report-types.patch
+0008-Bluetooth-hci_bcm-set-the-strict-duplicate-filter-quirk-without-a-patch-file.patch

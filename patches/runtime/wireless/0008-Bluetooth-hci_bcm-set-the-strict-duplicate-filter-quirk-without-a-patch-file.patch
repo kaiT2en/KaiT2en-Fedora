@@ -1,0 +1,30 @@
+From: Andre Eikmeyer <dev@deq.rocks>
+Subject: [PATCH] Bluetooth: hci_bcm: set the strict duplicate filter quirk without a patch file
+
+btbcm_finalize() sets HCI_QUIRK_STRICT_DUPLICATE_FILTER, but bcm_setup()
+returns before it when no patch file was loaded. The MacBookPro15,1 has
+none for its BCM4364B0 ("BCM: firmware Patch file not found"), so the
+quirk is missing and a service discovery scans with "Filter duplicates:
+Enabled". The controller then reports an address once per discovery
+cycle of about 10.7 s. A Mac that changed its advertisement data on the
+same address was reported 6 s after the change, at the next cycle.
+
+Set the quirk on that path as well.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+--- a/drivers/bluetooth/hci_bcm.c
++++ b/drivers/bluetooth/hci_bcm.c
+@@ -597,8 +597,11 @@
+ 	if (err)
+ 		return err;
+ 
+-	if (!fw_load_done)
++	if (!fw_load_done) {
++		/* btbcm_finalize() sets this after loading a patch file */
++		hci_set_quirk(hu->hdev, HCI_QUIRK_STRICT_DUPLICATE_FILTER);
+ 		return 0;
++	}
+ 
+ 	/* Init speed if any */
+ 	if (bcm->dev && bcm->dev->init_speed)
