@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! One AWDL session: brings AWDL up, keeps it running, finds the AirDrop
-//! receivers around and sends files to them on request. Runs in its own
-//! thread, the netlink calls block.
+//! receivers around and sends files to them on request. The own AirDrop
+//! server always runs, the service is advertised while `receiving` is set.
+//! Runs in its own thread, the netlink calls block.
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
@@ -15,8 +16,9 @@ use log::{info, warn};
 use rand::RngCore;
 
 use crate::airdrop::{File, Receiver};
-use crate::awdl::{Awdl, link_local, mac_str};
+use crate::awdl::{Awdl, Service, link_local, mac_str};
 use crate::genl::Genl;
+use crate::receive::{Handler, Server};
 
 /// How often the AWDL requests are sent again, as macOS does.
 const REFRESH: Duration = Duration::from_millis(2500);
@@ -28,6 +30,10 @@ const DISCOVER_ATTEMPTS: u32 = 20;
 const RECEIVER_TIMEOUT: Duration = Duration::from_secs(30);
 /// Time the user on the receiver has to accept.
 const ASK_TIMEOUT: Duration = Duration::from_secs(120);
+/// Port of the own AirDrop server, the one macOS uses.
+const AIRDROP_PORT: u16 = 8770;
+/// TXT flags of the own service, the value macOS 15.4.1 announces.
+const AIRDROP_FLAGS: u32 = 13311;
 
 /// An AirDrop receiver, `id` is its AWDL MAC.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,9 +57,12 @@ pub struct Session {
 
 impl Session {
     /// Starts AWDL on `primary`. `changed` gets the receiver list whenever
-    /// it changes.
+    /// it changes. `handler` takes the transfers of senders, they only find
+    /// this device while `receiving` is set.
     pub fn start(
         primary: &str,
+        handler: Arc<dyn Handler>,
+        receiving: Arc<AtomicBool>,
         changed: impl Fn(Vec<ReceiverInfo>) + Send + 'static,
     ) -> Result<Self> {
         let primary = ifindex(primary)?;
@@ -62,6 +71,8 @@ impl Session {
         let awdl = Awdl::up(genl, primary, random_mac(), awdl_host())?;
         info!("AWDL up on {} as {}", awdl.ifname, mac_str(&awdl.mac));
         let stop = Arc::new(AtomicBool::new(false));
+        let listening = Arc::new(AtomicBool::new(false));
+        spawn_server(link_local(&awdl.mac), awdl.ifindex, handler, stop.clone(), listening.clone());
         let (requests, request_rx) = mpsc::channel();
         let (ev_tx, ev_rx) = mpsc::channel();
         std::thread::spawn(move || {
@@ -75,7 +86,7 @@ impl Session {
         });
         let thread_stop = stop.clone();
         let thread = std::thread::spawn(move || {
-            run(awdl, ev_rx, request_rx, &thread_stop, changed);
+            run(awdl, ev_rx, request_rx, &thread_stop, &receiving, &listening, changed);
         });
         Ok(Self { stop, requests, thread: Some(thread) })
     }
@@ -108,8 +119,12 @@ fn run(
     events: mpsc::Receiver<crate::genl::Event>,
     requests: mpsc::Receiver<SendRequest>,
     stop: &AtomicBool,
+    receiving: &AtomicBool,
+    listening: &AtomicBool,
     changed: impl Fn(Vec<ReceiverInfo>),
 ) {
+    let instance = random_instance();
+    let mut advertised = false;
     let (found_tx, found_rx) = mpsc::channel::<([u8; 6], u16, Option<String>)>();
     let start = Instant::now();
     let mut last_refresh = Instant::now();
@@ -133,6 +148,34 @@ fn run(
         if !settled && start.elapsed() >= SETTLE_AFTER {
             settled = true;
             let _ = awdl.settle();
+        }
+
+        // A sender that finds the service before the server listens waits
+        // 5 s before it tries again
+        let receive = receiving.load(Ordering::Relaxed) && listening.load(Ordering::Relaxed);
+        if receive != advertised {
+            let service = receive.then(|| Service { instance: instance.clone(), port: AIRDROP_PORT, flags: AIRDROP_FLAGS });
+            match awdl.set_service(service) {
+                Ok(()) => {
+                    advertised = receive;
+                    info!("AirDrop service {instance} {}", if receive { "advertised" } else { "withdrawn" });
+                }
+                Err(err) => {
+                    warn!("AirDrop service: {err:#}");
+                    break;
+                }
+            }
+        }
+
+        // Senders connect to the own server, their replies need the
+        // neighbour entry and the firmware peer entry as well
+        if advertised {
+            let macs: Vec<_> = awdl.peers.keys().copied().collect();
+            for mac in macs {
+                if let Err(err) = awdl.add_peer(mac) {
+                    warn!("peer {}: {err:#}", mac_str(&mac));
+                }
+            }
         }
 
         // Ask every new AirDrop receiver for its name
@@ -228,6 +271,42 @@ fn run(
     changed(Vec::new());
     awdl.down();
     info!("AWDL down");
+}
+
+/// Starts the AirDrop server once the link local address of the AWDL
+/// interface is usable, which takes about 2 s after the interface comes
+/// up. Sets `listening` then.
+fn spawn_server(
+    address: String,
+    scope: u32,
+    handler: Arc<dyn Handler>,
+    stop: Arc<AtomicBool>,
+    listening: Arc<AtomicBool>,
+) {
+    std::thread::spawn(move || {
+        let server = loop {
+            if stop.load(Ordering::Relaxed) {
+                return;
+            }
+            match Server::bind(&address, scope, AIRDROP_PORT) {
+                Ok(server) => break server,
+                Err(err) => {
+                    log::debug!("AirDrop server: {err:#}");
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            }
+        };
+        listening.store(true, Ordering::Relaxed);
+        info!("AirDrop server on [{address}]:{AIRDROP_PORT}");
+        server.serve(handler, &stop);
+    });
+}
+
+/// A service instance name in the form macOS uses, 12 hex digits.
+fn random_instance() -> String {
+    let mut b = [0u8; 6];
+    rand::thread_rng().fill_bytes(&mut b);
+    b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
 /// A host name in the form macOS uses on AWDL (a UUID).

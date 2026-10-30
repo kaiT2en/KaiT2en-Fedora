@@ -39,6 +39,7 @@ const AWDL_AF: [u8; 5] = [0x7f, 0x00, 0x17, 0xf2, 0x08];
 const AWDL_AF_HDR: usize = 16;
 
 const TLV_SERVICE_RESPONSE: u8 = 0x02;
+const TLV_SERVICE_PARAMS: u8 = 0x06;
 const TLV_ARPA: u8 = 0x10;
 const TLV_VERSION: u8 = 0x15;
 const TLV_ELECTION_V2: u8 = 0x18;
@@ -47,6 +48,12 @@ const TLV_ELECTION_V2: u8 = 0x18;
 const AIRDROP_PTR_NAME: [u8; 2] = [0xc0, 0x07];
 const DNS_PTR: u8 = 0x0c;
 const DNS_SRV: u8 = 0x21;
+const DNS_TXT: u8 = 0x10;
+/// Compressed name suffixes as macOS writes them
+const NAME_LOCAL: [u8; 2] = [0xc0, 0x0c];
+const NAME_SELF: [u8; 2] = [0xc0, 0x00];
+/// Service params TLV value macOS sends while it advertises AirDrop
+const AIRDROP_SERVICE_PARAMS: [u8; 11] = [0, 0, 0, 0x0c, 0, 0, 0, 0x28, 0, 0x40, 0x04];
 
 fn hex(s: &str) -> Vec<u8> {
     (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
@@ -130,7 +137,16 @@ pub struct Peer {
     pub last_seen: Option<Instant>,
 }
 
+/// The AirDrop service this device advertises while it receives.
+#[derive(Debug, Clone)]
+pub struct Service {
+    pub instance: String,
+    pub port: u16,
+    pub flags: u32,
+}
+
 pub struct Awdl {
+    service: Option<Service>,
     genl: Genl,
     primary: u32,
     pub mac: [u8; 6],
@@ -148,6 +164,7 @@ impl Awdl {
         let ifindex = genl.up(primary, mac)?;
         let ifname = ifname(ifindex)?;
         let mut awdl = Awdl {
+            service: None,
             genl,
             primary,
             mac,
@@ -213,13 +230,63 @@ impl Awdl {
     fn payload(&self) -> Vec<u8> {
         let mut buf = insert_tlv(&self.template(PAYLOAD), 14, 0, &self.arpa_tlv());
         self.patch_election_tlv(&mut buf, 14);
+        if self.service.is_some() {
+            // The empty service params TLV at offset 2 gets the value macOS sends
+            buf = replace_tlv(&buf, 2, 0, TLV_SERVICE_PARAMS, &AIRDROP_SERVICE_PARAMS);
+        }
         buf
     }
 
     fn oob_af_auto(&self) -> Vec<u8> {
         let mut buf = insert_tlv(&self.template(OOB_AF_AUTO), 46, 44, &self.arpa_tlv());
         self.patch_election_tlv(&mut buf, 46);
+        if let Some(service) = &self.service {
+            // The empty service params TLV at the end is replaced by the
+            // filled one and the PTR, SRV and TXT records
+            let mut tail = tlv(TLV_SERVICE_PARAMS, &AIRDROP_SERVICE_PARAMS);
+            for record in self.service_records(service) {
+                tail.extend(tlv(TLV_SERVICE_RESPONSE, &record));
+            }
+            buf = replace_tlv(&buf, 46, 44, TLV_SERVICE_PARAMS, &[]);
+            let len = u16::from_le_bytes([buf[44], buf[45]]) + tail.len() as u16;
+            buf[44..46].copy_from_slice(&len.to_le_bytes());
+            buf.extend(tail);
+        }
         buf
+    }
+
+    /// PTR, SRV and TXT records of the AirDrop service, in the layout of
+    /// the service response TLVs of macOS.
+    fn service_records(&self, s: &Service) -> Vec<Vec<u8>> {
+        let inst = s.instance.as_bytes();
+        let host = self.host.as_bytes();
+        let txt = format!("flags={}", s.flags);
+        let mut instance_name = vec![inst.len() as u8];
+        instance_name.extend_from_slice(inst);
+        instance_name.extend_from_slice(&AIRDROP_PTR_NAME);
+
+        let mut ptr_data = vec![inst.len() as u8];
+        ptr_data.extend_from_slice(inst);
+        ptr_data.extend_from_slice(&NAME_SELF);
+        let mut srv_data = vec![0, 0, 0, 0];
+        srv_data.extend_from_slice(&s.port.to_be_bytes());
+        srv_data.push(host.len() as u8);
+        srv_data.extend_from_slice(host);
+        srv_data.extend_from_slice(&NAME_LOCAL);
+        let mut txt_data = vec![txt.len() as u8];
+        txt_data.extend_from_slice(txt.as_bytes());
+
+        vec![
+            service_record_bytes(&AIRDROP_PTR_NAME, DNS_PTR, &ptr_data),
+            service_record_bytes(&instance_name, DNS_SRV, &srv_data),
+            service_record_bytes(&instance_name, DNS_TXT, &txt_data),
+        ]
+    }
+
+    /// Starts or stops advertising the AirDrop service in the frames.
+    pub fn set_service(&mut self, service: Option<Service>) -> Result<()> {
+        self.service = service;
+        self.refresh()
     }
 
     /// slot_bss in its SDB off form: byte 0x0c 9, every chanspec in slice 0.
@@ -299,10 +366,14 @@ impl Awdl {
         self.set("awdl_psf_dwell", &[0u8; 8])
     }
 
-    /// awdl0 outside NetworkManager, with an EUI-64 link local address.
+    /// awdl0 outside NetworkManager, with an EUI-64 link local address that
+    /// is usable at once. Duplicate address detection would hold it back
+    /// for about 2 s, the address comes from a random MAC.
     fn configure_netdev(&self) {
         let _ = Command::new("nmcli").args(["dev", "set", &self.ifname, "managed", "no"]).output();
-        let _ = std::fs::write(format!("/proc/sys/net/ipv6/conf/{}/addr_gen_mode", self.ifname), "0");
+        let conf = format!("/proc/sys/net/ipv6/conf/{}", self.ifname);
+        let _ = std::fs::write(format!("{conf}/addr_gen_mode"), "0");
+        let _ = std::fs::write(format!("{conf}/accept_dad"), "0");
         let _ = Command::new("ip").args(["link", "set", &self.ifname, "up"]).status();
     }
 
@@ -454,6 +525,48 @@ fn find_af(data: &[u8]) -> Option<&[u8]> {
     None
 }
 
+fn tlv(kind: u8, value: &[u8]) -> Vec<u8> {
+    let mut out = vec![kind];
+    out.extend_from_slice(&(value.len() as u16).to_le_bytes());
+    out.extend_from_slice(value);
+    out
+}
+
+/// Replaces the value of the first TLV of `kind`, an empty `value` removes
+/// it. TLVs start at `tlv_off`, the 16 bit length at `len_off` counts
+/// everything after it.
+fn replace_tlv(data: &[u8], tlv_off: usize, len_off: usize, kind: u8, value: &[u8]) -> Vec<u8> {
+    let mut i = tlv_off;
+    while i + 3 <= data.len() {
+        let len = u16::from_le_bytes([data[i + 1], data[i + 2]]) as usize;
+        if data[i] == kind {
+            let mut out = data[..i].to_vec();
+            if !value.is_empty() {
+                out.extend(tlv(kind, value));
+            }
+            out.extend_from_slice(&data[(i + 3 + len).min(data.len())..]);
+            let delta = out.len() as i32 - data.len() as i32;
+            let total = (u16::from_le_bytes([data[len_off], data[len_off + 1]]) as i32 + delta) as u16;
+            out[len_off..len_off + 2].copy_from_slice(&total.to_le_bytes());
+            return out;
+        }
+        i += 3 + len;
+    }
+    data.to_vec()
+}
+
+/// A service response record: u16 length of name and type, name, type,
+/// u16 data length, u16 0, data.
+fn service_record_bytes(name: &[u8], kind: u8, data: &[u8]) -> Vec<u8> {
+    let mut out = ((name.len() + 1) as u16).to_le_bytes().to_vec();
+    out.extend_from_slice(name);
+    out.push(kind);
+    out.extend_from_slice(&(data.len() as u16).to_le_bytes());
+    out.extend_from_slice(&[0, 0]);
+    out.extend_from_slice(data);
+    out
+}
+
 /// One record of a service response TLV: name, record type and data.
 /// Layout: u16 length of name and type, name, type, u16 data length,
 /// u16 0, data.
@@ -506,6 +619,32 @@ mod tests {
         let (_, kind, data) = service_record(&srv).unwrap();
         assert_eq!(kind, DNS_SRV);
         assert_eq!(u16::from_be_bytes([data[4], data[5]]), 8770);
+    }
+
+    #[test]
+    fn builds_the_airdrop_records_like_macos() {
+        let inst = b"05a204c4b1a5";
+        let host = b"dbcd743c-8ff2-4759-9807-453e9d3ee9a2";
+        let mut name = vec![12u8];
+        name.extend_from_slice(inst);
+        name.extend_from_slice(&AIRDROP_PTR_NAME);
+        let mut ptr = vec![12u8];
+        ptr.extend_from_slice(inst);
+        ptr.extend_from_slice(&NAME_SELF);
+        assert_eq!(
+            service_record_bytes(&AIRDROP_PTR_NAME, DNS_PTR, &ptr),
+            hex("0300c0070c0f0000000c303561323034633462316135c000")
+        );
+        let mut srv = vec![0, 0, 0, 0, 0x22, 0x42, host.len() as u8];
+        srv.extend_from_slice(host);
+        srv.extend_from_slice(&NAME_LOCAL);
+        assert_eq!(
+            service_record_bytes(&name, DNS_SRV, &srv),
+            hex(concat!(
+                "10000c303561323034633462316135c007212d00000000000000224224",
+                "64626364373433632d386666322d343735392d393830372d343533653964336565396132c00c"
+            ))
+        );
     }
 
     #[test]

@@ -3,8 +3,8 @@ Description=T2 Drop, AirDrop to Apple devices over AWDL
 Documentation=https://github.com/kaiT2en/KaiT2en-Fedora
 
 [Service]
-# Started by D-Bus activation when a program looks for AirDrop receivers,
-# it exits again after a minute without callers
+# Started by D-Bus activation when a program looks for AirDrop receivers or
+# registers to receive, it exits again after a minute without either
 Type=dbus
 BusName=org.t2drop
 ExecStart=/usr/local/bin/t2drop daemon

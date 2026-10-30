@@ -2,16 +2,21 @@
 //! t2drop: send files to Apple devices over AWDL from T2 Macs running
 //! Linux. `t2drop daemon` is the system bus service org.t2drop, which owns
 //! AWDL through the kait2en brcmfmac patch. `t2drop list` and `t2drop send`
-//! are clients of it and run as the normal user.
+//! are clients of it and run as the normal user, so is `t2drop receive`,
+//! an agent that takes transfers into ~/Downloads.
 
+mod agent;
 mod airdrop;
 mod awdl;
 mod ble;
 mod genl;
+mod logind;
+mod mgmt;
+mod receive;
 mod service;
 mod session;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
@@ -49,6 +54,35 @@ enum Cmd {
         #[arg(long)]
         name: Option<String>,
     },
+    /// Be visible to AirDrop senders and save what they send
+    Receive {
+        /// Folder for the received files, ~/Downloads by default
+        #[arg(long)]
+        dir: Option<PathBuf>,
+        /// Name shown on the sender
+        #[arg(long)]
+        name: Option<String>,
+        /// Accept every transfer without asking
+        #[arg(long)]
+        yes: bool,
+        /// Only become visible while a sender nearby advertises over
+        /// Bluetooth LE, as macOS does
+        #[arg(long)]
+        ble: bool,
+    },
+}
+
+/// `path`, or `name (n).ext` next to it when it exists.
+fn free_path(path: &Path) -> PathBuf {
+    if !path.exists() {
+        return path.to_owned();
+    }
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+    let ext = path.extension().and_then(|s| s.to_str()).map(|e| format!(".{e}")).unwrap_or_default();
+    (1..)
+        .map(|n| path.with_file_name(format!("{stem} ({n}){ext}")))
+        .find(|p| !p.exists())
+        .expect("a free name")
 }
 
 #[proxy(interface = "org.t2drop.Sender1", default_service = "org.t2drop", default_path = "/org/t2drop")]
@@ -149,6 +183,13 @@ async fn main() -> Result<()> {
             r.context("send")?;
             println!("sent");
             Ok(())
+        }
+        Cmd::Receive { dir, name, yes, ble } => {
+            let dir = match dir {
+                Some(dir) => dir,
+                None => agent::downloads()?,
+            };
+            agent::run(dir, name.unwrap_or_else(hostname), yes, ble).await
         }
     }
 }
