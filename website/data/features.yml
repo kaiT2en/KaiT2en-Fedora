@@ -567,19 +567,20 @@ items:
       before suspend.
 
   - id: hci-bcm-le-scan
-    title: "Bluetooth LE devices show up within a second on the MacBookPro15,1"
+    title: "Bluetooth LE devices show up within a second"
     state: available
     upstream: downstream
     project: KAIT2EN Fedora
-    subsystem: Bluetooth / hci_bcm
+    subsystem: Bluetooth / btbcm
     authors:
       - deqrocks
     updated: "2026-10-30"
     notes: >-
-      The BCM4364 sets extra bits in the type of LE advertising reports, and
-      the kernel dropped most of them as unknown. Without a Bluetooth patch
-      file the driver also left duplicate filtering in the controller on, so
-      a device that changed its advertisement was only seen again after up
-      to 11 seconds. hci_bcm now clears the extra bits and lets the kernel
-      turn the controller's duplicate filter off. A Mac opening AirDrop is
-      now seen within a second instead of up to 30 seconds.
+      The Broadcom Bluetooth chips of the T2 Macs set extra bits in the type
+      of LE advertising reports, and the kernel dropped most of them as
+      unknown. The drivers also left duplicate filtering in the controller
+      on, so a device that changed its advertisement was only seen again
+      after up to 11 seconds. btbcm now clears the extra bits for hci_bcm
+      and hci_bcm4377, and both let the kernel turn the controller's
+      duplicate filter off. A Mac opening AirDrop is now seen within a second
+      instead of up to 30 seconds.
