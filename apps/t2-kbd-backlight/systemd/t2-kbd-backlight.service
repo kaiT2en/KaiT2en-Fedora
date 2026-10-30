@@ -1,0 +1,27 @@
+[Unit]
+Description=T2 keyboard backlight idle timeout
+After=upower.service systemd-udevd.service
+Wants=upower.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/t2-kbd-backlight
+Restart=on-failure
+RestartSec=2
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+MemoryDenyWriteExecute=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

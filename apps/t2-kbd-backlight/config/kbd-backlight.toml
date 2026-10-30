@@ -1,0 +1,7 @@
+# Keyboard backlight idle timeout. After idle_timeout_ms without keyboard,
+# trackpad or Touch Bar input the backlight fades out. The next input, a
+# finger resting on the trackpad included, fades it back to the level it had.
+# Apply changes with: sudo systemctl restart t2-kbd-backlight
+enabled = true
+# 5000 to 3600000 ms.
+idle_timeout_ms = 30000

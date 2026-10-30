@@ -31,6 +31,7 @@ app:t2-force-click            apps/t2-force-click/
 app:t2-debug                  apps/t2-debug/
 app:t2-airshare               apps/t2-airshare/
 app:t2-drop                   apps/t2-drop/
+app:t2-kbd-backlight          apps/t2-kbd-backlight/
 app:t2-touchbar               if=/usr/local/bin/kait2en-touchbar apps/t2-touchbar/
 app:t2-journal                t2-services/t2-journal/ packaging/lifecycle/
 app:gpu-control               apps/t2-dgpu-control/ apps/t2-hybrid-gpu-control/

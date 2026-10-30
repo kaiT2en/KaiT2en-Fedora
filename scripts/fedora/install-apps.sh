@@ -188,6 +188,13 @@ run_step "remove old Cargo build directories" remove_project_cargo_targets
 for app in t2-fan-control t2-smc-control t2-power-explorer t2-force-click t2-debug t2-airshare t2-drop; do
 	wanted "$app" && run_step "$app" install_rust_app "$REPO_ROOT/apps/$app" "$app"
 done
+if ! wanted t2-kbd-backlight; then
+	:
+elif has_keyboard_backlight; then
+	run_step "t2-kbd-backlight" install_rust_app "$REPO_ROOT/apps/t2-kbd-backlight" "t2-kbd-backlight"
+else
+	info "no keyboard backlight on this model; skipping t2-kbd-backlight"
+fi
 if ! wanted t2-touchbar; then
 	:
 elif ! has_touch_bar; then
