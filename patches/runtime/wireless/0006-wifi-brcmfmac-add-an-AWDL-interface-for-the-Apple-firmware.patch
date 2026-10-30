@@ -3,7 +3,12 @@ Subject: [PATCH] wifi: brcmfmac: add an AWDL interface for the Apple firmware
 
 The Apple firmware for the BCM4355, BCM4364 and BCM4377 runs AWDL itself
 once the host creates an interface of type 2 with interface_create and
-configures it through the awdl_* iovars. macOS keeps election,
+configures it through the awdl_* iovars. The interface is created as
+macOS does it: flags 0x1a (MAC address, if_index and BSSID given),
+if_index 2 and the AWDL BSSID 00:25:00:ff:94:73. Like macOS, iovars for
+it are plain iovars on its interface index, and the host sends it no
+multicast list and no MAC address. The firmware event mask is extended
+before the interface is created. macOS keeps election,
 synchronization, channel sequence and services in the host and only
 programs the firmware.
 
@@ -29,7 +34,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-@@ -0,0 +1,689 @@
+@@ -0,0 +1,715 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * AWDL interface for the Apple firmware of the BCM4355, BCM4364 and BCM4377.
@@ -71,8 +76,12 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +#include "awdl.h"
 +
 +#define BRCMF_AWDL_IFTYPE		2
-+/* WL_INTERFACE_MAC_USE */
-+#define BRCMF_AWDL_IF_MAC_USE		0x2
++/*
++ * interface_create flags as macOS sets them for AWDL: use the given MAC
++ * address (0x2), if_index (0x8) and BSSID (0x10)
++ */
++#define BRCMF_AWDL_IF_FLAGS		0x1a
++#define BRCMF_AWDL_IF_INDEX		2
 +#define BRCMF_AWDL_IF_WAIT_MS		2000
 +#define BRCMF_AWDL_HDR_LEN		16
 +#define BRCMF_AWDL_GET_MAX		BRCMF_DCMD_MAXLEN
@@ -90,6 +99,11 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	u8 if_index;
 +	u8 pad[3];
 +} __packed;
++
++/* The BSSID of all AWDL frames */
++static const u8 brcmf_awdl_bssid[ETH_ALEN] = {
++	0x00, 0x25, 0x00, 0xff, 0x94, 0x73,
++};
 +
 +/* LLC/SNAP with the Apple OUI and the start of the AWDL data header */
 +static const u8 brcmf_awdl_llc[10] = {
@@ -222,6 +236,10 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	return 0;
 +}
 +
++static void brcmf_awdl_set_rx_mode(struct net_device *ndev)
++{
++}
++
 +static int brcmf_awdl_stop(struct net_device *ndev)
 +{
 +	netif_stop_queue(ndev);
@@ -287,6 +305,14 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +					 awdl->mask_len);
 +}
 +
++/* Undoes UP before the AWDL state was published */
++static void brcmf_awdl_free_unused(struct brcmf_awdl *awdl)
++{
++	brcmf_awdl_events_restore(awdl);
++	kfree(awdl->saved_mask);
++	kfree(awdl);
++}
++
 +static struct brcmf_if *brcmf_awdl_wait_if(struct brcmf_pub *drvr,
 +					   const u8 *mac)
 +{
@@ -321,6 +347,11 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +		brcmf_awdl_netdev_ops.ndo_open = brcmf_awdl_open;
 +		brcmf_awdl_netdev_ops.ndo_stop = brcmf_awdl_stop;
 +		brcmf_awdl_netdev_ops.ndo_start_xmit = brcmf_awdl_xmit;
++		/* macOS sends no multicast list or MAC address to the AWDL
++		 * interface, the firmware filters AWDL traffic itself
++		 */
++		brcmf_awdl_netdev_ops.ndo_set_rx_mode = brcmf_awdl_set_rx_mode;
++		brcmf_awdl_netdev_ops.ndo_set_mac_address = NULL;
 +	}
 +	ndev->netdev_ops = &brcmf_awdl_netdev_ops;
 +	/* No cfg80211 vif to free for this interface */
@@ -384,13 +415,17 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	}
 +	awdl->drvr = drvr;
 +	awdl->primary_ifindex = pndev->ifindex;
++	/* While the firmware surely answers, before the interface exists */
++	brcmf_awdl_events_enable(awdl);
 +
 +	pri = brcmf_get_ifp(drvr, 0);
 +	req.ver = cpu_to_le16(3);
 +	req.len = cpu_to_le16(sizeof(req));
 +	req.fixed_len = cpu_to_le16(sizeof(req));
 +	req.iftype = BRCMF_AWDL_IFTYPE;
-+	req.flags = cpu_to_le32(BRCMF_AWDL_IF_MAC_USE);
++	req.flags = cpu_to_le32(BRCMF_AWDL_IF_FLAGS);
++	req.if_index = BRCMF_AWDL_IF_INDEX;
++	memcpy(req.bssid, brcmf_awdl_bssid, ETH_ALEN);
 +	nla_memcpy(mac, info->attrs[BRCMF_AWDL_ATTR_MAC], ETH_ALEN);
 +	memcpy(req.mac_addr, mac, ETH_ALEN);
 +	pri->fwil_fwerr = true;
@@ -399,7 +434,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	pri->fwil_fwerr = false;
 +	if (err) {
 +		GENL_SET_ERR_MSG(info, "interface_create failed");
-+		kfree(awdl);
++		brcmf_awdl_free_unused(awdl);
 +		err = err < 0 ? err : -EIO;
 +		goto out;
 +	}
@@ -407,18 +442,17 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	awdl->ifp = brcmf_awdl_wait_if(drvr, mac);
 +	if (!awdl->ifp) {
 +		GENL_SET_ERR_MSG(info, "no interface event for the AWDL interface");
-+		kfree(awdl);
++		brcmf_awdl_free_unused(awdl);
 +		err = -ETIMEDOUT;
 +		goto out;
 +	}
 +	err = brcmf_awdl_attach_netdev(awdl);
 +	if (err) {
-+		kfree(awdl);
++		brcmf_awdl_free_unused(awdl);
 +		goto out;
 +	}
 +	rcu_assign_pointer(drvr->awdl, awdl);
 +	list_add(&awdl->list, &brcmf_awdl_list);
-+	brcmf_awdl_events_enable(awdl);
 +	brcmf_dbg(INFO, "AWDL interface %s bsscfg %d ifidx %d\n",
 +		  awdl->ifp->ndev->name, awdl->ifp->bsscfgidx,
 +		  awdl->ifp->ifidx);
@@ -463,11 +497,11 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +		return -ENOENT;
 +	ifp = awdl->ifp;
 +	bsscfgidx = ifp->bsscfgidx;
-+	brcmf_fil_bsscfg_data_set(ifp, "awdl", &off, sizeof(off));
++	brcmf_fil_iovar_data_set(ifp, "awdl", &off, sizeof(off));
 +	brcmf_awdl_events_restore(awdl);
 +	brcmf_awdl_release(drvr);
 +	ifp->fwil_fwerr = true;
-+	err = brcmf_fil_bsscfg_data_set(ifp, "interface_remove", NULL, 0);
++	err = brcmf_fil_iovar_data_set(ifp, "interface_remove", NULL, 0);
 +	ifp->fwil_fwerr = false;
 +	/* The IF event removes awdl0 and the interface */
 +	end = jiffies + msecs_to_jiffies(BRCMF_AWDL_IF_WAIT_MS);
@@ -543,13 +577,10 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +		}
 +		ifp = awdl->ifp;
 +	}
++	/* Plain iovars on the interface index, as macOS addresses them */
 +	ifp->fwil_fwerr = true;
-+	if (!ifp->bsscfgidx)
-+		fwerr = get ? brcmf_fil_iovar_data_get(ifp, name, buf, len) :
-+			      brcmf_fil_iovar_data_set(ifp, name, buf, len);
-+	else
-+		fwerr = get ? brcmf_fil_bsscfg_data_get(ifp, name, buf, len) :
-+			      brcmf_fil_bsscfg_data_set(ifp, name, buf, len);
++	fwerr = get ? brcmf_fil_iovar_data_get(ifp, name, buf, len) :
++		      brcmf_fil_iovar_data_set(ifp, name, buf, len);
 +	ifp->fwil_fwerr = false;
 +
 +	msg = genlmsg_new(NLMSG_DEFAULT_SIZE + (get ? len : 0), GFP_KERNEL);
