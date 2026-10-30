@@ -29,7 +29,7 @@ app:t2-smc-control            apps/t2-smc-control/
 app:t2-power-explorer         apps/t2-power-explorer/
 app:t2-force-click            apps/t2-force-click/
 app:t2-debug                  apps/t2-debug/
-app:t2-share                  apps/t2-share/
+app:t2-airshare               apps/t2-airshare/
 app:t2-drop                   apps/t2-drop/
 app:t2-touchbar               if=/usr/local/bin/kait2en-touchbar apps/t2-touchbar/
 app:t2-journal                t2-services/t2-journal/ packaging/lifecycle/

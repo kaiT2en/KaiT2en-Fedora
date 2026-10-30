@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Send with T2 AirShare
+Comment=Send files to an Android phone or an Apple device
+Exec=/usr/local/bin/t2-airshare %F
+TryExec=/usr/local/bin/t2-airshare
+Icon=org.t2airshare.gtk
+Terminal=false
+NoDisplay=true
+MimeType=application/octet-stream;
+Categories=Network;FileTransfer;

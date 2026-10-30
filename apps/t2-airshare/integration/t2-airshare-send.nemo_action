@@ -1,0 +1,7 @@
+[Nemo Action]
+Name=Send with T2 AirShare
+Comment=Send the selected files to an Android phone or an Apple device
+Exec=/usr/local/bin/t2-airshare %F
+Icon-Name=org.t2airshare.gtk
+Selection=notnone
+Extensions=nodirs;

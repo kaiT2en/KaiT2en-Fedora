@@ -1,0 +1,13 @@
+[Unit]
+Description=T2 AirShare receiver for Quick Share and AirDrop
+Documentation=https://kait2en.org/documentation.html
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=exec
+ExecStart=/usr/local/bin/t2airshare daemon
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target

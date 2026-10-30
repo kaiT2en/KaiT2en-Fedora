@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=T2 AirShare
+Comment=Share files with Android phones over Quick Share and with Apple devices over AirDrop
+Exec=/usr/local/bin/t2-airshare
+TryExec=/usr/local/bin/t2-airshare
+Icon=org.t2airshare.gtk
+Terminal=false
+Categories=Network;FileTransfer;
+StartupNotify=true

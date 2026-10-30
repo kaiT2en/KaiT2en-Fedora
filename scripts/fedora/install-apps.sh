@@ -185,7 +185,7 @@ run_step "install app assets" install_app_assets
 (( STEP_STATUS == 0 )) && mark_applied app:assets
 run_step "remove obsolete apps" remove_obsolete_apps
 run_step "remove old Cargo build directories" remove_project_cargo_targets
-for app in t2-fan-control t2-smc-control t2-power-explorer t2-force-click t2-debug t2-share t2-drop; do
+for app in t2-fan-control t2-smc-control t2-power-explorer t2-force-click t2-debug t2-airshare t2-drop; do
 	wanted "$app" && run_step "$app" install_rust_app "$REPO_ROOT/apps/$app" "$app"
 done
 if ! wanted t2-touchbar; then

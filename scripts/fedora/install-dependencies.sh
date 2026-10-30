@@ -53,7 +53,7 @@ packages=(
 	policycoreutils-python-utils
 )
 
-# T2 Share adds "Send with T2 Share" to the Nautilus context menu through a
+# T2 AirShare adds "Send with T2 AirShare" to the Nautilus context menu through a
 # nautilus-python extension, which only matters where Nautilus is installed.
 rpm -q nautilus >/dev/null 2>&1 && packages+=(nautilus-python)
 

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Service
+MimeType=all/allfiles;
+Actions=sendWithT2AirShare;
+X-KDE-Priority=TopLevel
+
+[Desktop Action sendWithT2AirShare]
+Name=Send with T2 AirShare
+Icon=org.t2airshare.gtk
+Exec=/usr/local/bin/t2-airshare %F

@@ -1,7 +1,0 @@
-[Nemo Action]
-Name=Send with T2 Share
-Comment=Send the selected files to an Android phone with Quick Share
-Exec=/usr/local/bin/t2-share %F
-Icon-Name=org.t2share.gtk
-Selection=notnone
-Extensions=nodirs;
