@@ -193,6 +193,8 @@ struct PendingTouch {
     button: Option<usize>,
     /// Landed on the play cue of the dark bar.
     cue: bool,
+    /// Landed on the title of the track overlay.
+    title: bool,
 }
 
 struct Runtime {
@@ -347,7 +349,7 @@ impl Runtime {
             paused_here: false,
             cue_hold: None,
             screen_off: false,
-            cue: Cue::new(0),
+            cue: Cue::new(),
             cue_next_ms: None,
             layer_fade: None,
             blended: Vec::new(),
@@ -548,6 +550,7 @@ impl Runtime {
             self.contacts.insert(slot, Contact::Cancelled);
             return Ok(());
         }
+        let mut title = false;
         let cue = self.cue_frame().is_some() && {
             let cue = self.cue_layout();
             x >= f64::from(cue.left) && x < f64::from(cue.right)
@@ -568,8 +571,13 @@ impl Runtime {
                 self.contacts.insert(slot, Contact::TrackKey(forward));
                 return self.track_frame(now);
             }
-            // Anything else on the bar takes over from the overlay.
-            self.toast = None;
+            // The title stays until it is clear whether it is held.
+            if x >= f64::from(toast.layout.prev.1) && x < f64::from(toast.layout.next.0) {
+                title = true;
+            } else {
+                // Anything else on the bar takes over from the overlay.
+                self.toast = None;
+            }
         }
         let button = self.layout.hit(x, y, self.canvas.height);
         // The esc slot never moves, so it stays usable while the bar is dark.
@@ -584,6 +592,7 @@ impl Runtime {
             dark: !self.visible,
             button,
             cue,
+            title,
         });
         self.contacts.insert(slot, Contact::Pending);
         if let Some(index) = button {
@@ -670,6 +679,10 @@ impl Runtime {
             self.cue_hold = Some(touched + MEDIA_HOLD_MS);
             self.haptic.key_press();
             return Ok(());
+        }
+        if pending.dark && pending.title {
+            self.contacts.insert(pending.slot, Contact::Cancelled);
+            return self.pause_here();
         }
         if pending.dark && pending.button.is_some() {
             self.contacts.insert(pending.slot, Contact::DarkEsc);
@@ -997,7 +1010,7 @@ impl Runtime {
             self.cue_next_ms = None;
         } else if self.cue_next_ms.is_none() {
             let now = self.now_ms();
-            self.cue = Cue::new(self.started.elapsed().subsec_nanos());
+            self.cue = Cue::new();
             self.cue_next_ms = Some(now + self.cue.hold_ms());
         }
     }
@@ -1030,14 +1043,23 @@ impl Runtime {
     /// Holding the cue pauses, holding the pause bars plays on.
     fn cue_held(&mut self) -> Result<()> {
         self.cue_hold = None;
-        self.haptic.firm();
         if !self.playing {
+            self.haptic.firm();
             return self.play_pause();
         }
+        self.pause_here()
+    }
+
+    /// Pauses from the cue or the title of the track overlay.
+    fn pause_here(&mut self) -> Result<()> {
+        self.haptic.firm();
         self.paused_here = true;
         self.play_pause()?;
-        // The bars answer at once, along with the esc key.
-        self.show_activity_esc()
+        // The bars answer at once, along with the esc key, in place of the
+        // title.
+        self.toast = None;
+        self.show_activity_esc()?;
+        self.render_quiet_dark()
     }
 
     /// Goes through the desktop like the media keys do.
@@ -1540,6 +1562,8 @@ impl Runtime {
                         self.haptic.key_press();
                         self.haptic.key_release();
                         self.cue_tap(now)?;
+                    } else if pending.dark && pending.title {
+                        self.pause_here()?;
                     } else if pending.dark && pending.button.is_some() {
                         self.keyboard.press(Key::Esc)?;
                         self.keyboard.release()?;

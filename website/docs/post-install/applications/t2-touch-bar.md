@@ -11,7 +11,12 @@ Keeps the Touch Bar dark until it is touched or Fn is pressed.
 - Two-finger swipes change the row on a lit bar.
 - Three-finger swipes change the display brightness on a dark bar.
 - Touch ID shows an "Unlock with Touch ID" prompt.
-- Tracks from media players briefly appear on the dark bar.
+- Tracks from media players briefly appear on the dark bar. A touch on the
+  title pauses.
+- While something plays, a faint play triangle sits in the middle of the
+  dark bar. A tap brings the track back, holding it pauses.
+- After a pause from the bar, a tap on the pause bars plays on. They show
+  along with the escape key.
 - Remembers the last active row.
 - Holding Fn switches between the media row and the last remembered row.
 - Up to four personal keys can be configured in
