@@ -60,6 +60,34 @@ be in the same Wi-Fi.
   Bluetooth. Accept on the phone, both sides show the same PIN. A phone set
   to contacts only appears as a hidden device.
 
+## Terminal
+
+Both ways work from a terminal as well, as the normal user. `t2airshare`
+handles Quick Share, `t2drop` handles AirDrop through `t2-drop.service`.
+
+```bash
+# Quick Share: send files to the first phone found, or one whose name
+# contains the text after --to
+t2airshare send photo.jpg notes.pdf
+t2airshare send --to "S22" photo.jpg
+
+# Quick Share: receive until Ctrl+C, --yes accepts without asking
+t2airshare receive --dir ~/Incoming --yes
+
+# AirDrop: list the receivers nearby, then send to one of them
+t2drop list
+t2drop send --to "MacBook" photo.jpg
+
+# AirDrop: receive until Ctrl+C, --ble only becomes visible while a sender
+# nearby opens AirDrop, as macOS does
+t2drop receive --dir ~/Incoming --yes
+```
+
+`--name` sets the name the other device shows, the hostname by default.
+`--wait` sets how many seconds `send` and `list` look for devices. Stop the
+user service with `systemctl --user stop t2-airshare.service` before
+receiving from a terminal and start it again afterwards.
+
 ## Trusted devices
 
 Always trust accepts later transfers from that device without asking.
