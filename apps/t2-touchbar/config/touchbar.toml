@@ -41,5 +41,7 @@ activity_escape = true
 activity_timeout_ms = 30000
 
 # Show "Artist – Title" on the dark bar for five seconds when a media player
-# (MPRIS) starts a new track, with previous/next keys at both ends.
+# (MPRIS) starts a new track, with previous/next keys at both ends. While
+# something plays, a faint play triangle in the middle of the dark bar brings
+# it back on a tap and pauses on a long press.
 show_track_changes = true

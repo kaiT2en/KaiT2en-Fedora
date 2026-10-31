@@ -64,8 +64,14 @@ skipping the track. A tap still skips.
 
 When a media player starts a new track while the bar is dark, "Artist – Title"
 fades in for five seconds with previous/next keys at both ends, so an unwanted
-track can be skipped without waking the bar. `show_track_changes = false`
-turns this off.
+track can be skipped without waking the bar. Afterwards, as long as something
+plays, a play triangle as thin as the key outlines and as bright as the key
+glyphs builds up edge by edge in the middle of the bar and takes itself apart
+again. A tap on it brings the overlay back for five seconds, and every skip
+keeps it five seconds more. Holding it pauses. Two bars take its place then,
+shown and faded along with the escape key, and a tap on them plays on. The
+triangle is gone while playback pauses or the screen is locked or blanked.
+`show_track_changes = false` turns both off.
 
 Accepted key presses use `t2_trackpad_actuator` to give a bit of haptic feedback.
 Set `haptic_touch_up = false` in the Touch Bar config to actuate only on

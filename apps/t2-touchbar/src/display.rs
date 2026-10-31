@@ -180,20 +180,33 @@ impl Display {
     }
 
     pub fn present(&mut self, logical: &[u32], width: u16, height: u16) -> Result<()> {
+        self.present_columns(logical, width, height, 0, width)
+    }
+
+    /// Sends only the columns from `left` to `right`. The rest of the panel
+    /// keeps the previous frame, which must match `logical` there.
+    pub fn present_columns(
+        &mut self,
+        logical: &[u32],
+        width: u16,
+        height: u16,
+        left: u16,
+        right: u16,
+    ) -> Result<()> {
         anyhow::ensure!(
             logical.len() == width as usize * height as usize,
             "bad frame size"
         );
+        let (left, right) = (left.min(width), right.min(width));
         let info = self.card.get_framebuffer(self.framebuffer)?;
         let stride = info.pitch() as usize;
         let mut mapping = self.map()?;
         let target = mapping.as_mut();
-        target.fill(0);
 
         // t2bdrm exposes the panel rotated. This is the same transform as
         // tiny-dfr's cairo translate(height, 0) + rotate(90deg).
         for y in 0..height as usize {
-            for x in 0..width as usize {
+            for x in left as usize..right as usize {
                 let physical_x = height as usize - 1 - y;
                 let physical_y = x;
                 let offset = physical_y * stride + physical_x * 4;
@@ -202,8 +215,9 @@ impl Display {
             }
         }
         drop(mapping);
+        // t2bdrm sends only the damaged rectangle over USB.
         self.card
-            .dirty_framebuffer(self.framebuffer, &[ClipRect::new(0, 0, height, width)])?;
+            .dirty_framebuffer(self.framebuffer, &[ClipRect::new(0, left, height, right)])?;
         Ok(())
     }
 }

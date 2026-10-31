@@ -9,6 +9,7 @@ use tiny_skia::{
     Color, FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Rect, Stroke, Transform,
 };
 
+use crate::cue;
 use crate::policy::Mode;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -55,6 +56,21 @@ const GROUP_GAP: u16 = 56;
 pub struct TrackLayout {
     pub prev: (u16, u16),
     pub next: (u16, u16),
+}
+
+/// Span (left, right) of the play cue, which takes a touch anywhere in it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CueLayout {
+    pub left: u16,
+    pub right: u16,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CueGlyph {
+    /// The play triangle with the lit edges as a bit mask.
+    Play(u8),
+    /// The pause bars at an opacity in percent.
+    Pause(u32),
 }
 
 #[derive(Clone, Copy)]
@@ -236,17 +252,15 @@ impl Layout {
         if y < 5.0 || y > f64::from(height.saturating_sub(5)) {
             return None;
         }
-        self.buttons
-            .iter()
-            .position(|button| {
-                // Let the virtual Esc key respond all the way to the left edge
-                let left = if button.action == Action::Key(Key::Esc) {
-                    0.0
-                } else {
-                    f64::from(button.left)
-                };
-                x >= left && x < f64::from(button.right)
-            })
+        self.buttons.iter().position(|button| {
+            // Let the virtual Esc key respond all the way to the left edge
+            let left = if button.action == Action::Key(Key::Esc) {
+                0.0
+            } else {
+                f64::from(button.left)
+            };
+            x >= left && x < f64::from(button.right)
+        })
     }
 }
 
@@ -514,17 +528,83 @@ impl Canvas {
         }
     }
 
-    /// One key on an otherwise black bar, with optional pressed styling and
-    /// opacity for the activity escape key.
-    pub fn single_key(&mut self, layout: &Layout, index: usize, active: bool, fade: u32) {
+    /// The dark bar: the key at `esc` with optional pressed styling and
+    /// opacity for the activity escape key, and the play cue.
+    pub fn dark(
+        &mut self,
+        layout: &Layout,
+        esc: Option<(usize, bool, u32)>,
+        cue: Option<(CueLayout, CueGlyph)>,
+    ) {
         let full = self.color;
-        self.color = full.scale(fade.min(100));
         self.pixmap.fill(Color::BLACK);
-        if let Some(button) = layout.buttons.get(index) {
+        if let Some((index, active, fade)) = esc
+            && let Some(button) = layout.buttons.get(index)
+        {
+            self.color = full.scale(fade.min(100));
             self.button(button, active);
+            self.color = full;
+        }
+        match cue {
+            Some((cue, CueGlyph::Play(edges))) => self.cue(cue, edges),
+            Some((cue, CueGlyph::Pause(fade))) => self.cue_pause(cue, fade),
+            None => {}
         }
         self.flush();
-        self.color = full;
+    }
+
+    /// Only the outline of a play triangle, as thin as the key outlines and
+    /// as bright as the key glyphs, so it keeps their minimum level: a hint
+    /// for whoever knows it is there.
+    fn cue(&mut self, cue: CueLayout, edges: u8) {
+        let (top, bottom) = self.cue_span();
+        let half = KEY_OUTLINE / 2.0;
+        let width = (bottom - top) * 0.866;
+        let cx = (f32::from(cue.left) + f32::from(cue.right)) / 2.0;
+        let left = (cx - width / 2.0).round() + half;
+        let corners = [
+            (left, bottom),
+            (left, top),
+            (left + width, (top + bottom) / 2.0),
+        ];
+        let mut path = PathBuilder::new();
+        for edge in 0..cue::EDGES {
+            if edges & 1 << edge == 0 {
+                continue;
+            }
+            let (from, to) = (
+                corners[usize::from(edge)],
+                corners[usize::from((edge + 1) % cue::EDGES)],
+            );
+            path.move_to(from.0, from.1);
+            path.line_to(to.0, to.1);
+        }
+        if let Some(path) = path.finish() {
+            self.stroke(&path, self.color, KEY_OUTLINE);
+        }
+    }
+
+    /// Two bars in place of the triangle, drawn the same way.
+    fn cue_pause(&mut self, cue: CueLayout, fade: u32) {
+        let (top, bottom) = self.cue_span();
+        let gap = ((bottom - top) * 0.36).round();
+        let cx = ((f32::from(cue.left) + f32::from(cue.right)) / 2.0).round();
+        let mut path = PathBuilder::new();
+        for x in [cx - gap / 2.0, cx + gap / 2.0] {
+            let x = x.round() + KEY_OUTLINE / 2.0;
+            path.move_to(x, top);
+            path.line_to(x, bottom);
+        }
+        if let Some(path) = path.finish() {
+            self.stroke(&path, self.color.scale(fade.min(100)), KEY_OUTLINE);
+        }
+    }
+
+    /// Top and bottom of the cue: as tall as the key outlines, so it is
+    /// easy to hit.
+    fn cue_span(&self) -> (f32, f32) {
+        let half = KEY_OUTLINE / 2.0;
+        (KEY_INSET + half, f32::from(self.height) - KEY_INSET - half)
     }
 
     fn button(&mut self, button: &Button, active: bool) {
