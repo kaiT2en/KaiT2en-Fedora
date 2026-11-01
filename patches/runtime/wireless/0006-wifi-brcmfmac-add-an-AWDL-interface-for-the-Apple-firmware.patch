@@ -34,7 +34,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-@@ -0,0 +1,717 @@
+@@ -0,0 +1,723 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (c) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
@@ -58,8 +58,9 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 + * Election, synchronization, channel sequence, peers and services are left
 + * to user space, as macOS leaves them to IO80211Family and wifip2pd.
 + *
-+ * Before suspend and hibernation every AWDL interface is removed again, with
-+ * the firmware event mask of the primary interface as it was before. User
++ * Removing the AWDL interface deletes its flowrings first, then stops AWDL
++ * and restores the firmware event mask of the primary interface. Before
++ * suspend and hibernation every AWDL interface is removed that way. User
 + * space creates it anew after resume.
 + */
 +
@@ -75,6 +76,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +#include "debug.h"
 +#include "fwil.h"
 +#include "fweh.h"
++#include "proto.h"
 +#include "awdl.h"
 +
 +#define BRCMF_AWDL_IFTYPE		2
@@ -491,6 +493,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	struct brcmf_if *ifp;
 +	int bsscfgidx, err;
 +	unsigned long end;
++	u8 any[ETH_ALEN] = {};
 +	__le32 off = 0;
 +
 +	awdl = rcu_dereference_protected(drvr->awdl,
@@ -499,6 +502,9 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +		return -ENOENT;
 +	ifp = awdl->ifp;
 +	bsscfgidx = ifp->bsscfgidx;
++	if (ifp->ndev)
++		netif_tx_disable(ifp->ndev);
++	brcmf_proto_delete_peer(drvr, ifp->ifidx, any);
 +	brcmf_fil_iovar_data_set(ifp, "awdl", &off, sizeof(off));
 +	brcmf_awdl_events_restore(awdl);
 +	brcmf_awdl_release(drvr);
