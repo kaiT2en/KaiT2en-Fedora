@@ -12,7 +12,9 @@ Quick Share. Receiving and sending work the same way for both.
 - To send, right-click files in the file manager and choose "Send with T2
   AirShare" (Files, Dolphin, Nemo), use "Open With" in other file managers,
   or drop files on the T2 AirShare window. Apple devices and Android phones
-  show up in the same list.
+  show up in the same list, each with AirDrop or Quick Share below its name.
+  A device that offers both shows up once with a choice, AirDrop first.
+  AirDrop only looks for devices while the send window has the focus.
 
 ## AirDrop
 
@@ -111,6 +113,9 @@ the service with
 ```bash
 systemctl --user disable --now t2-airshare.service
 ```
+
+AirDrop is a trademark of Apple Inc. Quick Share is a trademark of Google
+LLC. T2 AirShare is not affiliated with or endorsed by either.
 
 T2 AirShare was called T2 Share before AirDrop implementation. Updating
 moves its settings and trusted devices over and switches the user service

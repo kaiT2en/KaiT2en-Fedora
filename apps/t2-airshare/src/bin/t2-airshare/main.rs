@@ -42,7 +42,7 @@ fn build_ui(app: &adw::Application) {
     let receiving = adw::PreferencesGroup::builder().title("Receiving").build();
     let visible = adw::SwitchRow::builder()
         .title("Visible to nearby devices")
-        .subtitle("Apple devices over AirDrop, Android phones in the same Wi-Fi over Quick Share")
+        .subtitle("Apple devices over AirDrop, Android phones over Quick Share")
         .active(service_active())
         .build();
     visible.connect_active_notify(|row| {

@@ -38,6 +38,15 @@ pub async fn run(name: &str) -> Result<()> {
             (None, mpsc::channel(1).1)
         }
     };
+    // The send window pauses the BLE advertisements while it looks for
+    // AirDrop receivers
+    let (_receiver_bus, mut pause) = match bluetooth::serve_receiver().await {
+        Ok((connection, pause)) => (Some(connection), pause),
+        Err(err) => {
+            warn!("no pause for the Bluetooth advertisements: {err:#}");
+            (None, mpsc::channel(1).1)
+        }
+    };
 
     let consent: receive::Consent = Arc::new(|incoming: Incoming| Box::pin(ask(incoming)));
     tokio::spawn(crate::airdrop::run(name.to_string()));
@@ -52,6 +61,11 @@ pub async fn run(name: &str) -> Result<()> {
             Some((device, stream)) = rfcomm.recv() => {
                 info!("Bluetooth connection from {device}");
                 tokio::spawn(receive(stream, device, consent.clone(), true));
+            }
+            Some(paused) = pause.recv() => {
+                if let Some(visibility) = &mut visibility {
+                    visibility.set_paused(paused).await;
+                }
             }
             _ = announce.tick() => {
                 if let Err(err) = advertisement.announce() {

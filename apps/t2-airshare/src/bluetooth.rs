@@ -192,6 +192,8 @@ pub struct Visibility {
     info: Vec<u8>,
     adapter: Option<OwnedObjectPath>,
     advertising: bool,
+    /// the send window looks for AirDrop receivers, see `set_paused`
+    paused: bool,
     psm: u16,
     /// the GATT advertisement, also answered over L2CAP
     advertisement: Arc<RwLock<Arc<Vec<u8>>>>,
@@ -232,6 +234,7 @@ impl Visibility {
             info: endpoint_info(DeviceType::Laptop, name),
             adapter: None,
             advertising: false,
+            paused: false,
             psm,
             advertisement,
             previous: None,
@@ -253,7 +256,7 @@ impl Visibility {
             self.advertising = false;
             return Ok(());
         };
-        if self.advertising {
+        if self.advertising || self.paused {
             return Ok(());
         }
         if self.adapter.as_ref() != Some(&path) {
@@ -266,7 +269,10 @@ impl Visibility {
             .build()
             .await?;
         let iface = zbus::names::InterfaceName::try_from("org.bluez.Adapter1")?;
-        props.set(iface.clone(), "Connectable", Value::from(true)).await.context("make the adapter connectable")?;
+        // BlueZ refuses to set them again while the adapter is discoverable
+        if !bool::try_from(props.get(iface.clone(), "Connectable").await?)? {
+            props.set(iface.clone(), "Connectable", Value::from(true)).await.context("make the adapter connectable")?;
+        }
         // BlueZ marks the advertisements "BR/EDR not supported" while the
         // adapter is not discoverable. Android then takes this machine for
         // an LE only device and does not page it for RFCOMM.
@@ -275,8 +281,10 @@ impl Visibility {
             let timeout = u32::try_from(props.get(iface.clone(), "DiscoverableTimeout").await?)?;
             self.previous = Some((path.clone(), discoverable, timeout));
         }
-        props.set(iface.clone(), "DiscoverableTimeout", Value::from(0u32)).await?;
-        props.set(iface, "Discoverable", Value::from(true)).await.context("make the adapter discoverable")?;
+        if !bool::try_from(props.get(iface.clone(), "Discoverable").await?)? {
+            props.set(iface.clone(), "DiscoverableTimeout", Value::from(0u32)).await?;
+            props.set(iface, "Discoverable", Value::from(true)).await.context("make the adapter discoverable")?;
+        }
         let manager = LeAdvertisingManager1Proxy::builder(&self.connection)
             .path(path.clone())?
             .build()
@@ -348,6 +356,131 @@ impl Visibility {
             warn!("Bluetooth: restore discoverable: {err:#}");
         }
     }
+}
+
+impl Visibility {
+    /// Takes the BLE advertisements off the air while the send window looks
+    /// for AirDrop receivers. The controller sends its advertisements in
+    /// turns, next to these two the AirDrop advertisement of t2-drop rarely
+    /// reaches the Macs nearby. GATT, RFCOMM and L2CAP stay up.
+    pub async fn set_paused(&mut self, paused: bool) {
+        if self.paused == paused {
+            return;
+        }
+        self.paused = paused;
+        if !paused {
+            info!("Bluetooth advertising resumed");
+            refresh(self).await;
+            return;
+        }
+        info!("Bluetooth advertising paused for an AirDrop search");
+        let Some(adapter) = self.adapter.clone() else { return };
+        self.advertising = false;
+        let result: Result<()> = async {
+            let manager = LeAdvertisingManager1Proxy::builder(&self.connection)
+                .path(adapter)?
+                .build()
+                .await?;
+            for adv_path in ADV_PATHS {
+                let _ = manager.unregister_advertisement(&ObjectPath::try_from(adv_path)?).await;
+            }
+            Ok(())
+        }
+        .await;
+        if let Err(err) = result {
+            warn!("Bluetooth: pause advertising: {err:#}");
+        }
+    }
+}
+
+/// Session bus name of the receiver service, the send window asks it to
+/// pause its BLE advertisements.
+pub const RECEIVER_BUS_NAME: &str = "org.t2airshare.Receiver";
+const RECEIVER_PATH: &str = "/org/t2airshare/Receiver";
+
+/// Holders of a pause, by unique bus name. A holder that leaves the bus
+/// releases its pause.
+struct Receiver {
+    holders: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
+    tx: mpsc::Sender<bool>,
+}
+
+#[interface(name = "org.t2airshare.Receiver1")]
+impl Receiver {
+    /// Pauses the BLE advertisements until the caller calls
+    /// `ResumeAdvertising` or leaves the bus.
+    async fn pause_advertising(&self, #[zbus(header)] header: zbus::message::Header<'_>) {
+        let Some(sender) = header.sender().map(|s| s.to_string()) else { return };
+        let first = {
+            let mut holders = self.holders.lock().expect("not poisoned");
+            holders.insert(sender) && holders.len() == 1
+        };
+        if first {
+            let _ = self.tx.send(true).await;
+        }
+    }
+
+    async fn resume_advertising(&self, #[zbus(header)] header: zbus::message::Header<'_>) {
+        let Some(sender) = header.sender().map(|s| s.to_string()) else { return };
+        release(&self.holders, &sender, &self.tx).await;
+    }
+}
+
+async fn release(
+    holders: &std::sync::Mutex<std::collections::HashSet<String>>,
+    name: &str,
+    tx: &mpsc::Sender<bool>,
+) {
+    let last = {
+        let mut holders = holders.lock().expect("not poisoned");
+        holders.remove(name) && holders.is_empty()
+    };
+    if last {
+        let _ = tx.send(false).await;
+    }
+}
+
+/// Serves org.t2airshare.Receiver on the session bus. The returned channel
+/// says when to pause (true) and resume (false) the advertisements.
+pub async fn serve_receiver() -> Result<(Connection, mpsc::Receiver<bool>)> {
+    let (tx, rx) = mpsc::channel(8);
+    let holders: Arc<std::sync::Mutex<std::collections::HashSet<String>>> = Arc::default();
+    let receiver = Receiver { holders: holders.clone(), tx: tx.clone() };
+    let connection = zbus::connection::Builder::session()?
+        .serve_at(RECEIVER_PATH, receiver)?
+        .name(RECEIVER_BUS_NAME)?
+        .build()
+        .await
+        .context("session bus")?;
+    let dbus = zbus::fdo::DBusProxy::new(&connection).await?;
+    let mut owners = dbus.receive_name_owner_changed().await?;
+    tokio::spawn(async move {
+        use futures_util::StreamExt;
+        while let Some(signal) = owners.next().await {
+            let Ok(args) = signal.args() else { continue };
+            if args.new_owner().is_none() {
+                release(&holders, args.name().as_str(), &tx).await;
+            }
+        }
+    });
+    Ok((connection, rx))
+}
+
+#[proxy(
+    interface = "org.t2airshare.Receiver1",
+    default_service = "org.t2airshare.Receiver",
+    default_path = "/org/t2airshare/Receiver"
+)]
+trait Receiver1 {
+    fn pause_advertising(&self) -> zbus::Result<()>;
+}
+
+/// Pauses the BLE advertisements of the receiver service as long as the
+/// returned connection lives. None when the service does not run.
+pub async fn pause_receiver_advertising() -> Option<Connection> {
+    let connection = Connection::session().await.ok()?;
+    Receiver1Proxy::new(&connection).await.ok()?.pause_advertising().await.ok()?;
+    Some(connection)
 }
 
 /// Hands every L2CAP data connection to the receiver.
