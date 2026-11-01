@@ -6,4 +6,4 @@
 0006-wifi-brcmfmac-add-an-AWDL-interface-for-the-Apple-firmware.patch
 0007-Bluetooth-btbcm-clear-vendor-bits-in-LE-advertising-report-types.patch
 0008-Bluetooth-set-the-strict-duplicate-filter-quirk-on-Apple-Broadcom-controllers.patch
-0009-wifi-brcmfmac-keep-ARP-and-ND-offload-off-on-Apple-firmware-while-awake.patch
+0009-wifi-brcmfmac-keep-ARP-and-ND-offload-off-on-the-BCM4364-while-awake.patch
