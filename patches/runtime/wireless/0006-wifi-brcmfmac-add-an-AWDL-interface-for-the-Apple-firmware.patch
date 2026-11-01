@@ -34,9 +34,11 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-@@ -0,0 +1,715 @@
+@@ -0,0 +1,717 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
++ * Copyright (c) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
++ *
 + * AWDL interface for the Apple firmware of the BCM4355, BCM4364 and BCM4377.
 + *
 + * The firmware runs AWDL itself once the host configures it through the
@@ -752,9 +754,13 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +}
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,19 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
-+/* AWDL interface for the Apple firmware, see awdl.c */
++/*
++ * Copyright (c) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
++ *
++ * AWDL interface for the Apple firmware, see awdl.c
++ */
 +#ifndef BRCMFMAC_AWDL_H
 +#define BRCMFMAC_AWDL_H
 +

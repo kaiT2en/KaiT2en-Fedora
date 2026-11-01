@@ -30,9 +30,9 @@ The GPL-3.0-or-later components carry an additional term under section 7(b):
 their author attribution must be preserved when the work is conveyed, and
 reproduced in the Appropriate Legal Notices displayed by works that contain it.
 Copyright of that userspace is held by André Eikmeyer
-<andre.eikmeyer@kait2en.org>, and by 4f1sh3r <git@syn-flut.de> for
-`t2-fan-control` and `t2-smc-control`. This is a reasonable attribution
-requirement and adds no restriction beyond section 7(b).
+<andre.eikmeyer@kait2en.org>, and by 4f1sh3r <git@syn-flut.de> for his
+contributions to `t2-fan-control` and `t2-smc-control`. This is a reasonable
+attribution requirement and adds no restriction beyond section 7(b).
 
 ## Other owners
 
