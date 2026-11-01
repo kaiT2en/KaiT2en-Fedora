@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.t2airshare.QuickShareHotspot
+Exec=/bin/false
+User=root
+SystemdService=t2-quickshare-hotspot.service

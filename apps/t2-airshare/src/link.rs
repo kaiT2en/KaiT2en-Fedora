@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The transport both directions share: length prefixed frames over TCP,
-//! the encrypted channel after UKEY2, and the payload layer for the Nearby
+//! The transport both directions share: length prefixed frames over TCP or
+//! Bluetooth RFCOMM, the encrypted channel after UKEY2, and the payload layer for the Nearby
 //! Sharing frames.
 //!
 //! The payload framing follows NearDrop PROTOCOL.md and rquickshare
@@ -13,9 +13,7 @@ use anyhow::{Result, anyhow, bail};
 use log::warn;
 use prost::Message;
 use rand::Rng;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
@@ -33,6 +31,9 @@ pub const KEEPALIVE: Duration = Duration::from_secs(5);
 /// Silence after which the peer is considered gone.
 const READ_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Our half of a connection.
+pub type Writer = Box<dyn AsyncWrite + Send + Unpin>;
+
 /// Incoming frames, read by a task of their own so the reader never loses
 /// a half read frame to a `select!`.
 pub struct Frames {
@@ -41,11 +42,14 @@ pub struct Frames {
 }
 
 impl Frames {
-    pub fn split(stream: TcpStream) -> (Self, OwnedWriteHalf) {
-        let (reader, writer) = stream.into_split();
+    pub fn split<S>(stream: S) -> (Self, Writer)
+    where
+        S: AsyncRead + AsyncWrite + Send + 'static,
+    {
+        let (reader, writer) = tokio::io::split(stream);
         let (tx, rx) = mpsc::channel(16);
         let task = tokio::spawn(read_frames(reader, tx));
-        (Self { rx, task }, writer)
+        (Self { rx, task }, Box::new(writer))
     }
 
     pub async fn next(&mut self) -> Result<Vec<u8>> {
@@ -73,7 +77,7 @@ impl Drop for Frames {
     }
 }
 
-async fn read_frames(mut reader: OwnedReadHalf, tx: mpsc::Sender<Vec<u8>>) {
+async fn read_frames(mut reader: impl AsyncRead + Unpin, tx: mpsc::Sender<Vec<u8>>) {
     loop {
         let mut len = [0u8; 4];
         if reader.read_exact(&mut len).await.is_err() {
@@ -91,7 +95,7 @@ async fn read_frames(mut reader: OwnedReadHalf, tx: mpsc::Sender<Vec<u8>>) {
     }
 }
 
-pub async fn write_frame(writer: &mut OwnedWriteHalf, data: &[u8]) -> Result<()> {
+pub async fn write_frame(writer: &mut Writer, data: &[u8]) -> Result<()> {
     writer.write_all(&(data.len() as u32).to_be_bytes()).await?;
     writer.write_all(data).await?;
     writer.flush().await?;
@@ -123,12 +127,17 @@ pub fn connection_accept() -> nc::OfflineFrame {
 /// The encrypted part of a connection.
 pub struct Link {
     channel: SecureChannel,
-    writer: OwnedWriteHalf,
+    writer: Writer,
 }
 
 impl Link {
-    pub fn new(channel: SecureChannel, writer: OwnedWriteHalf) -> Self {
+    pub fn new(channel: SecureChannel, writer: Writer) -> Self {
         Self { channel, writer }
+    }
+
+    /// Moves the link to another connection, returns the prior one.
+    pub fn replace_writer(&mut self, writer: Writer) -> Writer {
+        std::mem::replace(&mut self.writer, writer)
     }
 
     pub fn open(&mut self, raw: &[u8]) -> Result<nc::OfflineFrame> {

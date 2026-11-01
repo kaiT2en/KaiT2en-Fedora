@@ -8,9 +8,12 @@
 //! adapted from rquickshare, see THIRD-PARTY-NOTICES.md.
 
 pub mod airdrop;
+pub mod bluetooth;
 pub mod config;
 pub mod discover;
 pub mod endpoint;
+pub mod hotspot;
+pub mod l2cap;
 pub mod link;
 pub mod mdns;
 pub mod notify;
@@ -18,4 +21,5 @@ pub mod proto;
 pub mod receive;
 pub mod secure;
 pub mod send;
+pub mod upgrade;
 pub mod service;

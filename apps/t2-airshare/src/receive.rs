@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Receiving side (server) of a Quick Share transfer over one TCP
-//! connection: connection request, UKEY2, paired key exchange, the
-//! introduction with the user's consent, then payload chunks.
+//! Receiving side (server) of a Quick Share transfer over TCP or Bluetooth
+//! RFCOMM: connection request, UKEY2, paired key exchange, the introduction
+//! with the user's consent, then payload chunks. A transfer that starts
+//! over Bluetooth moves to a Wi-Fi hotspot, see upgrade.rs.
 //!
 //! The frame sequence follows NearDrop PROTOCOL.md and rquickshare
 //! `core_lib/src/hdl/inbound.rs` (commit 378d8ae, GPL-3.0).
@@ -17,17 +18,21 @@ use std::sync::Arc;
 use anyhow::{Context, Result, anyhow, bail};
 use log::{debug, info, warn};
 use prost::Message;
-use tokio::net::TcpStream;
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::task::JoinHandle;
 
 use crate::endpoint::{DeviceType, parse_endpoint_info};
+use crate::hotspot::Hotspot;
 use crate::link::{
-    BytesPayloads, Frames, KEEPALIVE, Link, connection_accept, paired_key_encryption,
+    BytesPayloads, Frames, KEEPALIVE, Link, Writer, connection_accept, paired_key_encryption,
     paired_key_result, write_frame,
 };
 use crate::proto::location::nearby::connections as nc;
 use crate::proto::sharing::nearby as sn;
 use crate::secure::ServerHandshake;
+use crate::upgrade::{self, Prepared};
+
+use nc::bandwidth_upgrade_negotiation_frame::EventType;
 
 /// What the sender offers, shown to the user before accepting.
 #[derive(Clone, Debug)]
@@ -73,17 +78,39 @@ struct Session {
     done_texts: Vec<String>,
 }
 
-/// Runs one incoming connection to its end.
-pub async fn handle(stream: TcpStream, dir: PathBuf, consent: Consent) -> Result<Outcome> {
-    let peer = stream.peer_addr().ok();
-    let result = run(stream, dir, consent).await;
+/// The move to the hotspot while both connections are open.
+struct Switch {
+    frames: Option<Frames>,
+    writer: Option<Writer>,
+    /// the phone sent LAST_WRITE_TO_PRIOR_CHANNEL
+    last_write: bool,
+    /// the phone sent SAFE_TO_CLOSE_PRIOR_CHANNEL
+    safe: bool,
+}
+
+/// Runs one incoming connection to its end. `upgrade` moves it to a
+/// Wi-Fi hotspot, for connections over Bluetooth.
+pub async fn handle<S>(
+    stream: S,
+    peer: &str,
+    dir: PathBuf,
+    consent: Consent,
+    upgrade: bool,
+) -> Result<Outcome>
+where
+    S: AsyncRead + AsyncWrite + Send + 'static,
+{
+    let result = run(stream, dir, consent, upgrade).await;
     if let Err(err) = &result {
-        warn!("connection from {peer:?}: {err:#}");
+        warn!("connection from {peer}: {err:#}");
     }
     result
 }
 
-async fn run(stream: TcpStream, dir: PathBuf, consent: Consent) -> Result<Outcome> {
+async fn run<S>(stream: S, dir: PathBuf, consent: Consent, upgrade: bool) -> Result<Outcome>
+where
+    S: AsyncRead + AsyncWrite + Send + 'static,
+{
     let (mut frames, mut writer) = Frames::split(stream);
     let request = frames.expect(nc::v1_frame::FrameType::ConnectionRequest).await?;
     let request = request
@@ -114,6 +141,13 @@ async fn run(stream: TcpStream, dir: PathBuf, consent: Consent) -> Result<Outcom
     let mut keepalive = tokio::time::interval(KEEPALIVE);
     let mut pending_consent: Option<JoinHandle<bool>> = None;
     let mut accepted = false;
+    // as nearby, the receiver starts the upgrade once the connection stands
+    let mut preparing: Option<JoinHandle<Result<Prepared>>> =
+        upgrade.then(|| tokio::spawn(upgrade::prepare()));
+    let mut accepting: Option<JoinHandle<Result<(Frames, Writer)>>> = None;
+    let mut switching: Option<Switch> = None;
+    // keeps the hotspot up, dropping it stops the hotspot
+    let mut _hotspot: Option<Hotspot> = None;
     loop {
         tokio::select! {
             raw = frames.next() => {
@@ -121,6 +155,49 @@ async fn run(stream: TcpStream, dir: PathBuf, consent: Consent) -> Result<Outcom
                 let Some(v1) = frame.v1 else { continue };
                 match v1.r#type() {
                     nc::v1_frame::FrameType::KeepAlive => {}
+                    nc::v1_frame::FrameType::BandwidthUpgradeNegotiation => {
+                        let negotiation = v1.bandwidth_upgrade_negotiation.unwrap_or_default();
+                        match negotiation.event_type() {
+                            EventType::LastWriteToPriorChannel => {
+                                // the ack of the introduction may be out before
+                                // the task reported back
+                                if let Some(task) = accepting.take() {
+                                    switching = start_switch(&mut session, task.await).await?;
+                                }
+                                if let Some(switch) = &mut switching {
+                                    session.link.send_offline(upgrade::event(EventType::SafeToClosePriorChannel)).await?;
+                                    switch.last_write = true;
+                                }
+                            }
+                            EventType::SafeToClosePriorChannel => {
+                                if let Some(switch) = &mut switching {
+                                    if let Some(writer) = switch.writer.take() {
+                                        let mut prior = session.link.replace_writer(writer);
+                                        let _ = write_frame(&mut prior, &upgrade::disconnection()).await;
+                                        // The phone reads the prior channel until it closes
+                                        // before it sends on the hotspot. bluetoothd keeps its
+                                        // own reference to an RFCOMM socket, dropping ours
+                                        // does not close it.
+                                        let _ = prior.shutdown().await;
+                                    }
+                                    switch.safe = true;
+                                }
+                            }
+                            EventType::UpgradeFailure => {
+                                warn!("the phone could not move to the hotspot, staying on Bluetooth");
+                                if let Some(task) = accepting.take() {
+                                    task.abort();
+                                }
+                                switching = None;
+                                _hotspot = None;
+                            }
+                            other => debug!("ignoring bandwidth upgrade event {other:?}"),
+                        }
+                        if let Some(switch) = switching.take_if(|s| s.last_write && s.safe) {
+                            frames = switch.frames.expect("taken only here");
+                            info!("transfer moved to the hotspot");
+                        }
+                    }
                     nc::v1_frame::FrameType::Disconnection => {
                         return Ok(if accepted { session.outcome() } else { Outcome::Cancelled });
                     }
@@ -175,7 +252,48 @@ async fn run(stream: TcpStream, dir: PathBuf, consent: Consent) -> Result<Outcom
                     return Ok(Outcome::Rejected);
                 }
             }
-            _ = keepalive.tick() => session.link.send_keepalive().await?,
+            result = async { preparing.as_mut().unwrap().await }, if preparing.is_some() => {
+                preparing = None;
+                match result.map_err(anyhow::Error::from).and_then(|r| r) {
+                    Ok(prepared) => {
+                        session.link.send_offline(upgrade::path_available(&prepared)?).await?;
+                        accepting = Some(tokio::spawn(upgrade::accept(prepared.listener)));
+                        _hotspot = Some(prepared.hotspot);
+                    }
+                    Err(err) => warn!("staying on Bluetooth: {err:#}"),
+                }
+            }
+            result = async { accepting.as_mut().unwrap().await }, if accepting.is_some() => {
+                accepting = None;
+                switching = start_switch(&mut session, result).await?;
+                if switching.is_none() {
+                    _hotspot = None;
+                }
+            }
+            _ = keepalive.tick() => {
+                // between our LAST_WRITE and the phone's SAFE_TO_CLOSE nothing
+                // else may go out
+                if !switching.as_ref().is_some_and(|s| !s.safe) {
+                    session.link.send_keepalive().await?;
+                }
+            }
+        }
+    }
+}
+
+/// Sends LAST_WRITE_TO_PRIOR_CHANNEL once the phone is on the hotspot.
+async fn start_switch(
+    session: &mut Session,
+    accepted: std::result::Result<Result<(Frames, Writer)>, tokio::task::JoinError>,
+) -> Result<Option<Switch>> {
+    match accepted.map_err(anyhow::Error::from).and_then(|r| r) {
+        Ok((frames, writer)) => {
+            session.link.send_offline(upgrade::event(EventType::LastWriteToPriorChannel)).await?;
+            Ok(Some(Switch { frames: Some(frames), writer: Some(writer), last_write: false, safe: false }))
+        }
+        Err(err) => {
+            warn!("staying on Bluetooth: {err:#}");
+            Ok(None)
         }
     }
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Background receiver for the systemd user service: visible in the shared
-//! WLAN, trusted devices are accepted right away, everyone else is asked
+//! WLAN and over Bluetooth, trusted devices are accepted right away, everyone else is asked
 //! through a notification. AirDrop transfers arrive through the t2-drop
 //! service when it is installed and take the same way.
 
@@ -9,8 +9,11 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use log::{info, warn};
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
 
+use crate::bluetooth::{self, Visibility};
 use crate::config::Config;
 use crate::endpoint::random_endpoint_id;
 use crate::mdns::Advertisement;
@@ -25,8 +28,16 @@ const OFFER_TIMEOUT: Duration = Duration::from_secs(300);
 pub async fn run(name: &str) -> Result<()> {
     let listener = TcpListener::bind(("0.0.0.0", 0)).await.context("listen")?;
     let port = listener.local_addr()?.port();
-    let advertisement = Advertisement::start(random_endpoint_id(), name, port)?;
+    let endpoint_id = random_endpoint_id();
+    let advertisement = Advertisement::start(endpoint_id, name, port)?;
     info!("visible as {name:?} on TCP port {port}");
+    let (mut visibility, mut rfcomm) = match Visibility::start(endpoint_id, name).await {
+        Ok((visibility, rfcomm)) => (Some(visibility), rfcomm),
+        Err(err) => {
+            warn!("not visible over Bluetooth: {err:#}");
+            (None, mpsc::channel(1).1)
+        }
+    };
 
     let consent: receive::Consent = Arc::new(|incoming: Incoming| Box::pin(ask(incoming)));
     tokio::spawn(crate::airdrop::run(name.to_string()));
@@ -36,38 +47,54 @@ pub async fn run(name: &str) -> Result<()> {
             accepted = listener.accept() => {
                 let (stream, peer) = accepted?;
                 info!("connection from {peer}");
-                let consent = consent.clone();
-                tokio::spawn(async move {
-                    let config = Config::load().unwrap_or_else(|err| {
-                        warn!("{err:#}, using defaults");
-                        Config::default()
-                    });
-                    let Some(dir) = config.download_dir() else {
-                        warn!("no download directory");
-                        return;
-                    };
-                    if let Err(err) = std::fs::create_dir_all(&dir) {
-                        warn!("create {}: {err}", dir.display());
-                        return;
-                    }
-                    match receive::handle(stream, dir.clone(), consent).await {
-                        Ok(outcome) => report(outcome).await,
-                        Err(err) => {
-                            warn!("transfer failed: {err:#}");
-                            notify_info("Transfer failed", &format!("{err:#}")).await;
-                        }
-                    }
-                });
+                tokio::spawn(receive(stream, peer.to_string(), consent.clone(), false));
+            }
+            Some((device, stream)) = rfcomm.recv() => {
+                info!("Bluetooth connection from {device}");
+                tokio::spawn(receive(stream, device, consent.clone(), true));
             }
             _ = announce.tick() => {
                 if let Err(err) = advertisement.announce() {
                     warn!("{err:#}");
                 }
+                if let Some(visibility) = &mut visibility {
+                    bluetooth::refresh(visibility).await;
+                }
             }
             _ = shutdown_signal() => {
                 info!("stopping");
+                if let Some(visibility) = &mut visibility {
+                    visibility.stop().await;
+                }
                 return Ok(());
             }
+        }
+    }
+}
+
+/// Receives one transfer into the download folder, `upgrade` moves one
+/// over Bluetooth to a Wi-Fi hotspot.
+async fn receive<S>(stream: S, peer: String, consent: receive::Consent, upgrade: bool)
+where
+    S: AsyncRead + AsyncWrite + Send + 'static,
+{
+    let config = Config::load().unwrap_or_else(|err| {
+        warn!("{err:#}, using defaults");
+        Config::default()
+    });
+    let Some(dir) = config.download_dir() else {
+        warn!("no download directory");
+        return;
+    };
+    if let Err(err) = std::fs::create_dir_all(&dir) {
+        warn!("create {}: {err}", dir.display());
+        return;
+    }
+    match receive::handle(stream, &peer, dir, consent, upgrade).await {
+        Ok(outcome) => report(outcome).await,
+        Err(err) => {
+            warn!("transfer failed: {err:#}");
+            notify_info("Transfer failed", &format!("{err:#}")).await;
         }
     }
 }

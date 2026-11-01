@@ -18,6 +18,10 @@ required-features = ["gui"]
 name = "t2airshare"
 path = "src/bin/t2airshare.rs"
 
+[[bin]]
+name = "t2-quickshare-hotspot"
+path = "src/bin/t2-quickshare-hotspot.rs"
+
 [features]
 default = ["gui"]
 gui = ["dep:gtk4", "dep:adw", "dep:glib", "dep:gio", "dep:async-channel"]
@@ -39,6 +43,7 @@ futures-util = { version = "0.3", default-features = false }
 hkdf = "0.12"
 hmac = "0.12"
 if-addrs = "0.15"
+libc = "0.2"
 log = "0.4"
 mdns-sd = "0.21"
 p256 = { version = "0.13", features = ["ecdh"] }

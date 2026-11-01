@@ -46,9 +46,14 @@ again after resume.
 
 ## Quick Share
 
-Quick Share is the sharing feature built into Android. Phone and Mac have to
-be in the same Wi-Fi.
+Quick Share is the sharing feature built into Android. Phone and Mac do not
+have to be in the same Wi-Fi. In a shared Wi-Fi the transfer runs over it.
+Otherwise the phone finds the Mac over Bluetooth and starts over Bluetooth,
+then the Mac opens a Wi-Fi hotspot `T2AirShare-…` next to its normal Wi-Fi
+connection and the transfer moves there. The phone joins it on its own.
 
+- Bluetooth on the Mac has to be on. While T2 AirShare is visible, the Mac
+  is also visible to other Bluetooth devices, as Android needs it.
 - On the phone, choose Share, then Quick Share, then the name of the Mac.
   The Mac shows up with its hostname.
 - A phone that is not trusted yet raises a notification with the files, the
@@ -59,6 +64,8 @@ be in the same Wi-Fi.
   Bluetooth on the Mac has to be on, the Mac wakes the phone through
   Bluetooth. Accept on the phone, both sides show the same PIN. A phone set
   to contacts only appears as a hidden device.
+- When the hotspot comes up and when it goes away again, the normal Wi-Fi
+  connection of the Mac drops for one to three seconds.
 
 ## Terminal
 

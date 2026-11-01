@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Command line front end: receive and send Quick Share transfers in the
-//! shared WLAN.
+//! Command line front end: receive Quick Share transfers in the shared WLAN
+//! and over Bluetooth, send them in the shared WLAN.
 
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
@@ -10,8 +10,11 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use log::{info, warn};
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
 
+use t2_airshare::bluetooth::{self, Visibility};
 use t2_airshare::discover::{Discovery, Peer};
 use t2_airshare::endpoint::random_endpoint_id;
 use t2_airshare::mdns::Advertisement;
@@ -159,8 +162,16 @@ async fn receive_loop(name: Option<String>, dir: Option<PathBuf>, yes: bool, por
 
     let listener = TcpListener::bind(("0.0.0.0", port)).await.context("listen")?;
     let port = listener.local_addr()?.port();
-    let advertisement = Advertisement::start(random_endpoint_id(), &name, port)?;
+    let endpoint_id = random_endpoint_id();
+    let advertisement = Advertisement::start(endpoint_id, &name, port)?;
     info!("visible as {name:?} on TCP port {port}, saving to {}", dir.display());
+    let (mut visibility, mut rfcomm) = match Visibility::start(endpoint_id, &name).await {
+        Ok((visibility, rfcomm)) => (Some(visibility), rfcomm),
+        Err(err) => {
+            warn!("not visible over Bluetooth: {err:#}");
+            (None, mpsc::channel(1).1)
+        }
+    };
 
     let consent: receive::Consent = Arc::new(move |incoming: Incoming| {
         Box::pin(async move {
@@ -178,34 +189,47 @@ async fn receive_loop(name: Option<String>, dir: Option<PathBuf>, yes: bool, por
             accepted = listener.accept() => {
                 let (stream, peer) = accepted?;
                 info!("connection from {peer}");
-                let dir = dir.clone();
-                let consent = consent.clone();
-                tokio::spawn(async move {
-                    match receive::handle(stream, dir, consent).await {
-                        Ok(Outcome::Received { files, texts }) => {
-                            for file in files {
-                                println!("saved {}", file.display());
-                            }
-                            for text in texts {
-                                println!("text: {text}");
-                            }
-                        }
-                        Ok(Outcome::Rejected) => println!("rejected"),
-                        Ok(Outcome::Cancelled) => println!("cancelled by the sender"),
-                        Err(err) => warn!("transfer failed: {err:#}"),
-                    }
-                });
+                tokio::spawn(receive_one(stream, peer.to_string(), dir.clone(), consent.clone(), false));
+            }
+            Some((device, stream)) = rfcomm.recv() => {
+                info!("Bluetooth connection from {device}");
+                tokio::spawn(receive_one(stream, device, dir.clone(), consent.clone(), true));
             }
             _ = announce.tick() => {
                 if let Err(err) = advertisement.announce() {
                     warn!("{err:#}");
                 }
+                if let Some(visibility) = &mut visibility {
+                    bluetooth::refresh(visibility).await;
+                }
             }
             _ = tokio::signal::ctrl_c() => {
                 info!("stopping");
+                if let Some(visibility) = &mut visibility {
+                    visibility.stop().await;
+                }
                 return Ok(());
             }
         }
+    }
+}
+
+async fn receive_one<S>(stream: S, peer: String, dir: PathBuf, consent: receive::Consent, upgrade: bool)
+where
+    S: AsyncRead + AsyncWrite + Send + 'static,
+{
+    match receive::handle(stream, &peer, dir, consent, upgrade).await {
+        Ok(Outcome::Received { files, texts }) => {
+            for file in files {
+                println!("saved {}", file.display());
+            }
+            for text in texts {
+                println!("text: {text}");
+            }
+        }
+        Ok(Outcome::Rejected) => println!("rejected"),
+        Ok(Outcome::Cancelled) => println!("cancelled by the sender"),
+        Err(err) => warn!("transfer failed: {err:#}"),
     }
 }
 

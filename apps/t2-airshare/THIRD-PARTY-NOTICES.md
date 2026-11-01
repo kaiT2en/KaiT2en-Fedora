@@ -33,6 +33,16 @@ The layout of the BLE Fast Initiation advertisement follows
 (https://github.com/google/nearby, Apache License 2.0). No code is copied
 from it.
 
+Receiving over Bluetooth (`src/bluetooth.rs`) and the move of such a
+transfer to a Wi-Fi hotspot (`src/upgrade.rs`) follow google/nearby, commit
+203b6e1: the BLE advertisement header with its bloom filter and
+advertisement hash, the advertisement served over GATT and the RFCOMM
+service from `connections/implementation/mediums/ble.cc` and
+`connections/implementation/mediums/ble/`, the bandwidth upgrade sequence
+from `connections/implementation/bwu_manager.cc`. No code is copied from
+it. The bloom filter uses MurmurHash3 by Austin Appleby, which is in the
+public domain.
+
 The protocol description follows NearDrop's `PROTOCOL.md` by grishka
 (https://github.com/grishka/NearDrop), released into the public domain
 under the Unlicense.

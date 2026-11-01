@@ -1940,6 +1940,7 @@ dependencies = [
  "hmac",
  "if-addrs",
  "libadwaita",
+ "libc",
  "log",
  "mdns-sd",
  "p256",

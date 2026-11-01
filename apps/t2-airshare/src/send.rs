@@ -296,7 +296,7 @@ mod tests {
         let target = inbox.clone();
         let receiver = tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
-            receive::handle(stream, target, consent).await
+            receive::handle(stream, "loopback", target, consent, false).await
         });
 
         let outcome = send(addr, "Loopback", &[source], &mut ()).await.unwrap();

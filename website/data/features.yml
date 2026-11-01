@@ -540,13 +540,14 @@ items:
     authors:
       - deqrocks
     link: post-install/applications/t2-airshare.md
-    updated: "2026-10-30"
+    updated: "2026-11-01"
     notes: >-
       AirDrop between your T2 Mac and other Apple devices, in both
       directions, while the Mac stays on its Wi-Fi network. The same app
       does Quick Share with Android phones, so Apple devices and Android
       phones share one send window, one notification to accept and one list
-      of trusted devices.
+      of trusted devices. Android phones connect via Bluetooth first and
+      then transfer using a Wi-Fi hotspot of the Mac.
 
   - id: brcmfmac-awdl
     title: "Wi-Fi: AWDL for AirDrop on the Apple firmware"

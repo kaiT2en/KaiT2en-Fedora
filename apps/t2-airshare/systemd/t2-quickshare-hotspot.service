@@ -1,0 +1,11 @@
+[Unit]
+Description=T2 AirShare hotspot for Quick Share transfers over Bluetooth
+Documentation=https://github.com/kaiT2en/KaiT2en-Fedora
+After=NetworkManager.service
+
+[Service]
+# Started by D-Bus activation when a transfer over Bluetooth moves to
+# Wi-Fi, it exits again after a minute without a hotspot
+Type=dbus
+BusName=org.t2airshare.QuickShareHotspot
+ExecStart=/usr/local/libexec/t2-quickshare-hotspot
