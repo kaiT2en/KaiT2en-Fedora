@@ -7,3 +7,5 @@
 0007-Bluetooth-btbcm-clear-vendor-bits-in-LE-advertising-report-types.patch
 0008-Bluetooth-set-the-strict-duplicate-filter-quirk-on-Apple-Broadcom-controllers.patch
 0009-wifi-brcmfmac-keep-ARP-and-ND-offload-off-on-the-BCM4364-while-awake.patch
+0010-wifi-brcmfmac-Improve-D3-substate-entering-timeout-handling.patch
+0011-wifi-brcmfmac-reload-the-firmware-after-a-missing-D3-ACK.patch

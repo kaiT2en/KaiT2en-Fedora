@@ -1,0 +1,37 @@
+From: Sebastian Reichel <sebastian.reichel@collabora.com>
+Subject: [PATCH] wifi: brcmfmac: Improve D3 substate entering timeout handling
+
+commit 6f88e6ebdc1a37eee93fcae9ae6384a03788bae4 upstream.
+
+Some firmwares (e.g. BCM43752) do not service the D3_INFORM mailbox
+handshake when idle, so the D3 ACK never arrives. If WoWL is not armed
+the device is going to be powered off during system suspend and
+re-probed on resume anyway (brcmf_pcie_pm_leave_D3() handles that), so
+the missing ACK is harmless and must not abort the whole system suspend.
+When WoWL is active the device has to stay powered with its state
+preserved, so keep treating the timeout as fatal.
+
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+Acked-by: Arend van Spriel <arend.vanspriel@broadcom.com>
+Link: https://patch.msgid.link/20260915-brcmfmac-bcm43752-suspend-fix-v2-1-1bd84914998b@collabora.com
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+---
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -2652,9 +2652,13 @@
+ 	wait_event_timeout(devinfo->mbdata_resp_wait, devinfo->mbdata_completed,
+ 			   BRCMF_PCIE_MBDATA_TIMEOUT);
+ 	if (!devinfo->mbdata_completed) {
+-		brcmf_err(bus, "Timeout on response for entering D3 substate\n");
+-		brcmf_bus_change_state(bus, BRCMF_BUS_UP);
+-		return -EIO;
++		if (devinfo->wowl_enabled) {
++			brcmf_err(bus, "Timeout on response for entering D3 substate\n");
++			brcmf_bus_change_state(bus, BRCMF_BUS_UP);
++			return -EIO;
++		}
++
++		brcmf_dbg(PCIE, "No D3 ACK, continuing to power the device off\n");
+ 	}
+ 
+ 	devinfo->state = BRCMFMAC_PCIE_STATE_DOWN;
