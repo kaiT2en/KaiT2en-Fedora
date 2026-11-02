@@ -253,8 +253,8 @@ class GlassSurface {
         this._mask = new RoundedMask();
         this._glass = new St.Widget({clip_to_allocation: true, visible: false});
         this._glass.add_child(this._content);
-        this._glass.add_effect(this._blur);
         this._glass.add_effect(this._mask);
+        this._glass.add_effect(this._blur);
         parent.insert_child_below(this._glass, below);
         this._glass.connect('destroy', () => this._release());
         this._fill();
