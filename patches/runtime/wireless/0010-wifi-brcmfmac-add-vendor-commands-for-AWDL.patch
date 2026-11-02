@@ -17,7 +17,9 @@ the primary interface for that:
 - AWDL_SET_SYNC sets the master to synchronize to, with its metric and
   the distance to it. Without a master the device is its own master.
 - AWDL_PEER_ADD and AWDL_PEER_DEL add and remove a peer data frames go
-  to.
+  to. AWDL_PEER_ADD takes the HT and VHT capabilities elements of the
+  peer, which macOS builds from the AWDL TLVs of the peer and passes in
+  awdl_peer_op.
 
 The other firmware parameters of AWDL are set by the driver in the
 order the firmware expects them, with the values the firmware takes
@@ -30,15 +32,15 @@ event.
 
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
- .../broadcom/brcm80211/brcmfmac/awdl.c        | 569 +++++++++++++++++-
+ .../broadcom/brcm80211/brcmfmac/awdl.c        | 586 +++++++++++++++++-
  .../broadcom/brcm80211/brcmfmac/awdl.h        |  53 ++
  .../broadcom/brcm80211/brcmfmac/cfg80211.c    |   5 +-
  .../broadcom/brcm80211/brcmfmac/vendor.c      |  78 +++
- .../broadcom/brcm80211/brcmfmac/vendor.h      |  82 +++
- 5 files changed, 783 insertions(+), 4 deletions(-)
+ .../broadcom/brcm80211/brcmfmac/vendor.h      |  86 +++
+ 5 files changed, 804 insertions(+), 4 deletions(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-index 052cd33..8040a8a 100644
+index 052cd33..45eab93 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 @@ -27,13 +27,18 @@
@@ -60,7 +62,7 @@ index 052cd33..8040a8a 100644
  #include "awdl.h"
  
  /* The firmware interface index of the AWDL interface */
-@@ -53,10 +58,118 @@ static const u8 brcmf_awdl_bssid[ETH_ALEN] = {
+@@ -53,10 +58,123 @@ static const u8 brcmf_awdl_bssid[ETH_ALEN] = {
  	0x00, 0x25, 0x00, 0xff, 0x94, 0x73,
  };
  
@@ -156,11 +158,16 @@ index 052cd33..8040a8a 100644
 +	0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 +};
 +
-+/* awdl_peer_op: byte 1 the operation, 2 to 7 the peer, 8 the flags */
++/*
++ * awdl_peer_op: byte 1 the operation, 2 to 7 the peer, 8 the flags, from 9
++ * the HT and VHT capabilities elements of the peer. An add without them is
++ * 0x25 bytes long.
++ */
 +#define BRCMF_AWDL_PEER_OP_ADD		0
 +#define BRCMF_AWDL_PEER_OP_DEL		1
++#define BRCMF_AWDL_PEER_OP_HDR_LEN	9
 +#define BRCMF_AWDL_PEER_OP_ADD_LEN	0x25
-+#define BRCMF_AWDL_PEER_OP_DEL_LEN	9
++#define BRCMF_AWDL_PEER_IES_MAX		128
 +
 +static void brcmf_awdl_ctrl_work(struct work_struct *work);
 +static void brcmf_awdl_aftx_work(struct wiphy *wiphy, struct wiphy_work *work);
@@ -181,7 +188,7 @@ index 052cd33..8040a8a 100644
  }
  
  /*
-@@ -248,6 +361,8 @@ int brcmf_awdl_del(struct brcmf_pub *drvr)
+@@ -248,6 +366,8 @@ int brcmf_awdl_del(struct brcmf_pub *drvr)
  	if (!ifp)
  		return -ENOENT;
  
@@ -190,7 +197,7 @@ index 052cd33..8040a8a 100644
  	netif_tx_disable(ifp->ndev);
  	/* Deletes the flowrings of all peers */
  	brcmf_proto_configure_addr_mode(drvr, ifp->ifidx, ADDR_INDIRECT);
-@@ -335,6 +450,449 @@ int brcmf_awdl_decap(struct sk_buff *skb)
+@@ -335,6 +455,461 @@ int brcmf_awdl_decap(struct sk_buff *skb)
  	return 0;
  }
  
@@ -469,6 +476,8 @@ index 052cd33..8040a8a 100644
 +	[BRCMF_AWDL_ATTR_MASTER_DISTANCE] = { .type = NLA_U8 },
 +	[BRCMF_AWDL_ATTR_STATUS] = { .type = NLA_REJECT },
 +	[BRCMF_AWDL_ATTR_IFINDEX] = { .type = NLA_REJECT },
++	[BRCMF_AWDL_ATTR_PEER_IES] = { .type = NLA_BINARY,
++				       .len = BRCMF_AWDL_PEER_IES_MAX },
 +};
 +
 +/* The device of a vendor command and its parsed attributes */
@@ -605,9 +614,11 @@ index 052cd33..8040a8a 100644
 +static int brcmf_awdl_peer_op(struct wiphy *wiphy, const void *data, int len,
 +			      bool add)
 +{
++	u8 op[BRCMF_AWDL_PEER_OP_HDR_LEN + BRCMF_AWDL_PEER_IES_MAX] = {};
 +	struct nlattr *tb[BRCMF_AWDL_ATTR_MAX + 1];
-+	u8 op[BRCMF_AWDL_PEER_OP_ADD_LEN] = {};
++	u32 op_len = BRCMF_AWDL_PEER_OP_HDR_LEN;
 +	struct brcmf_pub *drvr;
++	struct nlattr *ies;
 +
 +	drvr = brcmf_awdl_vndr_parse(wiphy, data, len, tb);
 +	if (IS_ERR(drvr))
@@ -620,9 +631,17 @@ index 052cd33..8040a8a 100644
 +	op[1] = add ? BRCMF_AWDL_PEER_OP_ADD : BRCMF_AWDL_PEER_OP_DEL;
 +	ether_addr_copy(op + 2, nla_data(tb[BRCMF_AWDL_ATTR_ADDR]));
 +	op[8] = add;
++	if (add) {
++		ies = tb[BRCMF_AWDL_ATTR_PEER_IES];
++		if (ies) {
++			memcpy(op + BRCMF_AWDL_PEER_OP_HDR_LEN, nla_data(ies),
++			       nla_len(ies));
++			op_len += nla_len(ies);
++		}
++		op_len = max_t(u32, op_len, BRCMF_AWDL_PEER_OP_ADD_LEN);
++	}
 +	return brcmf_fil_iovar_data_set(drvr->awdl.ifp, "awdl_peer_op", op,
-+					add ? BRCMF_AWDL_PEER_OP_ADD_LEN :
-+					      BRCMF_AWDL_PEER_OP_DEL_LEN);
++					op_len);
 +}
 +
 +int brcmf_awdl_vndr_peer_add(struct wiphy *wiphy, struct wireless_dev *wdev,
@@ -640,7 +659,7 @@ index 052cd33..8040a8a 100644
  /* Called before the interfaces of the device are removed */
  void brcmf_awdl_detach(struct brcmf_pub *drvr)
  {
-@@ -342,10 +900,17 @@ void brcmf_awdl_detach(struct brcmf_pub *drvr)
+@@ -342,10 +917,17 @@ void brcmf_awdl_detach(struct brcmf_pub *drvr)
  
  	rtnl_lock();
  	wiphy_lock(drvr->wiphy);
@@ -870,10 +889,10 @@ index d07e7c7..5e7de07 100644
 +	},
  };
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
-index 418f33e..954a210 100644
+index 418f33e..ce7f7c4 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
-@@ -8,12 +8,93 @@
+@@ -8,12 +8,97 @@
  
  #define BROADCOM_OUI	0x001018
  
@@ -894,7 +913,8 @@ index 418f33e..954a210 100644
 + *	%BRCMF_AWDL_ATTR_MASTER_DISTANCE. Without %BRCMF_AWDL_ATTR_MASTER the
 + *	device is its own master.
 + * @BRCMF_VNDR_CMDS_AWDL_PEER_ADD: add the peer %BRCMF_AWDL_ATTR_ADDR, data
-+ *	frames to it are sent from then on.
++ *	frames to it are sent from then on. %BRCMF_AWDL_ATTR_PEER_IES gives its
++ *	HT and VHT capabilities, sent again it updates them.
 + * @BRCMF_VNDR_CMDS_AWDL_PEER_DEL: remove the peer %BRCMF_AWDL_ATTR_ADDR.
 + * @BRCMF_VNDR_CMDS_LAST: number of vendor commands plus one.
 + *
@@ -946,6 +966,8 @@ index 418f33e..954a210 100644
 + * @BRCMF_AWDL_ATTR_MASTER_DISTANCE: hops from this device to the master (u8).
 + * @BRCMF_AWDL_ATTR_STATUS: 0 or a negative error code (s32).
 + * @BRCMF_AWDL_ATTR_IFINDEX: interface index of the AWDL interface (u32).
++ * @BRCMF_AWDL_ATTR_PEER_IES: HT and VHT capabilities elements of a peer,
++ *	built from the AWDL TLVs it sends, as macOS passes them.
 + * @BRCMF_AWDL_ATTR_MAX: highest attribute.
 + */
 +enum brcmf_awdl_attrs {
@@ -959,6 +981,7 @@ index 418f33e..954a210 100644
 +	BRCMF_AWDL_ATTR_MASTER_DISTANCE,
 +	BRCMF_AWDL_ATTR_STATUS,
 +	BRCMF_AWDL_ATTR_IFINDEX,
++	BRCMF_AWDL_ATTR_PEER_IES,
 +
 +	__BRCMF_AWDL_ATTR_AFTER_LAST,
 +	BRCMF_AWDL_ATTR_MAX = __BRCMF_AWDL_ATTR_AFTER_LAST - 1
@@ -967,7 +990,7 @@ index 418f33e..954a210 100644
  /**
   * enum brcmf_nlattrs - nl80211 message attributes
   *
-@@ -49,5 +130,6 @@ struct brcmf_vndr_dcmd_hdr {
+@@ -49,5 +134,6 @@ struct brcmf_vndr_dcmd_hdr {
  };
  
  extern const struct wiphy_vendor_command brcmf_vendor_cmds[];

@@ -70,7 +70,8 @@ trait Agent1 {
 #[derive(Default)]
 struct State {
     session: Option<Session>,
-    /// The own advertisement while browsing or sending
+    /// The own advertisement while browsing or sending, until the receiver
+    /// accepted
     beacon: Option<AirDropBeacon>,
     /// Looks for senders while an agent can take transfers
     scanner: Option<BeaconScanner>,
@@ -79,6 +80,9 @@ struct State {
     listeners: HashSet<String>,
     agent: Option<Agent>,
     sending: usize,
+    /// Sends the receiver accepted. Bluetooth and Wi-Fi share the radio,
+    /// the advertisement and the sender scan stay off while they upload.
+    uploading: usize,
     /// Accepted incoming transfers still connected
     incoming: usize,
     /// Whether a sender was near at the last housekeeping
@@ -238,8 +242,11 @@ impl Sender {
             return false;
         }
         let usable = self.agent_usable().await;
-        let has_agent = self.state.lock().unwrap().agent.is_some();
-        self.update_scanner(has_agent && usable).await;
+        let (has_agent, uploading) = {
+            let state = self.state.lock().unwrap();
+            (state.agent.is_some(), state.uploading > 0)
+        };
+        self.update_scanner(has_agent && usable && !uploading).await;
 
         let (receive, want_beacon, want_awdl) = {
             let mut state = self.state.lock().unwrap();
@@ -249,8 +256,9 @@ impl Sender {
                 info!("AirDrop sender {}", if sender_near { "nearby" } else { "gone" });
             }
             let receive = state.agent.is_some() && (!state.listeners.is_empty() || sender_near);
-            let want_beacon = !state.browsers.is_empty() || state.sending > 0;
-            let want_awdl = want_beacon || receive || state.incoming > 0;
+            let browsing_or_sending = !state.browsers.is_empty() || state.sending > 0;
+            let want_beacon = browsing_or_sending && state.uploading == 0;
+            let want_awdl = browsing_or_sending || receive || state.incoming > 0;
             (receive, want_beacon, want_awdl)
         };
         self.receiving.store(receive, Ordering::Relaxed);
@@ -463,17 +471,24 @@ impl Sender {
         let emitter = emitter.to_owned();
         let handle = tokio::runtime::Handle::current();
         let progress_id = id.clone();
+        let progress_state = self.state.clone();
         std::thread::spawn(move || {
             let mut accepted = false;
             while let Ok(p) = progress_rx.recv() {
                 let (sent, total) = match p {
                     SendProgress::Accepted => {
+                        if !accepted {
+                            progress_state.lock().unwrap().uploading += 1;
+                        }
                         accepted = true;
                         (0, 0)
                     }
                     SendProgress::Sent(sent, total) => (sent, total),
                 };
                 let _ = handle.block_on(Self::send_progress(&emitter, &progress_id, accepted, sent, total));
+            }
+            if accepted {
+                progress_state.lock().unwrap().uploading -= 1;
             }
         });
         {

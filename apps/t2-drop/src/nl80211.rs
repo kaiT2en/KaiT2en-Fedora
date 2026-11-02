@@ -54,8 +54,9 @@ const ATTR_MASTER_METRIC: u16 = 5;
 const ATTR_MASTER_DISTANCE: u16 = 6;
 const ATTR_STATUS: u16 = 7;
 const ATTR_IFINDEX: u16 = 8;
-const ATTR_FRAME: u16 = 9;
-const ATTR_ROLE: u16 = 10;
+const ATTR_PEER_IES: u16 = 9;
+const ATTR_FRAME: u16 = 10;
+const ATTR_ROLE: u16 = 11;
 
 /// How long AWDL_START and AWDL_STOP may take, the driver waits up to 2 s
 /// for each firmware interface event.
@@ -318,8 +319,14 @@ impl Nl80211 {
         self.vendor(CMD_AWDL_SET_SYNC, &d).context("AWDL sync")
     }
 
-    pub fn peer_add(&mut self, mac: [u8; 6]) -> Result<()> {
-        self.vendor(CMD_AWDL_PEER_ADD, &attr(ATTR_ADDR, &mac)).context("AWDL peer add")
+    /// Adds the peer `mac`, or updates it, with its HT and VHT capabilities
+    /// elements `ies`. Without them the firmware does not know its rates.
+    pub fn peer_add(&mut self, mac: [u8; 6], ies: &[u8]) -> Result<()> {
+        let mut d = attr(ATTR_ADDR, &mac);
+        if !ies.is_empty() {
+            d.extend(attr(ATTR_PEER_IES, ies));
+        }
+        self.vendor(CMD_AWDL_PEER_ADD, &d).context("AWDL peer add")
     }
 
     pub fn peer_del(&mut self, mac: [u8; 6]) -> Result<()> {

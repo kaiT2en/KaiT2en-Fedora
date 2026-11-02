@@ -302,10 +302,7 @@ pub fn open(app: &adw::Application, files: Vec<PathBuf>) {
     let status = adw::StatusPage::builder()
         .icon_name("network-wireless-symbolic")
         .title("Looking for devices")
-        .description(
-            "Phones have to be in the same Wi-Fi, with Bluetooth on and Quick Share \
-             visible to everyone. Macs, iPhones and iPads need AirDrop for everyone.",
-        )
+        .description("Quick Share and AirDrop devices")
         .vexpand(true)
         .build();
     let list = gtk::ListBox::builder()

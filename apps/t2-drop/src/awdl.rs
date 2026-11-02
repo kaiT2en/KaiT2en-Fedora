@@ -6,7 +6,7 @@
 //!
 //! The TLVs start from what macOS sent on a MacBookAir9,1 (BCM4377). The
 //! BCM4364 of the MacBookPro15,1 also needs an ARPA TLV with the own host
-//! name, see reverse-engineering/airdrop/README.md.
+//! name.
 
 use std::collections::HashMap;
 use std::process::Command;
@@ -31,6 +31,11 @@ const TLV_SERVICE_RESPONSE: u8 = 0x02;
 const TLV_SERVICE_PARAMS: u8 = 0x06;
 const TLV_ARPA: u8 = 0x10;
 const TLV_VERSION: u8 = 0x15;
+const TLV_HT_CAPS: u8 = 0x07;
+const TLV_VHT_CAPS: u8 = 0x11;
+/// HT capabilities element: id and length of its 26 byte body
+const HT_IE: [u8; 2] = [0x2d, 0x1a];
+const VHT_IE_ID: u8 = 0xbf;
 const TLV_ELECTION_V2: u8 = 0x18;
 
 /// The compressed name macOS uses for _airdrop._tcp.local in PTR records.
@@ -124,6 +129,24 @@ pub struct Peer {
     /// AirDrop service instance and port, from its PTR and SRV records
     pub airdrop: Option<(String, u16)>,
     pub last_seen: Option<Instant>,
+    /// HT and VHT capabilities elements for awdl_peer_op, built from its
+    /// TLVs as macOS builds them
+    pub ies: Vec<u8>,
+}
+
+/// The HT capabilities element from the value of an HT capabilities TLV:
+/// two leading bytes, then the start of the element body.
+fn ht_ie(value: &[u8]) -> Option<Vec<u8>> {
+    let body = value.get(2..)?;
+    let mut ie = HT_IE.to_vec();
+    ie.extend(body.iter().take(HT_IE[1] as usize));
+    ie.resize(2 + HT_IE[1] as usize, 0);
+    Some(ie)
+}
+
+/// The VHT capabilities element, the whole value of a VHT capabilities TLV.
+fn vht_ie(value: &[u8]) -> Option<Vec<u8>> {
+    (value.len() >= 2 && value[0] == VHT_IE_ID && value.len() == 2 + value[1] as usize).then(|| value.to_vec())
 }
 
 /// The AirDrop service this device advertises while it receives.
@@ -143,7 +166,8 @@ pub struct Awdl {
     host: String,
     master: Option<Election>,
     pub peers: HashMap<[u8; 6], Peer>,
-    peer_ops: Vec<[u8; 6]>,
+    /// Peers added to the firmware, with the elements they were added with
+    peer_ops: HashMap<[u8; 6], Vec<u8>>,
 }
 
 impl Awdl {
@@ -158,7 +182,7 @@ impl Awdl {
             host,
             master: None,
             peers: HashMap::new(),
-            peer_ops: Vec::new(),
+            peer_ops: HashMap::new(),
         };
         let (payload, oob) = awdl.frames();
         awdl.ifindex = awdl.nl.start(mac, &payload, &oob)?;
@@ -314,8 +338,12 @@ impl Awdl {
         let mut host = None;
         let mut airdrop = None;
         let mut instance = None;
+        let mut ht = None;
+        let mut vht = None;
         for (kind, value) in tlvs(&body[AWDL_AF_HDR..]) {
             match kind {
+                TLV_HT_CAPS => ht = ht_ie(value),
+                TLV_VHT_CAPS => vht = vht_ie(value),
                 TLV_ELECTION_V2 if value.len() >= 24 => {
                     election = Some(Election {
                         master: value[0..6].try_into().unwrap(),
@@ -351,6 +379,14 @@ impl Awdl {
         let new = !self.peers.contains_key(&addr);
         let peer = self.peers.entry(addr).or_insert_with(|| Peer { mac: addr, ..Default::default() });
         peer.last_seen = Some(now);
+        let mut ies_changed = false;
+        if let Some(ht) = ht {
+            let ies: Vec<u8> = ht.into_iter().chain(vht.unwrap_or_default()).collect();
+            if ies != peer.ies {
+                peer.ies = ies;
+                ies_changed = true;
+            }
+        }
         if host.is_some() {
             peer.host = host;
         }
@@ -359,6 +395,10 @@ impl Awdl {
                 info!("AirDrop service {instance} on {} port {port}", mac_str(&addr));
             }
             peer.airdrop = Some((instance, port));
+        }
+        // A peer added before its capabilities were known gets them now
+        if ies_changed && self.peer_ops.contains_key(&addr) {
+            self.update_peer(addr)?;
         }
         if new {
             info!("AWDL peer {}", mac_str(&addr));
@@ -402,7 +442,7 @@ impl Awdl {
     /// Makes a peer reachable for unicast: neighbour entry for its link
     /// local address and the firmware peer entry.
     pub fn add_peer(&mut self, mac: [u8; 6]) -> Result<()> {
-        if self.peer_ops.contains(&mac) {
+        if self.peer_ops.contains_key(&mac) {
             return Ok(());
         }
         let ll = link_local(&mac);
@@ -412,14 +452,24 @@ impl Awdl {
         if !status.success() {
             warn!("neighbour entry for {ll} failed");
         }
-        self.nl.peer_add(mac)?;
-        self.peer_ops.push(mac);
+        self.peer_ops.insert(mac, Vec::new());
+        self.update_peer(mac)
+    }
+
+    /// Sends the peer with its current capabilities elements to the firmware.
+    fn update_peer(&mut self, mac: [u8; 6]) -> Result<()> {
+        let ies = self.peers.get(&mac).map(|p| p.ies.clone()).unwrap_or_default();
+        if !ies.is_empty() {
+            debug!("peer {} with HT/VHT capabilities, {} bytes", mac_str(&mac), ies.len());
+        }
+        self.nl.peer_add(mac, &ies)?;
+        self.peer_ops.insert(mac, ies);
         Ok(())
     }
 
     /// Removes peers and the interface.
     pub fn down(&mut self) {
-        for mac in std::mem::take(&mut self.peer_ops) {
+        for mac in std::mem::take(&mut self.peer_ops).into_keys() {
             let _ = self.nl.peer_del(mac);
         }
         if let Err(err) = self.nl.stop() {
@@ -563,5 +613,32 @@ mod tests {
         assert_eq!(out.len(), p.len() + 4);
         assert_eq!(u16::from_le_bytes([out[0], out[1]]), 0x8b + 4);
         assert_eq!(&out[out.len() - 9..out.len() - 5], &[0x10, 1, 0, 0xaa]);
+    }
+}
+
+#[cfg(test)]
+mod peer_ie_tests {
+    use super::*;
+
+    /// The awdl_peer_op macOS 15.4.1 sent for this device starts its HT
+    /// element with 2d1a6f001fffff0000 and carries the VHT element
+    /// bf0c32008003faff0000faff0000. Both come from the TLVs we send.
+    #[test]
+    fn builds_the_elements_macos_built_from_our_tlvs() {
+        let payload = hex(PAYLOAD);
+        let mut ht = None;
+        let mut vht = None;
+        for (kind, value) in tlvs(&payload[2..]) {
+            match kind {
+                TLV_HT_CAPS => ht = ht_ie(value),
+                TLV_VHT_CAPS => vht = vht_ie(value),
+                _ => {}
+            }
+        }
+        let ht = ht.expect("HT TLV in the payload");
+        assert_eq!(ht.len(), 28);
+        assert_eq!(ht[..9], hex("2d1a6f001fffff0000")[..]);
+        assert!(ht[9..].iter().all(|&b| b == 0));
+        assert_eq!(vht.expect("VHT TLV in the payload"), hex("bf0c32008003faff0000faff0000"));
     }
 }

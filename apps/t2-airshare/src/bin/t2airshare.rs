@@ -102,8 +102,8 @@ async fn send_files(files: Vec<PathBuf>, to: Option<String>, wait: u64, name: St
             _ = tokio::time::sleep_until(deadline) => {
                 if to.is_some() || peers.is_empty() {
                     anyhow::bail!(
-                        "no matching phone found. The phone has to be in the same Wi-Fi, with \
-                         Bluetooth on and Quick Share visible to everyone"
+                        "no matching phone found. The phone needs Bluetooth on and Quick Share \
+                         visible to everyone"
                     );
                 }
                 break pick(peers)?;

@@ -30,10 +30,10 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  7 files changed, 151 insertions(+), 9 deletions(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-index 8040a8a..8452a63 100644
+index 45eab93..b817d34 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-@@ -634,17 +634,125 @@ static void brcmf_awdl_settle_work(struct wiphy *wiphy,
+@@ -639,17 +639,125 @@ static void brcmf_awdl_settle_work(struct wiphy *wiphy,
  		       sizeof(dwell_off));
  }
  
@@ -165,10 +165,10 @@ index 8040a8a..8452a63 100644
  	if (!skb)
  		return;
  	if (nla_put_s32(skb, BRCMF_AWDL_ATTR_STATUS, status) ||
-@@ -725,6 +833,8 @@ const struct nla_policy brcmf_awdl_vndr_policy[BRCMF_AWDL_ATTR_MAX + 1] = {
- 	[BRCMF_AWDL_ATTR_MASTER_DISTANCE] = { .type = NLA_U8 },
- 	[BRCMF_AWDL_ATTR_STATUS] = { .type = NLA_REJECT },
+@@ -732,6 +840,8 @@ const struct nla_policy brcmf_awdl_vndr_policy[BRCMF_AWDL_ATTR_MAX + 1] = {
  	[BRCMF_AWDL_ATTR_IFINDEX] = { .type = NLA_REJECT },
+ 	[BRCMF_AWDL_ATTR_PEER_IES] = { .type = NLA_BINARY,
+ 				       .len = BRCMF_AWDL_PEER_IES_MAX },
 +	[BRCMF_AWDL_ATTR_FRAME] = { .type = NLA_REJECT },
 +	[BRCMF_AWDL_ATTR_ROLE] = { .type = NLA_REJECT },
  };
@@ -264,10 +264,10 @@ index 5e7de07..aae9cd7 100644
 +	},
  };
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
-index 954a210..8424232 100644
+index ce7f7c4..9600937 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
-@@ -53,6 +53,11 @@ enum brcmf_vndr_cmds {
+@@ -54,6 +54,11 @@ enum brcmf_vndr_cmds {
   * @BRCMF_VNDR_EVTS_AWDL_STOPPED: the AWDL interface was removed, after
   *	%BRCMF_VNDR_CMDS_AWDL_STOP or before system sleep, with
   *	%BRCMF_AWDL_ATTR_STATUS.
@@ -279,7 +279,7 @@ index 954a210..8424232 100644
   * @BRCMF_VNDR_EVTS_LAST: number of vendor events.
   *
   * The value of an event is its index in the vendor events and its vendor
-@@ -61,6 +66,8 @@ enum brcmf_vndr_cmds {
+@@ -62,6 +67,8 @@ enum brcmf_vndr_cmds {
  enum brcmf_vndr_evts {
  	BRCMF_VNDR_EVTS_AWDL_STARTED,
  	BRCMF_VNDR_EVTS_AWDL_STOPPED,
@@ -288,20 +288,20 @@ index 954a210..8424232 100644
  	BRCMF_VNDR_EVTS_LAST
  };
  
-@@ -77,6 +84,9 @@ enum brcmf_vndr_evts {
-  * @BRCMF_AWDL_ATTR_MASTER_DISTANCE: hops from this device to the master (u8).
-  * @BRCMF_AWDL_ATTR_STATUS: 0 or a negative error code (s32).
+@@ -80,6 +87,9 @@ enum brcmf_vndr_evts {
   * @BRCMF_AWDL_ATTR_IFINDEX: interface index of the AWDL interface (u32).
+  * @BRCMF_AWDL_ATTR_PEER_IES: HT and VHT capabilities elements of a peer,
+  *	built from the AWDL TLVs it sends, as macOS passes them.
 + * @BRCMF_AWDL_ATTR_FRAME: received action frame body.
 + * @BRCMF_AWDL_ATTR_ROLE: AWDL role of the firmware (u32), 0 slave, 1 master
 + *	not taking part in the election, 2 master.
   * @BRCMF_AWDL_ATTR_MAX: highest attribute.
   */
  enum brcmf_awdl_attrs {
-@@ -90,6 +100,8 @@ enum brcmf_awdl_attrs {
- 	BRCMF_AWDL_ATTR_MASTER_DISTANCE,
+@@ -94,6 +104,8 @@ enum brcmf_awdl_attrs {
  	BRCMF_AWDL_ATTR_STATUS,
  	BRCMF_AWDL_ATTR_IFINDEX,
+ 	BRCMF_AWDL_ATTR_PEER_IES,
 +	BRCMF_AWDL_ATTR_FRAME,
 +	BRCMF_AWDL_ATTR_ROLE,
  
