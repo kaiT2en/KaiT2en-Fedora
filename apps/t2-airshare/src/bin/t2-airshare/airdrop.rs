@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use futures_util::StreamExt;
 use zbus::proxy;
 use zbus::zvariant::OwnedFd;
 
@@ -16,6 +17,9 @@ trait Sender1 {
     fn browse(&self) -> zbus::Result<()>;
     fn receivers(&self) -> zbus::Result<Vec<(String, String)>>;
     fn send(&self, id: &str, names: Vec<String>, fds: Vec<OwnedFd>, sender_name: &str) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    fn send_progress(&self, id: String, accepted: bool, sent: u64, total: u64) -> zbus::Result<()>;
 }
 
 /// Whether the t2-drop service runs or can be started on this system.
@@ -104,8 +108,22 @@ async fn browse_once(
     }
 }
 
+/// How a send goes on.
+pub enum SendState {
+    /// The user on the receiver accepted.
+    Accepted,
+    /// Bytes of the upload sent so far, of all, after the acceptance.
+    Sent(u64, u64),
+}
+
 /// Sends `files` to the receiver `id` and returns once it has them.
-pub async fn send(id: &str, files: &[PathBuf], sender_name: &str) -> Result<()> {
+/// `progress` hears when the receiver accepted and how much went out.
+pub async fn send(
+    id: &str,
+    files: &[PathBuf],
+    sender_name: &str,
+    mut progress: impl FnMut(SendState),
+) -> Result<()> {
     let mut names = Vec::new();
     let mut fds = Vec::new();
     for path in files {
@@ -122,6 +140,29 @@ pub async fn send(id: &str, files: &[PathBuf], sender_name: &str) -> Result<()> 
     let sender = Sender1Proxy::new(&connection).await?;
     // The service only sends while someone browses, this caller included.
     sender.browse().await?;
-    sender.send(id, names, fds, sender_name).await?;
-    Ok(())
+    let mut updates = sender.receive_send_progress().await?;
+    let call = sender.send(id, names, fds, sender_name);
+    tokio::pin!(call);
+    let mut accepted = false;
+    loop {
+        tokio::select! {
+            result = &mut call => {
+                result?;
+                return Ok(());
+            }
+            Some(update) = updates.next() => {
+                let Ok(args) = update.args() else { continue };
+                if args.id() != id || !args.accepted() {
+                    continue;
+                }
+                if !accepted {
+                    accepted = true;
+                    progress(SendState::Accepted);
+                }
+                if *args.total() > 0 {
+                    progress(SendState::Sent(*args.sent(), *args.total()));
+                }
+            }
+        }
+    }
 }

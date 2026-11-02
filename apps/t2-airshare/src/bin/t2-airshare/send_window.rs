@@ -134,11 +134,13 @@ struct Ui {
     status: adw::StatusPage,
     list: gtk::ListBox,
     progress: gtk::ProgressBar,
+    /// the progress bar moves until the AirDrop receiver accepted
+    pulsing: Rc<Cell<bool>>,
     tx: async_channel::Sender<Event>,
     files: Vec<PathBuf>,
     /// Quick Share discovery and the running send
     tasks: RefCell<Vec<JoinHandle<()>>>,
-    /// the AirDrop browse, only while the window is active
+    /// the AirDrop browse, until the window closes or a send starts
     airdrop: RefCell<Option<JoinHandle<()>>>,
     /// false once a send started, no more looking after that
     looking: Cell<bool>,
@@ -156,15 +158,13 @@ impl Ui {
         }
     }
 
-    /// AirDrop looks for receivers only while the window is active.
-    fn set_active(&self, active: bool) {
+    /// AirDrop looks for receivers from opening the window until it closes
+    /// or a send starts. Tied to the focus, an open window did not look
+    /// whenever it was not active.
+    fn start_airdrop(&self) {
         let mut task = self.airdrop.borrow_mut();
-        if active && self.looking.get() {
-            if task.is_none() {
-                *task = Some(spawn_airdrop(self.tx.clone()));
-            }
-        } else if let Some(task) = task.take() {
-            task.abort();
+        if self.looking.get() && task.is_none() {
+            *task = Some(spawn_airdrop(self.tx.clone()));
         }
     }
 
@@ -222,9 +222,28 @@ impl Ui {
             Via::AirDrop(id) => {
                 self.status.set_title(&format!("Accept on {name}"));
                 self.progress.set_visible(true);
-                self.progress.pulse();
+                self.progress.set_fraction(0.0);
+                // Moves while the receiver has not accepted yet
+                self.pulsing.set(true);
+                let bar = self.progress.clone();
+                let pulsing = self.pulsing.clone();
+                glib::timeout_add_local(std::time::Duration::from_millis(150), move || {
+                    if pulsing.get() && bar.is_visible() {
+                        bar.pulse();
+                        glib::ControlFlow::Continue
+                    } else {
+                        glib::ControlFlow::Break
+                    }
+                });
+                let progress_tx = tx.clone();
                 runtime().spawn(async move {
-                    let result = airdrop::send(&id, &files, &local_name())
+                    let report = move |p| {
+                        let _ = progress_tx.try_send(match p {
+                            airdrop::SendState::Accepted => Event::Sent(0, 1),
+                            airdrop::SendState::Sent(sent, total) => Event::Sent(sent, total),
+                        });
+                    };
+                    let result = airdrop::send(&id, &files, &local_name(), report)
                         .await
                         .map(|()| SendOutcome::Sent)
                         .map_err(|err| format!("{err:#}"));
@@ -341,6 +360,7 @@ pub fn open(app: &adw::Application, files: Vec<PathBuf>) {
         status: status.clone(),
         list: list.clone(),
         progress: progress.clone(),
+        pulsing: Rc::default(),
         tx: tx.clone(),
         files,
         tasks: RefCell::default(),
@@ -368,14 +388,7 @@ pub fn open(app: &adw::Application, files: Vec<PathBuf>) {
             });
         });
     }
-    {
-        let ui = Rc::downgrade(&ui);
-        window.connect_is_active_notify(move |window| {
-            if let Some(ui) = ui.upgrade() {
-                ui.set_active(window.is_active());
-            }
-        });
-    }
+    ui.start_airdrop();
     {
         let ui = ui.clone();
         window.connect_close_request(move |_| {
@@ -455,14 +468,16 @@ pub fn open(app: &adw::Application, files: Vec<PathBuf>) {
                     progress.set_fraction(0.0);
                 }
                 Event::Sent(sent, total) => {
+                    ui.pulsing.set(false);
                     status.set_title("Sending");
                     progress.set_fraction(sent as f64 / total.max(1) as f64);
                 }
                 Event::Done(result) => {
+                    ui.pulsing.set(false);
                     progress.set_visible(false);
                     match result {
                         Ok(SendOutcome::Sent) => {
-                            status.set_icon_name(Some("emblem-ok-symbolic"));
+                            status.set_icon_name(Some("object-select-symbolic"));
                             status.set_title("Sent");
                             status.set_description(None);
                         }
