@@ -77,16 +77,20 @@ int bce_vhci_create(struct device *parent, struct bce_vhci *vhci)
     }
     t2bce_core_client_set_pm_ops(vhci->client, &bce_vhci_pm_ops, vhci);
 
-    if ((status = bce_vhci_create_message_queues(vhci)))
-        goto fail_mq;
-    if ((status = bce_vhci_create_event_queues(vhci)))
-        goto fail_eq;
-
     vhci->tq_state_wq = alloc_ordered_workqueue("t2bce_vhci-tq-state", 0);
+    if (!vhci->tq_state_wq) {
+        status = -ENOMEM;
+        goto fail_wq;
+    }
     INIT_WORK(&vhci->w_fw_events, bce_vhci_handle_firmware_events_w);
     INIT_WORK(&vhci->w_add_hcd, bce_vhci_add_hcd_w);
     vhci->port_change_pending = 0;
     vhci->system_suspending = false;
+
+    if ((status = bce_vhci_create_message_queues(vhci)))
+        goto fail_mq;
+    if ((status = bce_vhci_create_event_queues(vhci)))
+        goto fail_eq;
 
     vhci->hcd = usb_create_hcd(&bce_vhci_driver, vhci->vdev, "t2bce_vhci");
     if (!vhci->hcd) {
@@ -118,6 +122,9 @@ fail_hcd:
 fail_eq:
     bce_vhci_destroy_message_queues(vhci);
 fail_mq:
+    destroy_workqueue(vhci->tq_state_wq);
+    vhci->tq_state_wq = NULL;
+fail_wq:
     t2bce_core_client_set_pm_ops(vhci->client, NULL, NULL);
     t2bce_core_client_put(vhci->client);
     vhci->client = NULL;
@@ -135,6 +142,8 @@ void bce_vhci_destroy(struct bce_vhci *vhci)
     bce_vhci_remove_hcd(vhci);
     bce_vhci_destroy_event_queues(vhci);
     bce_vhci_destroy_message_queues(vhci);
+    destroy_workqueue(vhci->tq_state_wq);
+    vhci->tq_state_wq = NULL;
     t2bce_core_client_set_pm_ops(vhci->client, NULL, NULL);
     t2bce_core_client_put(vhci->client);
     vhci->client = NULL;
@@ -1215,7 +1224,7 @@ MODULE_PARM_DESC(vhci_port_mask, "Specifies which VHCI ports are enabled");
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("André Eikmeyer <andre.eikmeyer@gmail.com>");
 MODULE_DESCRIPTION("Apple T2 BCE VHCI Driver");
-MODULE_VERSION("0.02");
+MODULE_VERSION("0.03");
 MODULE_SOFTDEP("pre: t2bce_core");
 module_init(bce_vhci_module_init);
 module_exit(bce_vhci_module_exit);
