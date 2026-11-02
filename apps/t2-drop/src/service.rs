@@ -32,7 +32,7 @@ use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedFd, OwnedObjectPath};
 use zbus::{Connection, fdo, interface, proxy};
 
-use crate::airdrop::File;
+use crate::airdrop::{File, SendProgress};
 use crate::ble::{AirDropBeacon, BeaconScanner, BluetoothOff};
 use crate::logind;
 use crate::receive::{Ask, Handler};
@@ -107,6 +107,9 @@ pub struct Sender {
     connection: Arc<Mutex<Option<Connection>>>,
     /// Serializes starting a session, two callers must not start two.
     starting: Arc<tokio::sync::Mutex<()>>,
+    /// Serializes starting the advertisement. Two at once registered two,
+    /// the one not kept stayed with BlueZ until its slots ran out.
+    beacon_starting: Arc<tokio::sync::Mutex<()>>,
     /// Whether the session advertises the own AirDrop service
     receiving: Arc<AtomicBool>,
 }
@@ -120,6 +123,7 @@ impl Sender {
             state: Arc::default(),
             connection: Arc::default(),
             starting: Arc::default(),
+            beacon_starting: Arc::default(),
             receiving: Arc::default(),
         }
     }
@@ -137,14 +141,12 @@ impl Sender {
 
     /// Starts the own AirDrop advertisement unless it runs already.
     async fn ensure_beacon(&self) -> Result<()> {
+        let _starting = self.beacon_starting.lock().await;
         if self.state.lock().unwrap().beacon.is_some() {
             return Ok(());
         }
         let beacon = AirDropBeacon::start().await?;
-        let mut state = self.state.lock().unwrap();
-        if state.beacon.is_none() {
-            state.beacon = Some(beacon);
-        }
+        self.state.lock().unwrap().beacon = Some(beacon);
         Ok(())
     }
 
@@ -442,6 +444,7 @@ impl Sender {
     /// once the receiver has them or fails with the reason.
     async fn send(
         &self,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
         id: String,
         names: Vec<String>,
         fds: Vec<OwnedFd>,
@@ -455,10 +458,28 @@ impl Sender {
             .map_err(|e| Error::Failed(e.to_string()))?
             .map_err(failed)?;
         let (reply, result) = mpsc::channel();
+        let (progress, progress_rx) = mpsc::channel();
+        // Ends when the send drops its sender
+        let emitter = emitter.to_owned();
+        let handle = tokio::runtime::Handle::current();
+        let progress_id = id.clone();
+        std::thread::spawn(move || {
+            let mut accepted = false;
+            while let Ok(p) = progress_rx.recv() {
+                let (sent, total) = match p {
+                    SendProgress::Accepted => {
+                        accepted = true;
+                        (0, 0)
+                    }
+                    SendProgress::Sent(sent, total) => (sent, total),
+                };
+                let _ = handle.block_on(Self::send_progress(&emitter, &progress_id, accepted, sent, total));
+            }
+        });
         {
             let mut state = self.state.lock().unwrap();
             let session = state.session.as_ref().ok_or_else(|| Error::Failed("not browsing".into()))?;
-            session.send(SendRequest { id, sender: sender_name, files, reply }).map_err(failed)?;
+            session.send(SendRequest { id, sender: sender_name, files, reply, progress }).map_err(failed)?;
             state.sending += 1;
         }
         let r = tokio::task::spawn_blocking(move || result.recv()).await;
@@ -472,6 +493,18 @@ impl Sender {
 
     #[zbus(signal)]
     async fn receivers_changed(emitter: &SignalEmitter<'_>, receivers: Vec<(String, String)>) -> zbus::Result<()>;
+
+    /// Progress of a Send to `id`: whether the receiver accepted, and the
+    /// bytes of the upload sent so far of `total`. Sent before the
+    /// acceptance only fill buffers.
+    #[zbus(signal)]
+    async fn send_progress(
+        emitter: &SignalEmitter<'_>,
+        id: &str,
+        accepted: bool,
+        sent: u64,
+        total: u64,
+    ) -> zbus::Result<()>;
 }
 
 #[interface(name = "org.t2drop.Receiver1")]

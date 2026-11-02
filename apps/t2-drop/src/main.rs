@@ -9,7 +9,7 @@ mod agent;
 mod airdrop;
 mod awdl;
 mod ble;
-mod genl;
+mod nl80211;
 mod logind;
 mod mgmt;
 mod receive;

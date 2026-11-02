@@ -13,10 +13,11 @@
 //! Bodies are binary property lists, the upload a gzip compressed cpio
 //! archive in the portable (odc) format.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{self, BufRead, BufReader, Cursor, Read, Write};
 use std::net::{Ipv6Addr, SocketAddrV6, TcpStream};
+use std::os::fd::AsRawFd;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
 use flate2::Compression;
@@ -67,6 +68,18 @@ impl ServerCertVerifier for AcceptAny {
     }
 }
 
+/// Upload bytes handed to TLS at a time.
+const UPLOAD_CHUNK: usize = 128 * 1024;
+
+/// How a send goes on.
+#[derive(Debug, Clone, Copy)]
+pub enum SendProgress {
+    /// The user on the receiver accepted.
+    Accepted,
+    /// Bytes of the upload sent so far, of all.
+    Sent(u64, u64),
+}
+
 /// A file to send, the name without directories.
 pub struct File {
     pub name: String,
@@ -109,13 +122,20 @@ impl Receiver {
     }
 
     fn request(&self, path: &str, body: &[u8], extra: &[(&str, String)]) -> Vec<u8> {
+        let mut out = self.head(path, body.len(), extra);
+        out.extend_from_slice(body);
+        out
+    }
+
+    /// The request line and headers of a request with a body of `len` bytes.
+    fn head(&self, path: &str, len: usize, extra: &[(&str, String)]) -> Vec<u8> {
         let mut head = format!(
             "POST {path} HTTP/1.1\r\nHost: [{}]:{}\r\nContent-Type: application/octet-stream\r\n\
              Connection: keep-alive\r\nAccept: */*\r\nUser-Agent: AirDrop/1.0\r\n\
              Accept-Language: en-us\r\nAccept-Encoding: gzip, deflate\r\nContent-Length: {}\r\n",
             self.addr.ip(),
             self.addr.port(),
-            body.len()
+            len
         );
         for (k, v) in extra {
             if *k == "Content-Type" {
@@ -125,9 +145,7 @@ impl Receiver {
             }
         }
         head.push_str("\r\n");
-        let mut out = head.into_bytes();
-        out.extend_from_slice(body);
-        out
+        head.into_bytes()
     }
 
     /// The name the receiver shows for itself, None if it does not answer.
@@ -142,8 +160,15 @@ impl Receiver {
     }
 
     /// Asks the receiver and uploads `files`. Waits up to `wait` for the
-    /// user on the receiver.
-    pub fn send(&self, sender_name: &str, files: Vec<File>, wait: Duration) -> Result<()> {
+    /// user on the receiver. `progress` hears when the user accepted and how
+    /// much of the upload went out.
+    pub fn send(
+        &self,
+        sender_name: &str,
+        files: Vec<File>,
+        wait: Duration,
+        progress: &mut dyn FnMut(SendProgress),
+    ) -> Result<()> {
         let mut entries = Vec::new();
         let mut archive_files = Vec::new();
         let mut total = 0u64;
@@ -179,17 +204,23 @@ impl Receiver {
 
         let mut tls = self.connect(wait)?;
         tls.write_all(&self.request("/Ask", &plist_bytes(ask)?, &[]))?;
-        tls.write_all(&self.request(
+        tls.write_all(&self.head(
             "/Upload",
-            &archive,
+            archive.len(),
             &[("Content-Type", "application/x-cpio".into()), ("TotalBytes", total.to_string())],
         ))?;
-        let mut reader = BufReader::new(&mut tls);
+        // The ask reply comes once the user decided, while the upload waits
+        // on the same connection
+        let (early, accepted) = upload(&mut tls, &archive, wait, progress)?;
+        let mut reader = BufReader::new(Cursor::new(early).chain(&mut tls));
         let ask = read_reply(&mut reader).context("ask")?;
         match ask.status {
             200 => {}
             403 => bail!("declined on the receiver"),
             s => bail!("ask failed with HTTP {s}"),
+        }
+        if !accepted {
+            progress(SendProgress::Accepted);
         }
         let upload = read_reply(&mut reader).context("upload")?;
         if upload.status != 200 {
@@ -197,6 +228,100 @@ impl Receiver {
         }
         Ok(())
     }
+}
+
+/// The HTTP status of a reply that starts `data`, once its status line is in.
+fn status_of(data: &[u8]) -> Option<u16> {
+    let end = data.iter().position(|&b| b == b'\n')?;
+    std::str::from_utf8(&data[..end]).ok()?.split_whitespace().nth(1)?.parse().ok()
+}
+
+/// Writes `data` to `tls` and reads what the receiver answers meanwhile.
+/// Returns the plaintext received and whether it holds an accepting ask
+/// reply. Fails early when the receiver declines. Waits at most `wait`
+/// without any progress.
+fn upload(
+    tls: &mut Tls,
+    data: &[u8],
+    wait: Duration,
+    progress: &mut dyn FnMut(SendProgress),
+) -> Result<(Vec<u8>, bool)> {
+    let total = data.len() as u64;
+    let mut off = 0;
+    let mut received = Vec::new();
+    let mut accepted = false;
+    let mut last = Instant::now();
+    tls.sock.set_nonblocking(true)?;
+    let result = (|| -> Result<()> {
+        loop {
+            let mut moved = false;
+            if off < data.len() && !tls.conn.wants_write() {
+                let end = (off + UPLOAD_CHUNK).min(data.len());
+                let n = tls.conn.writer().write(&data[off..end])?;
+                off += n;
+                moved |= n > 0;
+            }
+            while tls.conn.wants_write() {
+                match tls.conn.write_tls(&mut tls.sock) {
+                    Ok(n) => moved |= n > 0,
+                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
+                    Err(e) => return Err(e).context("upload"),
+                }
+            }
+            if moved && !tls.conn.wants_write() {
+                progress(SendProgress::Sent(off as u64, total));
+            }
+            match tls.conn.read_tls(&mut tls.sock) {
+                Ok(0) => bail!("the receiver closed the connection"),
+                Ok(_) => {
+                    tls.conn.process_new_packets().context("tls")?;
+                    let mut buf = [0u8; 4096];
+                    loop {
+                        match tls.conn.reader().read(&mut buf) {
+                            Ok(0) => break,
+                            Ok(n) => received.extend_from_slice(&buf[..n]),
+                            Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
+                            Err(e) => return Err(e).context("tls"),
+                        }
+                    }
+                    moved = true;
+                }
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
+                Err(e) => return Err(e).context("upload"),
+            }
+            if !accepted {
+                match status_of(&received) {
+                    Some(200) => {
+                        accepted = true;
+                        progress(SendProgress::Accepted);
+                    }
+                    Some(403) => bail!("declined on the receiver"),
+                    Some(s) => bail!("ask failed with HTTP {s}"),
+                    None => {}
+                }
+            }
+            if off == data.len() && !tls.conn.wants_write() {
+                return Ok(());
+            }
+            if moved {
+                last = Instant::now();
+                continue;
+            }
+            let left = wait.saturating_sub(last.elapsed());
+            if left.is_zero() {
+                bail!("the receiver did not answer");
+            }
+            let mut fd = libc::pollfd {
+                fd: tls.sock.as_raw_fd(),
+                events: libc::POLLIN | if tls.conn.wants_write() { libc::POLLOUT } else { 0 },
+                revents: 0,
+            };
+            // SAFETY: fd is a valid pollfd for one descriptor.
+            unsafe { libc::poll(&mut fd, 1, left.as_millis().min(1000) as i32) };
+        }
+    })();
+    tls.sock.set_nonblocking(false)?;
+    result.map(|()| (received, accepted))
 }
 
 fn plist_bytes(dict: Dictionary) -> Result<Vec<u8>> {

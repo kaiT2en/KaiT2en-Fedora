@@ -15,15 +15,13 @@ use anyhow::{Result, anyhow, bail};
 use log::{info, warn};
 use rand::RngCore;
 
-use crate::airdrop::{File, Receiver};
+use crate::airdrop::{File, Receiver, SendProgress};
 use crate::awdl::{Awdl, Service, link_local, mac_str};
-use crate::genl::Genl;
+use crate::nl80211::Nl80211;
 use crate::receive::{Handler, Server};
 
 /// How often the AWDL requests are sent again, as macOS does.
 const REFRESH: Duration = Duration::from_millis(2500);
-/// macOS ends the fast search settings 5 s after the enable.
-const SETTLE_AFTER: Duration = Duration::from_secs(5);
 /// Attempts of /Discover, each with a 3 s connect timeout and a 1 s pause.
 const DISCOVER_ATTEMPTS: u32 = 20;
 /// How long a receiver may stay silent before it is dropped.
@@ -47,6 +45,8 @@ pub struct SendRequest {
     pub sender: String,
     pub files: Vec<File>,
     pub reply: mpsc::Sender<Result<()>>,
+    /// Hears when the receiver accepted and how much went out
+    pub progress: mpsc::Sender<SendProgress>,
 }
 
 pub struct Session {
@@ -66,9 +66,9 @@ impl Session {
         changed: impl Fn(Vec<ReceiverInfo>) + Send + 'static,
     ) -> Result<Self> {
         let primary = ifindex(primary)?;
-        let genl = Genl::open()?;
-        let events = genl.events()?;
-        let awdl = Awdl::up(genl, primary, random_mac(), awdl_host())?;
+        let nl = Nl80211::open(primary)?;
+        let events = nl.events()?;
+        let awdl = Awdl::up(nl, random_mac(), awdl_host())?;
         info!("AWDL up on {} as {}", awdl.ifname, mac_str(&awdl.mac));
         let stop = Arc::new(AtomicBool::new(false));
         let listening = Arc::new(AtomicBool::new(false));
@@ -116,7 +116,7 @@ struct Known {
 
 fn run(
     mut awdl: Awdl,
-    events: mpsc::Receiver<crate::genl::Event>,
+    events: mpsc::Receiver<crate::nl80211::Event>,
     requests: mpsc::Receiver<SendRequest>,
     stop: &AtomicBool,
     receiving: &AtomicBool,
@@ -126,9 +126,7 @@ fn run(
     let instance = random_instance();
     let mut advertised = false;
     let (found_tx, found_rx) = mpsc::channel::<([u8; 6], u16, Option<String>)>();
-    let start = Instant::now();
     let mut last_refresh = Instant::now();
-    let mut settled = false;
     let mut asked: HashSet<[u8; 6]> = HashSet::new();
     let mut known: HashMap<[u8; 6], Known> = HashMap::new();
     let mut published: Vec<ReceiverInfo> = Vec::new();
@@ -144,10 +142,6 @@ fn run(
                 warn!("AWDL refresh: {err:#}");
                 break;
             }
-        }
-        if !settled && start.elapsed() >= SETTLE_AFTER {
-            settled = true;
-            let _ = awdl.settle();
         }
 
         // A sender that finds the service before the server listens waits
@@ -258,8 +252,11 @@ fn run(
             match Receiver::new(&link_local(mac), awdl.ifindex, k.port) {
                 Ok(receiver) => {
                     std::thread::spawn(move || {
-                        let r = receiver.send(&request.sender, request.files, ASK_TIMEOUT);
-                        let _ = request.reply.send(r);
+                        let SendRequest { sender, files, reply, progress, .. } = request;
+                        let r = receiver.send(&sender, files, ASK_TIMEOUT, &mut |p| {
+                            let _ = progress.send(p);
+                        });
+                        let _ = reply.send(r);
                     });
                 }
                 Err(err) => {

@@ -1,0 +1,119 @@
+From: Andre Eikmeyer <dev@deq.rocks>
+Subject: [PATCH] wifi: brcmfmac: move the interface_create definitions to
+ fwil_types.h
+
+The interface_create iovar structures and flags are firmware interface
+types like the others in fwil_types.h. Move them there so code outside
+cfg80211.c can create firmware interfaces as well.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ .../broadcom/brcm80211/brcmfmac/cfg80211.c    | 42 ------------------
+ .../broadcom/brcm80211/brcmfmac/fwil_types.h  | 43 +++++++++++++++++++
+ 2 files changed, 43 insertions(+), 42 deletions(-)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
+index 6c200cd..d061ee0 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
+@@ -268,48 +268,6 @@ struct parsed_vndr_ies {
+ 	struct parsed_vndr_ie_info ie_info[VNDR_IE_PARSE_LIMIT];
+ };
+ 
+-#define WL_INTERFACE_CREATE_VER_1		1
+-#define WL_INTERFACE_CREATE_VER_2		2
+-#define WL_INTERFACE_CREATE_VER_3		3
+-#define WL_INTERFACE_CREATE_VER_MAX		WL_INTERFACE_CREATE_VER_3
+-
+-#define WL_INTERFACE_MAC_DONT_USE	0x0
+-#define WL_INTERFACE_MAC_USE		0x2
+-
+-#define WL_INTERFACE_CREATE_STA		0x0
+-#define WL_INTERFACE_CREATE_AP		0x1
+-
+-struct wl_interface_create_v1 {
+-	u16	ver;			/* structure version */
+-	u32	flags;			/* flags for operation */
+-	u8	mac_addr[ETH_ALEN];	/* MAC address */
+-	u32	wlc_index;		/* optional for wlc index */
+-};
+-
+-struct wl_interface_create_v2 {
+-	u16	ver;			/* structure version */
+-	u8	pad1[2];
+-	u32	flags;			/* flags for operation */
+-	u8	mac_addr[ETH_ALEN];	/* MAC address */
+-	u8	iftype;			/* type of interface created */
+-	u8	pad2;
+-	u32	wlc_index;		/* optional for wlc index */
+-};
+-
+-struct wl_interface_create_v3 {
+-	u16 ver;			/* structure version */
+-	u16 len;			/* length of structure + data */
+-	u16 fixed_len;			/* length of structure */
+-	u8 iftype;			/* type of interface created */
+-	u8 wlc_index;			/* optional for wlc index */
+-	u32 flags;			/* flags for operation */
+-	u8 mac_addr[ETH_ALEN];		/* MAC address */
+-	u8 bssid[ETH_ALEN];		/* optional for BSSID */
+-	u8 if_index;			/* interface index request */
+-	u8 pad[3];
+-	u8 data[];			/* Optional for specific data */
+-};
+-
+ static u8 nl80211_band_to_fwil(enum nl80211_band band)
+ {
+ 	switch (band) {
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h
+index e74a23e..6f13e10 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h
+@@ -1236,4 +1236,47 @@ struct brcmf_mkeep_alive_pkt_le {
+ 	u8   data[];
+ } __packed;
+ 
++/* interface_create iovar */
++#define WL_INTERFACE_CREATE_VER_1		1
++#define WL_INTERFACE_CREATE_VER_2		2
++#define WL_INTERFACE_CREATE_VER_3		3
++#define WL_INTERFACE_CREATE_VER_MAX		WL_INTERFACE_CREATE_VER_3
++
++#define WL_INTERFACE_MAC_DONT_USE	0x0
++#define WL_INTERFACE_MAC_USE		0x2
++
++#define WL_INTERFACE_CREATE_STA		0x0
++#define WL_INTERFACE_CREATE_AP		0x1
++
++struct wl_interface_create_v1 {
++	u16	ver;			/* structure version */
++	u32	flags;			/* flags for operation */
++	u8	mac_addr[ETH_ALEN];	/* MAC address */
++	u32	wlc_index;		/* optional for wlc index */
++};
++
++struct wl_interface_create_v2 {
++	u16	ver;			/* structure version */
++	u8	pad1[2];
++	u32	flags;			/* flags for operation */
++	u8	mac_addr[ETH_ALEN];	/* MAC address */
++	u8	iftype;			/* type of interface created */
++	u8	pad2;
++	u32	wlc_index;		/* optional for wlc index */
++};
++
++struct wl_interface_create_v3 {
++	u16 ver;			/* structure version */
++	u16 len;			/* length of structure + data */
++	u16 fixed_len;			/* length of structure */
++	u8 iftype;			/* type of interface created */
++	u8 wlc_index;			/* optional for wlc index */
++	u32 flags;			/* flags for operation */
++	u8 mac_addr[ETH_ALEN];		/* MAC address */
++	u8 bssid[ETH_ALEN];		/* optional for BSSID */
++	u8 if_index;			/* interface index request */
++	u8 pad[3];
++	u8 data[];			/* Optional for specific data */
++};
++
+ #endif /* FWIL_TYPES_H_ */

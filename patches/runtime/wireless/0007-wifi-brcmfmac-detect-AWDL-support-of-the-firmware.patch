@@ -1,0 +1,62 @@
+From: Andre Eikmeyer <dev@deq.rocks>
+Subject: [PATCH] wifi: brcmfmac: detect AWDL support of the firmware
+
+The Apple firmware of the BCM4355, BCM4364 and BCM4377 runs Apple
+Wireless Direct Link (AWDL) itself and announces it with "awdl" in its
+capabilities. Add the feature flag for it.
+
+An AWDL interface is created with interface_create version 3 and
+interface type 2. The host gives the MAC address, the interface index
+and the BSSID, which the flags 0x2, 0x8 and 0x10 select. Add the
+definitions for the interface type and the two new flags.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c    | 1 +
+ drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h    | 3 ++-
+ drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h | 3 +++
+ 3 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
+index 0677f76..56bf68e 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
+@@ -45,6 +45,7 @@ static const struct brcmf_feat_fwcap brcmf_fwcap_map[] = {
+ 	{ BRCMF_FEAT_SAE, "sae" },
+ 	{ BRCMF_FEAT_FWAUTH, "idauth" },
+ 	{ BRCMF_FEAT_SAE_EXT, "sae_ext" },
++	{ BRCMF_FEAT_AWDL, "awdl" },
+ };
+ 
+ #ifdef DEBUG
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
+index 31f8695..3927240 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
+@@ -59,7 +59,8 @@
+ 	BRCMF_FEAT_DEF(SCAN_V2) \
+ 	BRCMF_FEAT_DEF(PMKID_V2) \
+ 	BRCMF_FEAT_DEF(PMKID_V3) \
+-	BRCMF_FEAT_DEF(SAE_EXT)
++	BRCMF_FEAT_DEF(SAE_EXT) \
++	BRCMF_FEAT_DEF(AWDL)
+ 
+ /*
+  * Quirks:
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h
+index 6f13e10..8d1532e 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h
+@@ -1244,9 +1244,12 @@ struct brcmf_mkeep_alive_pkt_le {
+ 
+ #define WL_INTERFACE_MAC_DONT_USE	0x0
+ #define WL_INTERFACE_MAC_USE		0x2
++#define WL_INTERFACE_IF_INDEX_USE	0x8
++#define WL_INTERFACE_BSSID_USE		0x10
+ 
+ #define WL_INTERFACE_CREATE_STA		0x0
+ #define WL_INTERFACE_CREATE_AP		0x1
++#define WL_INTERFACE_CREATE_AWDL	0x2
+ 
+ struct wl_interface_create_v1 {
+ 	u16	ver;			/* structure version */
