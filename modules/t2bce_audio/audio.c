@@ -563,9 +563,11 @@ static void t2audio_init_dev(struct t2audio_device *a, t2audio_device_id_t dev_i
 
     if (sdev->is_pcm)
         t2audio_create_pcm(sdev);
-    /* Headphone Jack status */
-    if (!strcmp(sdev->uid, "Codec Output")) {
-        if (snd_jack_new(a->card, sdev->uid, SND_JACK_HEADPHONE, &sdev->jack, true, false))
+    /* Headphone Jack status. The iMacPro1,1 reports one combined "Codec" device
+     * instead of "Codec Output" and "Codec Input". Its jack keeps the
+     * "Codec Output" name so the UCM JackControl matches on every model. */
+    if (!strcmp(sdev->uid, "Codec Output") || !strcmp(sdev->uid, "Codec")) {
+        if (snd_jack_new(a->card, "Codec Output", SND_JACK_HEADPHONE, &sdev->jack, true, false))
             dev_warn(a->dev, "Failed to create an attached jack for %s\n", sdev->uid);
         t2audio_cmd_property_listener(a, sdev->dev_id, sdev->dev_id,
                 T2AUDIO_PROP(T2AUDIO_PROP_SCOPE_OUTPUT, T2AUDIO_PROP_JACK_PLUGGED, 0));
@@ -1162,6 +1164,7 @@ struct t2audio_alsa_pcm_id_mapping t2audio_alsa_id_mappings[] = {
         {"Speaker", 0},
         {"Digital Mic", 1},
         {"Codec Output", 2},
+        {"Codec", 2},
         {"Codec Input", 3},
         {"Bridge Loopback", 4},
         {}
@@ -1175,6 +1178,6 @@ MODULE_SOFTDEP("pre: t2bce_core");
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("André Eikmeyer <andre.eikmeyer@kait2en.org>");
 MODULE_DESCRIPTION("Apple T2 Audio Driver");
-MODULE_VERSION("0.04");
+MODULE_VERSION("0.05");
 module_init(t2audio_module_init);
 module_exit(t2audio_module_exit);
