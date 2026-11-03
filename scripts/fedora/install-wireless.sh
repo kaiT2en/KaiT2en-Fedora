@@ -48,9 +48,11 @@ PATCH_FILES=()
 # BCM4355/BCM4364 Macs, hci_bcm4377 the PCIe Bluetooth. Both Bluetooth drivers
 # link to btbcm. Only drivers the target kernel builds as modules are replaced.
 BRCMFMAC_DIR=drivers/net/wireless/broadcom/brcm80211/brcmfmac
+BRCMUTIL_DIR=drivers/net/wireless/broadcom/brcm80211/brcmutil
 BLUETOOTH_DIR=drivers/bluetooth
 MODULES=()
 BLUETOOTH_MAKE_ARGS=()
+BRCMFMAC_MAKE_ARGS=(CONFIG_BRCMDBG=y "KCPPFLAGS=-DDEBUG -DCONFIG_BRCMDBG=1")
 
 kernel_config() {
 	sed -n "s/^CONFIG_$1=//p" "$build_tree/.config"
@@ -59,6 +61,7 @@ kernel_config() {
 select_modules() {
 	if [[ $(kernel_config BRCMFMAC) == m ]]; then
 		MODULES+=(
+			"$BRCMUTIL_DIR/brcmutil.ko"
 			"$BRCMFMAC_DIR/brcmfmac.ko"
 			"$BRCMFMAC_DIR/wcc/brcmfmac-wcc.ko"
 			"$BRCMFMAC_DIR/cyw/brcmfmac-cyw.ko"
@@ -214,6 +217,8 @@ tree="$workdir/linux"
 install -d "$tree/${BRCMFMAC_DIR%/*}" "$tree/${BLUETOOTH_DIR%/*}"
 cp -a --reflink=auto "$source_tree/$BRCMFMAC_DIR" "$tree/${BRCMFMAC_DIR%/*}/" ||
 	fail "brcmfmac source is missing in $source_tree"
+cp -a --reflink=auto "$source_tree/$BRCMUTIL_DIR" "$tree/${BRCMUTIL_DIR%/*}/" ||
+	fail "brcmutil source is missing in $source_tree"
 cp -a --reflink=auto "$source_tree/${BRCMFMAC_DIR%/*}/include" "$tree/${BRCMFMAC_DIR%/*}/" ||
 	fail "brcm80211 headers are missing in $source_tree"
 cp -a --reflink=auto "$source_tree/$BLUETOOTH_DIR" "$tree/${BLUETOOTH_DIR%/*}/" ||
@@ -224,8 +229,14 @@ for patch_file in "${PATCH_FILES[@]}"; do
 done
 
 if [[ " ${MODULES[*]} " == *" $BRCMFMAC_DIR/"* ]]; then
+	info "building brcmutil for $KVER"
+	make -j "$(nproc)" -C "$build_tree" M="$tree/$BRCMUTIL_DIR" \
+		"${BRCMFMAC_MAKE_ARGS[@]}" modules
+
 	info "building brcmfmac for $KVER"
-	make -j "$(nproc)" -C "$build_tree" M="$tree/$BRCMFMAC_DIR" modules
+	make -j "$(nproc)" -C "$build_tree" M="$tree/$BRCMFMAC_DIR" \
+		KBUILD_EXTRA_SYMBOLS="$tree/$BRCMUTIL_DIR/Module.symvers" \
+		"${BRCMFMAC_MAKE_ARGS[@]}" modules
 fi
 if [[ " ${MODULES[*]} " == *" $BLUETOOTH_DIR/"* ]]; then
 	info "building the Bluetooth drivers for $KVER"
