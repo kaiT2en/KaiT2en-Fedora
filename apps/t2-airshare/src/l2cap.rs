@@ -34,6 +34,8 @@ const BDADDR_LE_PUBLIC: u8 = 1;
 const SERVICE_ID_HASH: [u8; 3] = [0xfc, 0x9f, 0x5e];
 /// The first three bytes of a BLE socket control packet.
 const CONTROL: [u8; 3] = [0, 0, 0];
+/// Largest packet of a data connection with lengths
+const MAX_PACKET: usize = 64 * 1024;
 
 const REQUEST_ADVERTISEMENT: u8 = 1;
 const REQUEST_ADVERTISEMENT_FINISH: u8 = 2;
@@ -276,6 +278,17 @@ pub async fn serve(channel: Channel, advertisement: Arc<Vec<u8>>) -> Result<Opti
         }
     }
 
+    // An S22 Ultra puts the 4 byte length in front of every packet of the
+    // data connection as well, as in front of the commands
+    let head = reader.take(7).await?;
+    let length = u32::from_be_bytes([head[0], head[1], head[2], head[3]]) as usize;
+    let lengths = (3..=MAX_PACKET).contains(&length) && (head[4..7] == CONTROL || head[4..7] == SERVICE_ID_HASH);
+    reader.buf.splice(0..0, head);
+    if lengths {
+        info!("L2CAP data connection, BLE socket packets with lengths");
+        return Ok(Some(serve_with_lengths(channel, reader)));
+    }
+
     // control packets first, the first data bytes tell the framing
     let packets = loop {
         let first = reader.take(3).await?;
@@ -351,6 +364,78 @@ pub async fn serve(channel: Channel, advertisement: Arc<Vec<u8>>) -> Result<Opti
         debug!("L2CAP to the phone ended: {result:?}");
     });
     Ok(Some(theirs))
+}
+
+/// The data connection when every packet carries its length: [length u32]
+/// then the service id hash and the data, or three zero bytes and a
+/// SocketControlFrame. The data holds the plain frames, which the stream
+/// gets as they are. Packets to the phone get the same layout.
+fn serve_with_lengths(channel: Arc<Channel>, mut reader: Reader) -> DuplexStream {
+    let (ours, theirs) = tokio::io::duplex(256 * 1024);
+    let (mut from_us, mut to_us) = tokio::io::split(ours);
+    let write_lock = Arc::new(Mutex::new(()));
+
+    // phone to receiver
+    let lock = write_lock.clone();
+    let ack_channel = channel.clone();
+    tokio::spawn(async move {
+        let result: io::Result<()> = async {
+            let mut frames = Vec::new();
+            loop {
+                let len = reader.u32_be().await?;
+                if !(3..=MAX_PACKET).contains(&len) {
+                    return Err(io::Error::other(format!("L2CAP packet of {len} bytes")));
+                }
+                let packet = reader.take(len).await?;
+                let (hash, data) = packet.split_at(3);
+                if hash == CONTROL {
+                    debug!("L2CAP control frame {:02x?}", data);
+                    continue;
+                }
+                if hash != SERVICE_ID_HASH {
+                    return Err(io::Error::other(format!("packet for service {hash:02x?}")));
+                }
+                frames.extend_from_slice(data);
+                // acknowledge each frame once it is complete, as for the
+                // packets without lengths
+                while frames.len() >= 4 {
+                    let size = u32::from_be_bytes([frames[0], frames[1], frames[2], frames[3]]) as usize;
+                    if frames.len() < 4 + size {
+                        break;
+                    }
+                    {
+                        let _guard = lock.lock().await;
+                        ack_channel.send(&command(&acknowledgement(size))).await?;
+                    }
+                    to_us.write_all(&frames[..4 + size]).await?;
+                    frames.drain(..4 + size);
+                }
+            }
+        }
+        .await;
+        debug!("L2CAP from the phone ended: {result:?}");
+        let _ = to_us.shutdown().await;
+    });
+
+    // receiver to phone
+    tokio::spawn(async move {
+        let result: io::Result<()> = async {
+            loop {
+                let len = from_us.read_u32().await? as usize;
+                let mut data = vec![0u8; len];
+                from_us.read_exact(&mut data).await?;
+                let mut packet = Vec::with_capacity(len + 7);
+                packet.extend_from_slice(&SERVICE_ID_HASH);
+                packet.extend_from_slice(&(len as u32).to_be_bytes());
+                packet.extend_from_slice(&data);
+                let _guard = write_lock.lock().await;
+                channel.send(&command(&packet)).await?;
+            }
+        }
+        .await;
+        debug!("L2CAP to the phone ended: {result:?}");
+    });
+    theirs
 }
 
 #[cfg(test)]

@@ -140,7 +140,7 @@ struct Ui {
     files: Vec<PathBuf>,
     /// Quick Share discovery and the running send
     tasks: RefCell<Vec<JoinHandle<()>>>,
-    /// the AirDrop browse, until the window closes or a send starts
+    /// the AirDrop browse, only while the window is active
     airdrop: RefCell<Option<JoinHandle<()>>>,
     /// false once a send started, no more looking after that
     looking: Cell<bool>,
@@ -158,13 +158,18 @@ impl Ui {
         }
     }
 
-    /// AirDrop looks for receivers from opening the window until it closes
-    /// or a send starts. Tied to the focus, an open window did not look
-    /// whenever it was not active.
-    fn start_airdrop(&self) {
+    /// AirDrop looks for receivers only while the window is active. Its
+    /// search pauses the Quick Share advertisements of the receiver
+    /// service, a send window left open in the background must not keep
+    /// this machine hidden from phones.
+    fn set_active(&self, active: bool) {
         let mut task = self.airdrop.borrow_mut();
-        if self.looking.get() && task.is_none() {
-            *task = Some(spawn_airdrop(self.tx.clone()));
+        if active && self.looking.get() {
+            if task.is_none() {
+                *task = Some(spawn_airdrop(self.tx.clone()));
+            }
+        } else if let Some(task) = task.take() {
+            task.abort();
         }
     }
 
@@ -385,7 +390,14 @@ pub fn open(app: &adw::Application, files: Vec<PathBuf>) {
             });
         });
     }
-    ui.start_airdrop();
+    {
+        let ui = Rc::downgrade(&ui);
+        window.connect_is_active_notify(move |window| {
+            if let Some(ui) = ui.upgrade() {
+                ui.set_active(window.is_active());
+            }
+        });
+    }
     {
         let ui = ui.clone();
         window.connect_close_request(move |_| {
