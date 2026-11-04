@@ -44,6 +44,16 @@ pub const PATH: &str = "/org/t2drop";
 const LINGER: Duration = Duration::from_secs(15);
 /// The service exits after this long without AWDL and without an agent.
 const EXIT_IDLE: Duration = Duration::from_secs(60);
+/// Longest pause of the housekeeping between two failed AWDL starts
+const AWDL_RETRY_MAX: Duration = Duration::from_secs(300);
+
+/// Pause after the given number of failed AWDL starts in a row: 2 s,
+/// doubled each time, at most AWDL_RETRY_MAX. Firmware without AWDL fails
+/// every time, a try each second filled the kernel log.
+fn awdl_retry_delay(failures: u32) -> Duration {
+    let secs = 1u64 << failures.min(9);
+    Duration::from_secs(secs).min(AWDL_RETRY_MAX)
+}
 /// Upper limit of one transfer, the files are held in memory.
 const MAX_BYTES: u64 = 2 << 30;
 const MAX_FILES: usize = 256;
@@ -94,6 +104,12 @@ struct State {
     sleeping: bool,
     /// Last problem logged by the housekeeping, logged once
     problem: String,
+    /// Failed AWDL starts by the housekeeping in a row
+    awdl_failures: u32,
+    /// The housekeeping starts AWDL again only from then on
+    awdl_retry_at: Option<Instant>,
+    /// Whether the last housekeeping wanted AWDL
+    awdl_wanted: bool,
 }
 
 impl State {
@@ -272,12 +288,36 @@ impl Sender {
         }
 
         if want_awdl {
-            self.state.lock().unwrap().idle_since = None;
-            if let Err(err) = self.ensure_session().await {
-                self.state.lock().unwrap().report(format!("AWDL: {err:#}"));
+            let retry = {
+                let mut state = self.state.lock().unwrap();
+                state.idle_since = None;
+                if !state.awdl_wanted {
+                    // A new demand tries at once
+                    state.awdl_wanted = true;
+                    state.awdl_failures = 0;
+                    state.awdl_retry_at = None;
+                }
+                state.awdl_retry_at.is_none_or(|at| Instant::now() >= at)
+            };
+            if retry {
+                let result = self.ensure_session().await;
+                let mut state = self.state.lock().unwrap();
+                match result {
+                    Ok(()) => {
+                        state.awdl_failures = 0;
+                        state.awdl_retry_at = None;
+                    }
+                    Err(err) => {
+                        state.awdl_failures += 1;
+                        let delay = awdl_retry_delay(state.awdl_failures);
+                        state.awdl_retry_at = Some(Instant::now() + delay);
+                        state.report(format!("AWDL: {err:#}, next try in {} s", delay.as_secs()));
+                    }
+                }
             }
             return false;
         }
+        self.state.lock().unwrap().awdl_wanted = false;
         let session = {
             let mut state = self.state.lock().unwrap();
             let since = *state.idle_since.get_or_insert_with(Instant::now);
@@ -692,4 +732,16 @@ pub async fn run() -> Result<()> {
         warn!("release {BUS_NAME}: {err}");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn awdl_retries_back_off_to_five_minutes() {
+        let delays: Vec<u64> = (1..=10).map(|n| awdl_retry_delay(n).as_secs()).collect();
+        assert_eq!(delays, [2, 4, 8, 16, 32, 64, 128, 256, 300, 300]);
+        assert_eq!(awdl_retry_delay(u32::MAX), AWDL_RETRY_MAX);
+    }
 }
