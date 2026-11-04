@@ -458,12 +458,14 @@ items:
   - id: brcmfmac-bcm4364-txbf
     title: "Two stream Wi-Fi uplink on BCM4364"
     state: available
-    upstream: downstream
-    project: KAIT2EN Fedora
+    upstream: submitted
+    version: v1
+    project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    updated: "2026-10-25"
+    link: "https://lore.kernel.org/all/20261104151623.70695-1-dev@deq.rocks/"
+    updated: "2026-11-04"
     notes: >-
       With TX beamforming on, the BCM4364 firmware sends a single beamformed
       stream and the uplink tops out at about 350 Mbit/s next to the router.
@@ -473,58 +475,67 @@ items:
   - id: btbcm-acl-priority
     title: "Bluetooth audio without dropouts during Wi-Fi traffic"
     state: available
-    upstream: downstream
-    project: KAIT2EN Fedora
+    upstream: submitted
+    version: v1
+    project: Linux kernel
     subsystem: Bluetooth / btbcm
     authors:
       - deqrocks
-    updated: "2026-10-25"
+    link: "https://lore.kernel.org/all/20261104151601.70493-1-dev@deq.rocks/"
+    updated: "2026-11-04"
     notes: >-
       On 2.4 GHz with Wi-Fi traffic the Broadcom controller held Bluetooth
       packets for up to 200 ms and A2DP audio dropped out. hci_bcm and
       hci_bcm4377 now give every Bluetooth link high priority in the
-      controller as it connects, as macOS/Android does for Broadcom chips.
+      controller as it connects, as the Android Broadcom vendor library does.
       This covers headphones, mice and keyboards.
 
   - id: brcmfmac-ps-timeout
     title: "Lower Wi-Fi idle power"
     state: available
-    upstream: downstream
-    project: KAIT2EN Fedora
+    upstream: submitted
+    version: v1
+    project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    updated: "2026-10-25"
+    link: "https://lore.kernel.org/all/20261104151626.70737-1-dev@deq.rocks/"
+    updated: "2026-11-04"
     notes: >-
       brcmfmac kept the Wi-Fi radio awake for 2 s after every frame when
       NetworkManager asked for power save without a timeout. It now uses
-      200 ms, the value Apple configures for the BCM4364. Idle system power
+      200 ms, the value macOS sets on the BCM4377. Idle system power
       on the MacBookPro15,1 dropped from 11.3 W to 9.2 W with Wi-Fi connected.
 
   - id: brcmfmac-fwcap-whole-words
     title: "No more Wi-Fi P2P errors on BCM4364"
     state: available
-    upstream: preparing
-    project: KAIT2EN Fedora
+    upstream: submitted
+    version: v1
+    project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    updated: "2026-10-28"
+    link: "https://lore.kernel.org/all/20261104151547.70333-2-dev@deq.rocks/"
+    updated: "2026-11-04"
     notes: >-
       brcmfmac searched the firmware capability list for "p2p" as a substring
       and found it in Apple's "hp2p". It then offered Wi-Fi Direct, which the
       BCM4364 firmware does not support, and every boot logged three P2P
-      errors. Capabilities are now matched as whole words.
+      errors. Capabilities are now matched as whole words. Submitted as
+      patch 1 of the AWDL series.
 
   - id: brcmfmac-bcm4364-ap-fwauth
     title: "Wi-Fi hotspot clients can connect on BCM4364"
     state: available
-    upstream: preparing
-    project: KAIT2EN Fedora
+    upstream: submitted
+    version: v1
+    project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    updated: "2026-10-28"
+    link: "https://lore.kernel.org/all/20261104151629.70790-1-dev@deq.rocks/"
+    updated: "2026-11-04"
     notes: >-
       The BCM4364 firmware claims to run the WPA2 handshake for its access
       point, but never completes it, so phones were dropped after about
@@ -552,15 +563,16 @@ items:
   - id: brcmfmac-awdl
     title: "Wi-Fi: AWDL for AirDrop on the Apple firmware"
     state: available
-    upstream: downstream
-    project: KAIT2EN Fedora
+    upstream: submitted
+    version: v1
+    project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    link: post-install/applications/t2-airshare.md
-    updated: "2026-10-29"
+    link: "https://lore.kernel.org/all/20261104151547.70333-1-dev@deq.rocks/"
+    updated: "2026-11-04"
     notes: >-
-      The Apple firmware of the Broadcom Wi-Fi chips runs AWDL itself once
+      The Apple firmware of the BCM4364 and BCM4377 runs AWDL itself once
       the host sets it up. brcmfmac now creates the AWDL interface, passes
       its firmware events to user space and carries AWDL data over awdl0.
       The t2-drop system service drives it as macOS does: it follows the
@@ -570,12 +582,14 @@ items:
   - id: hci-bcm-le-scan
     title: "Bluetooth LE devices show up within a second"
     state: available
-    upstream: downstream
-    project: KAIT2EN Fedora
+    upstream: submitted
+    version: v1
+    project: Linux kernel
     subsystem: Bluetooth / btbcm
     authors:
       - deqrocks
-    updated: "2026-10-30"
+    link: "https://lore.kernel.org/all/20261104151601.70493-1-dev@deq.rocks/"
+    updated: "2026-11-04"
     notes: >-
       The Broadcom Bluetooth chips of the T2 Macs set extra bits in the type
       of LE advertising reports, and the kernel dropped most of them as
@@ -584,4 +598,42 @@ items:
       after up to 11 seconds. btbcm now clears the extra bits for hci_bcm
       and hci_bcm4377, and both let the kernel turn the controller's
       duplicate filter off. A Mac opening AirDrop is now seen within a second
-      instead of up to 30 seconds.
+      instead of up to 30 seconds. The series also reverts a generic
+      hci_event change in bluetooth-next that masked the type on every
+      Broadcom controller.
+
+  - id: brcmfmac-bcm4364-ndoe
+    title: "Full speed IPv6 Wi-Fi downloads on BCM4364"
+    state: available
+    upstream: submitted
+    version: v1
+    project: Linux kernel
+    subsystem: Wi-Fi / brcmfmac
+    authors:
+      - deqrocks
+    link: "https://lore.kernel.org/all/20261104151620.70671-1-dev@deq.rocks/"
+    updated: "2026-11-04"
+    notes: >-
+      With the firmware's ND offload on, IPv6 downloads on the BCM4364
+      collapsed to about 55 Mbit/s. brcmfmac now keeps ARP and ND offload
+      off on this chip while the Mac is awake. Closes t2linux/kernel#34 and
+      T2-Debian-and-Ubuntu-Kernel#227.
+
+  - id: brcmfmac-d3-ack-reload
+    title: "Wi-Fi works after a suspend without D3 ACK"
+    state: available
+    upstream: submitted
+    version: v1
+    project: Linux kernel
+    subsystem: Wi-Fi / brcmfmac
+    authors:
+      - deqrocks
+      - Klizas
+    link: "https://lore.kernel.org/all/20261104151616.70623-1-dev@deq.rocks/"
+    updated: "2026-11-04"
+    notes: >-
+      When the firmware does not acknowledge D3 at suspend, brcmfmac now
+      reloads it on resume. Before, the association came back while the
+      data path stayed dead, or every firmware command timed out. Follows
+      up Sebastian Reichel's accepted suspend fix and replaces our v2
+      BCM4377 patch.
