@@ -68,6 +68,42 @@
     "navi14-mbp161-trained-uclk": {
       "message_id": "1563590381638131894",
       "hash": "e45af73a65fef34aa6ed57d94ee67139fa4a43cbe46344c30482fafc67c9b893"
+    },
+    "brcmfmac-bcm4364-txbf": {
+      "message_id": "1567559777305764021",
+      "hash": "2d60d673a6b0b5ea120fb2f3dab362657434086dce5ab7dad0e64bc9eb2c85c8"
+    },
+    "btbcm-acl-priority": {
+      "message_id": "1567559781986603140",
+      "hash": "ca7ea253aeaa5b2add715f5f404f506e428981b49443c28050c5c642bc347e95"
+    },
+    "brcmfmac-ps-timeout": {
+      "message_id": "1567559786172649515",
+      "hash": "de86024d47672f6794e5047f8c86f3d7c263c4b5edfe573cb9465d988451254b"
+    },
+    "brcmfmac-fwcap-whole-words": {
+      "message_id": "1567559789851050075",
+      "hash": "d76ab4d766021d9efa486c99979708be1982638fa07c9996098451642192c3d4"
+    },
+    "brcmfmac-bcm4364-ap-fwauth": {
+      "message_id": "1567559795186204756",
+      "hash": "c88edbd40cbbac3902a7ac756e8c8987011cff6ffb7554d8a1a257764f4c5beb"
+    },
+    "brcmfmac-awdl": {
+      "message_id": "1567559799921713182",
+      "hash": "5eeb4d0fade81f4fbf82cb00416e0c5691715e0feb6f11aba0b6525c712372b3"
+    },
+    "hci-bcm-le-scan": {
+      "message_id": "1567559803453313107",
+      "hash": "8d52d6aa4d3b98aa4dc1ce5639e188963de493590ed4f7acd6ca282a9003802c"
+    },
+    "brcmfmac-bcm4364-ndoe": {
+      "message_id": "1567559807760597002",
+      "hash": "4366db6efad62e25febd3c0bdcd03a6477c1634468b644e8804d9c3227e6dd08"
+    },
+    "brcmfmac-d3-ack-reload": {
+      "message_id": "1567559811908903124",
+      "hash": "e7addf73bc7bfb7ff1ea1a47d5e6f14537fe975a325aadd135e3e4dc48c8e36d"
     }
   }
 }
