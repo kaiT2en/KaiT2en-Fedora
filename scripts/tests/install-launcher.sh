@@ -49,11 +49,14 @@ cat >"$fake_bin/sudo" <<'EOF'
 #!/usr/bin/env bash
 printf 'sudo cwd=%s command=%s\n' "$PWD" "$*" >>"$KAIT2EN_TEST_LOG"
 [[ "${KAIT2EN_TEST_INSTALL_FAILS:-0}" == 1 && "$*" == "bash ./scripts/fedora/install.sh" ]] && exit 1
+[[ "${KAIT2EN_TEST_COMPLETE_FAILS:-0}" == 1 && "$*" == */kait2en-prepare\ --complete ]] && exit 1
 exit 0
 EOF
 chmod 0755 "$fake_bin"/*
 
-printf 'n\n' |
+run_launcher() {
+	local script=$1
+	shift
 	env \
 		HOME="$fake_home" \
 		XDG_RUNTIME_DIR="$work" \
@@ -64,7 +67,11 @@ printf 'n\n' |
 		KAIT2EN_TEST_REPOSITORY="$fake_repo" \
 		KAIT2EN_TEST_ORIGIN_URL_FILE="$origin_url_file" \
 		KAIT2EN_TEST_LOG="$log" \
-		bash "$launcher" >"$initial_output"
+		"$@" bash "$script"
+}
+
+printf 'n\n' |
+	run_launcher "$launcher" >"$initial_output"
 
 grep -Fq "git $git_prefix pull --ff-only origin main" "$log"
 grep -Fq "sudo cwd=$fake_repo command=bash ./scripts/fedora/install.sh" "$log"
@@ -76,17 +83,7 @@ grep -Fq 'Reboot once more to start the fully configured system.' "$initial_outp
 : >"$log"
 printf 'phase=complete\ntarget_kernel=%s\n' "$target" >"$fake_state/state"
 printf 'n\n' |
-	env \
-		HOME="$fake_home" \
-		XDG_RUNTIME_DIR="$work" \
-		PATH="$fake_bin:/usr/bin:/bin" \
-		KAIT2EN_STATE_DIR="$fake_state" \
-		KAIT2EN_REPOSITORY="$fake_repo" \
-		KAIT2EN_TEST_TARGET="$target" \
-		KAIT2EN_TEST_REPOSITORY="$fake_repo" \
-		KAIT2EN_TEST_ORIGIN_URL_FILE="$origin_url_file" \
-		KAIT2EN_TEST_LOG="$log" \
-		bash "$launcher" >/dev/null
+	run_launcher "$launcher" >/dev/null
 grep -Fq "git $git_prefix pull --ff-only origin main" "$log"
 grep -Fq "sudo cwd=$fake_repo command=bash ./scripts/fedora/install.sh" "$log"
 ! grep -Fq 'kait2en-prepare --complete' "$log"
@@ -98,17 +95,7 @@ printf 'delegated active=%s\n' \
 	"${KAIT2EN_INSTALL_SESSION_ACTIVE:-0}" >>"$KAIT2EN_TEST_LOG"
 EOF
 : >"$log"
-env \
-	HOME="$fake_home" \
-	XDG_RUNTIME_DIR="$work" \
-	PATH="$fake_bin:/usr/bin:/bin" \
-	KAIT2EN_STATE_DIR="$fake_state" \
-	KAIT2EN_REPOSITORY="$fake_repo" \
-	KAIT2EN_TEST_TARGET="$target" \
-	KAIT2EN_TEST_REPOSITORY="$fake_repo" \
-	KAIT2EN_TEST_ORIGIN_URL_FILE="$origin_url_file" \
-	KAIT2EN_TEST_LOG="$log" \
-	bash "$launcher" >/dev/null
+run_launcher "$launcher" >/dev/null
 grep -Fxq 'delegated active=0' "$log"
 ! grep -Fq 'flock ' "$log"
 
@@ -116,18 +103,8 @@ cp "$launcher" "$fake_repo/auto-installer/runtime/kait2en-install"
 : >"$log"
 printf 'phase=complete\ntarget_kernel=%s\n' "$target" >"$fake_state/state"
 printf 'n\n' |
-	env \
-		HOME="$fake_home" \
-		XDG_RUNTIME_DIR="$work" \
-		PATH="$fake_bin:/usr/bin:/bin" \
-		KAIT2EN_INSTALL_SESSION_ACTIVE=1 \
-		KAIT2EN_STATE_DIR="$fake_state" \
-		KAIT2EN_REPOSITORY="$fake_repo" \
-		KAIT2EN_TEST_TARGET="$target" \
-		KAIT2EN_TEST_REPOSITORY="$fake_repo" \
-		KAIT2EN_TEST_ORIGIN_URL_FILE="$origin_url_file" \
-		KAIT2EN_TEST_LOG="$log" \
-		bash "$fake_repo/auto-installer/runtime/kait2en-install" >/dev/null
+	run_launcher "$fake_repo/auto-installer/runtime/kait2en-install" \
+		KAIT2EN_INSTALL_SESSION_ACTIVE=1 >/dev/null
 grep -Fq "git $git_prefix pull --ff-only origin main" "$log"
 grep -Fq "sudo cwd=$fake_repo command=bash ./scripts/fedora/install.sh" "$log"
 ! grep -Fq 'flock ' "$log"
@@ -137,17 +114,7 @@ printf '%s\n' 'https://github.com' >"$origin_url_file"
 printf 'phase=complete\ntarget_kernel=%s\n' "$target" >"$fake_state/state"
 repair_output="$work/repair-output.log"
 printf 'n\n' |
-	env \
-		HOME="$fake_home" \
-		XDG_RUNTIME_DIR="$work" \
-		PATH="$fake_bin:/usr/bin:/bin" \
-		KAIT2EN_STATE_DIR="$fake_state" \
-		KAIT2EN_REPOSITORY="$fake_repo" \
-		KAIT2EN_TEST_TARGET="$target" \
-		KAIT2EN_TEST_REPOSITORY="$fake_repo" \
-		KAIT2EN_TEST_ORIGIN_URL_FILE="$origin_url_file" \
-		KAIT2EN_TEST_LOG="$log" \
-		bash "$launcher" >"$repair_output"
+	run_launcher "$launcher" >"$repair_output"
 grep -Fq 'Repairing the KaiT2en origin URL (found: https://github.com).' "$repair_output"
 grep -Fq "git $git_prefix remote set-url origin $canonical_url" "$log"
 grep -Fxq "$canonical_url" "$origin_url_file"
@@ -161,18 +128,7 @@ grep -Fq "sudo cwd=$fake_repo command=bash ./scripts/fedora/install.sh" "$log"
 printf 'phase=reboot_pending\ntarget_kernel=%s\n' "$target" >"$fake_state/state"
 failure_output="$work/failure-output.log"
 if printf 'n\n' |
-	env \
-		HOME="$fake_home" \
-		XDG_RUNTIME_DIR="$work" \
-		PATH="$fake_bin:/usr/bin:/bin" \
-		KAIT2EN_STATE_DIR="$fake_state" \
-		KAIT2EN_REPOSITORY="$fake_repo" \
-		KAIT2EN_TEST_TARGET="$target" \
-		KAIT2EN_TEST_REPOSITORY="$fake_repo" \
-		KAIT2EN_TEST_ORIGIN_URL_FILE="$origin_url_file" \
-		KAIT2EN_TEST_LOG="$log" \
-		KAIT2EN_TEST_INSTALL_FAILS=1 \
-		bash "$launcher" >"$failure_output" 2>&1; then
+	run_launcher "$launcher" KAIT2EN_TEST_INSTALL_FAILS=1 >"$failure_output" 2>&1; then
 	printf 'error: kait2en-install returned success after a reported install failure\n' >&2
 	exit 1
 fi
@@ -180,3 +136,16 @@ grep -Fq 'reported errors' "$failure_output"
 grep -Fq 'not marked complete' "$failure_output"
 ! grep -Fq 'installation stopped at line' "$failure_output"
 ! grep -Fq 'kait2en-prepare --complete' "$log"
+
+: >"$log"
+printf 'phase=reboot_pending\ntarget_kernel=%s\n' "$target" >"$fake_state/state"
+completion_output="$work/completion-failure.log"
+if printf 'n\n' |
+	run_launcher "$launcher" KAIT2EN_TEST_COMPLETE_FAILS=1 >"$completion_output" 2>&1; then
+	printf 'error: kait2en-install returned success after final boot selection failed\n' >&2
+	exit 1
+fi
+grep -Fq 'could not finalize the configured boot kernel' "$completion_output"
+! grep -Fq 'completed successfully' "$completion_output"
+! grep -Fq 'Reboot now?' "$completion_output"
+grep -Fxq 'phase=reboot_pending' "$fake_state/state"

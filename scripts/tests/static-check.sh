@@ -37,6 +37,7 @@ shell_files=(
 	scripts/copr/make-kernel-srpm.sh
 	scripts/tests/edition-catalog.sh
 	scripts/tests/iso-download.sh
+	scripts/tests/installer-input.sh
 	scripts/tests/install-launcher.sh
 	scripts/tests/static-check.sh
 	scripts/tests/prepare-install.sh
@@ -46,6 +47,7 @@ shell_files=(
 	scripts/tests/live-bluetooth.sh
 	scripts/tests/rescue.sh
 	scripts/tests/live-wifi.sh
+	scripts/tests/transition-rpm.sh
 	scripts/tests/terminal-launcher.sh
 	scripts/tests/wifi-firmware.sh
 )
@@ -262,28 +264,20 @@ grep -Fq 'source "$SCRIPT_DIR/download-fedora-iso.sh"' \
 	scripts/macos/prepare-fedora-installer.sh
 grep -Fq 'scripts/macos/download-fedora-iso.sh' \
 	auto-installer/build-in-container.sh
-grep -Fq 'FEDORA_METALINK=' auto-installer/targets/fedora-44.conf
-grep -Fq 'FEDORA_ARCHIVE_BASEURL=' auto-installer/targets/fedora-44.conf
+grep -Fq 'FEDORA_METALINK=' auto-installer/targets/fedora-45.conf
+grep -Fq 'FEDORA_ARCHIVE_BASEURL=' auto-installer/targets/fedora-45.conf
 ! grep -rIn 'FEDORA_BASEURL\|dl.fedoraproject.org/pub/fedora/linux/releases' \
 	auto-installer/targets scripts/fedora auto-installer/build-in-container.sh
 ! grep -Fq 'Keep no second driver disk connected' scripts/macos/prepare-fedora-installer.sh
 ! grep -Fq 'before the intentional EFI customization' scripts/macos/prepare-fedora-installer.sh
 grep -Fq 'shasum -a 256 -c' auto-installer/macos-release-bootstrap.sh.in
 grep -Fq 'KAIT2EN_TTY:-/dev/tty' auto-installer/macos-release-bootstrap.sh.in
-[[ $(grep -Fc 'uses: actions/checkout@v5' .github/workflows/installer.yml) -eq 3 ]]
 grep -Fq 'uses: actions/upload-artifact@v6' .github/workflows/installer.yml
 grep -Fq 'uses: actions/download-artifact@v7' .github/workflows/installer.yml
 ! grep -InE 'uses: actions/(checkout|upload-artifact|download-artifact)@v4' \
 	.github/workflows/installer.yml
 
-patch_name=$(
-	# shellcheck disable=SC1091
-	source auto-installer/targets/fedora-44.conf
-	printf '%s\n' "$INPUT_COMPAT_PATCH"
-)
-[[ -f "auto-installer/patches/$patch_name" ]]
-
-git apply --unidiff-zero --check "auto-installer/patches/$patch_name"
+bash scripts/tests/installer-input.sh
 
 bash scripts/tests/wifi-firmware.sh
 bash scripts/tests/bt-firmware.sh

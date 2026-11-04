@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
-target_name=${1:-fedora-44}
+target_name=${1:-fedora-45}
 target="$repo_root/auto-installer/targets/$target_name.conf"
 [[ -f "$target" ]]
 # shellcheck disable=SC1090

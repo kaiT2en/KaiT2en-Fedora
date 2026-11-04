@@ -7,8 +7,8 @@ prepare="$repo_root/auto-installer/runtime/kait2en-prepare"
 work=$(mktemp -d "${TMPDIR:-/tmp}/kait2en-prepare-test.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 
-target=7.0.1-100.fc44.x86_64
-old=6.19.10-300.fc44.x86_64
+target=7.2.15-300.fc45.x86_64
+old=7.2.11-300.fc45.x86_64
 fake_repo="$work/repository"
 fake_transition="$work/transition-source"
 fake_boot="$work/boot"
@@ -25,7 +25,7 @@ mkdir -p "$fake_repo/.git" "$fake_repo/scripts/fedora" \
 	"$fake_boot" "$fake_modules/$target" "$fake_bin"
 touch "$fake_boot/vmlinuz-$old" "$fake_boot/vmlinuz-$target"
 printf '1\n' >"$fake_transition/source-date-epoch"
-printf 'ID=fedora\nVERSION_ID=44\n' >"$fake_os_release"
+printf 'ID=fedora\nVERSION_ID=45\n' >"$fake_os_release"
 
 cat >"$fake_repo/scripts/fedora/install-dependencies.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -60,7 +60,9 @@ if [[ ${1:-} == --default-kernel ]]; then
 	printf '%s\n' "$KAIT2EN_TEST_OLD_KERNEL"
 elif [[ ${1:-} == --info=ALL ]]; then
 	prefix=$KAIT2EN_TEST_BLS_PREFIX
-	printf 'index=0\nkernel="%s/vmlinuz-%s"\n' "$prefix" "$KAIT2EN_TEST_TARGET"
+	if [[ ${KAIT2EN_TEST_HIDE_TARGET:-0} == 0 ]]; then
+		printf 'index=0\nkernel="%s/vmlinuz-%s"\n' "$prefix" "$KAIT2EN_TEST_TARGET"
+	fi
 	printf 'index=1\nkernel="%s/vmlinuz-%s"\n' "$prefix" "$KAIT2EN_TEST_OLD_RELEASE"
 	printf 'index=2\nkernel="%s/vmlinuz-0-rescue-test"\n' "$prefix"
 else
@@ -83,7 +85,8 @@ cat >"$fake_bin/cpio" <<'EOF'
 #!/usr/bin/env bash
 destination="$PWD/usr/lib/modules/$KAIT2EN_TEST_TARGET/updates/kait2en"
 mkdir -p "$destination"
-for module in t2bce_dma t2hid hid_t2magicmouse t2bce_core t2bce_vhci; do
+for module in t2bce_dma t2hid hid_t2magicmouse t2_trackpad_actuator t2_precision_trackpad t2bce_core t2bce_vhci; do
+	[[ "$module" != "${KAIT2EN_TEST_OMIT_MODULE:-}" ]] || continue
 	touch "$destination/$module.ko"
 done
 EOF
@@ -98,7 +101,7 @@ printf 'dracut %s\n' "$*" >>"$KAIT2EN_TEST_LOG"
 EOF
 cat >"$fake_bin/lsinitrd" <<'EOF'
 #!/usr/bin/env bash
-for module in t2bce_dma t2hid hid_t2magicmouse t2bce_core t2bce_vhci; do
+for module in t2bce_dma t2hid hid_t2magicmouse t2_trackpad_actuator t2_precision_trackpad t2bce_core t2bce_vhci; do
 	printf 'usr/lib/modules/test/updates/%s.ko.xz\n' "$module"
 done
 EOF
@@ -125,6 +128,8 @@ run_prepare() {
 		KAIT2EN_TEST_BLS_PREFIX="${bls_prefix:-/boot}" \
 		KAIT2EN_TEST_LOG="$log" \
 		KAIT2EN_TEST_DRACUT_FAIL="$dracut_fail" \
+		KAIT2EN_TEST_OMIT_MODULE="${KAIT2EN_TEST_OMIT_MODULE:-}" \
+		KAIT2EN_TEST_HIDE_TARGET="${KAIT2EN_TEST_HIDE_TARGET:-0}" \
 		KAIT2EN_SKIP_BOOTSTRAP=1 \
 		KAIT2EN_TEST_MODE=1 \
 		KAIT2EN_WORK_PARENT="$work" \
@@ -140,14 +145,34 @@ for bls_prefix in /boot /root/boot /@/boot; do
 	grep -Fq "build-input-kmod kernel=$target arguments=3" "$log"
 	# Forced, not merely added: the modules are deleted from the disk below.
 	grep -Fq \
-		'dracut --force --force-drivers t2bce_dma t2hid hid_t2magicmouse t2bce_core t2bce_vhci' \
+		'dracut --force --force-drivers t2bce_dma t2hid hid_t2magicmouse t2_trackpad_actuator t2_precision_trackpad t2bce_core t2bce_vhci' \
 		"$log"
 	grep -Fq 'rpm -e kmod-kait2en-input' "$log"
 	[[ ! -d "$fake_modules/$target/updates/kait2en-transition" ]]
 	[[ $(tail -n 1 "$log") == 'grubby --set-default-index=0' ]]
 	grep -Fxq 'phase=reboot_pending' "$fake_state/state"
 	grep -Fxq "target_kernel=$target" "$fake_state/state"
+	python3 - "$log" "$target" <<'CHECK'
+import pathlib
+import sys
+lines = pathlib.Path(sys.argv[1]).read_text().splitlines()
+upgrade = next(i for i, line in enumerate(lines) if line.startswith("dnf upgrade "))
+dependencies = lines.index("install-dependencies " + sys.argv[2])
+build = next(i for i, line in enumerate(lines) if line.startswith("build-input-kmod "))
+assert upgrade < dependencies < build
+assert lines[-1] == "grubby --set-default-index=0"
+CHECK
 done
+
+: >"$log"
+rm -f "$fake_state/state"
+if KAIT2EN_TEST_OMIT_MODULE=t2_precision_trackpad run_prepare 0 "$old" >"$work/missing-module.log" 2>&1; then
+	printf 'installer preparation accepted an RPM without the trackpad driver\n' >&2
+	exit 1
+fi
+grep -Fq 'temporary module is missing: t2_precision_trackpad' "$work/missing-module.log"
+! grep -Fq 'grubby --set-default-index=0' "$log"
+[[ ! -f "$fake_state/state" ]]
 
 : >"$log"
 rm -f "$fake_state/state"
@@ -160,6 +185,16 @@ fi
 
 printf 'phase=reboot_pending\ntarget_kernel=%s\n' "$target" >"$fake_state/state"
 touch "$fake_autostart" "$fake_prepare_launcher" "$fake_terminal_launcher"
+: >"$log"
+if KAIT2EN_TEST_HIDE_TARGET=1 run_prepare 0 "$target" --complete >"$work/missing-entry.log" 2>&1; then
+	printf 'installer marked complete without a boot entry for its configured kernel\n' >&2
+	exit 1
+fi
+grep -Fq "no boot loader entry for $target" "$work/missing-entry.log"
+grep -Fxq 'phase=reboot_pending' "$fake_state/state"
+[[ -e "$fake_autostart" && -e "$fake_prepare_launcher" && -d "$fake_transition" ]]
+
+: >"$log"
 run_prepare 0 "$target" --complete >/dev/null
 [[ ! -e "$fake_autostart" ]]
 [[ ! -e "$fake_prepare_launcher" ]]
@@ -168,3 +203,5 @@ run_prepare 0 "$target" --complete >/dev/null
 [[ ! -e "$fake_state/lock" ]]
 grep -Fxq 'phase=complete' "$fake_state/state"
 grep -Fxq "target_kernel=$target" "$fake_state/state"
+
+grep -Fxq 'grubby --set-default-index=0' "$log"

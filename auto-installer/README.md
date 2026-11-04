@@ -32,12 +32,14 @@ The repository checkout method remains available below for development builds.
    archive to a second USB drive. `sudo kait2en-rescue` mounts an already
    installed Fedora and chroots into it.
 4. Connect to Wi-Fi after the first login. One guided KaiT2en installer opens
-   automatically and updates Fedora. Reboot when its first phase succeeds.
+   automatically and updates Fedora. Reboot when its first phase prepares a
+   newer kernel.
    If no terminal appears, open one and run `kait2en-install` without
    `sudo`; the installer requests administrator access when needed.
 5. After the reboot, the same installer continues automatically with the
    regular, unchanged KaiT2en installer from GitHub `main`. Review its output
-   and reboot after success.
+   and reboot after success. If the prepared kernel is already running, setup
+   continues in the same window.
 
 Run `kait2en-install` again at any later time to fast-forward the clean Git
 checkout and rerun the regular project installer.
@@ -65,9 +67,9 @@ bash ./scripts/macos/prepare-fedora-installer.sh --help
 Build a target from a clean Git checkout:
 
 ```bash
-./scripts/fedora/build-installer.sh --target fedora-44
+./scripts/fedora/build-installer.sh
 ```
 
-A Fedora release consists of one `fedora-N.conf` target, one
-`fedora-N-editions.tsv` catalog, and the target-specific input compatibility
-patch. CI checks every catalog entry against Fedora's official `releases.json`.
+Only the current Fedora release is built. Its `fedora-N.conf` target and
+`fedora-N-editions.tsv` catalog are kept in `auto-installer/targets/`. CI checks
+every catalog entry against Fedora's official `releases.json`.
