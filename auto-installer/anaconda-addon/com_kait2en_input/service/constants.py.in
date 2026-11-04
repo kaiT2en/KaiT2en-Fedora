@@ -9,6 +9,8 @@ MODULES = (
     "t2bce_dma",
     "t2hid",
     "hid_t2magicmouse",
+    "t2_trackpad_actuator",
+    "t2_precision_trackpad",
     "t2bce_core",
     "t2bce_vhci",
 )

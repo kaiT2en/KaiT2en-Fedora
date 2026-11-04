@@ -9,7 +9,7 @@ OUTPUT_DIR=${3:-/work/out}
 required_variables=(
 	TARGET_ID FEDORA_RELEASE ARCH DEFAULT_EDITION EDITIONS_FILE
 	ISO_KERNEL_PATH ISO_INITRD_PATH ISO_KERNEL_RELEASE ANACONDA_VERSION
-	KERNEL_DEVEL_SHA256 FEDORA_METALINK FEDORA_ARCHIVE_BASEURL INPUT_COMPAT_PATCH
+	KERNEL_DEVEL_SHA256 FEDORA_METALINK FEDORA_ARCHIVE_BASEURL
 	ARTIFACT_BASENAME
 	SOURCE_DATE_EPOCH
 )
@@ -72,7 +72,6 @@ run_dnf_with_fallback '' install -y \
 	gzip \
 	kmod \
 	make \
-	patch \
 	python3 \
 	rpm-build \
 	tar \
@@ -108,8 +107,7 @@ RPM_PATH=$(
 		"$SOURCE_ROOT/auto-installer/build-input-kmod.sh" \
 		"$SOURCE_ROOT" \
 		"$ISO_KERNEL_RELEASE" \
-		"$BUILD_ROOT/input-rpm" \
-		"auto-installer/patches/$INPUT_COMPAT_PATCH" |
+		"$BUILD_ROOT/input-rpm" |
 		tail -n 1
 )
 [[ -n "$RPM_PATH" && -f "$RPM_PATH" ]]
@@ -126,12 +124,20 @@ mkdir -p "$EXTRACT_ROOT"
 	rpm2cpio "$RPM_PATH" | cpio -idm --quiet
 )
 RPM_FILE_LIST=$(rpm -qpl "$RPM_PATH")
-for module in t2bce_dma t2bce_core t2bce_vhci t2hid hid_t2magicmouse; do
+for module in t2bce_dma t2bce_core t2bce_vhci t2hid hid_t2magicmouse t2_precision_trackpad t2_trackpad_actuator; do
 	grep -Eq "/${module}\.ko$" <<<"$RPM_FILE_LIST"
 	VERMAGIC=$(modinfo -F vermagic \
 		"$EXTRACT_ROOT/usr/lib/modules/$ISO_KERNEL_RELEASE/updates/kait2en/$module.ko")
 	grep -Eq "^${ISO_KERNEL_RELEASE//./\\.} " <<<"$VERMAGIC"
 done
+
+TRACKPAD_ALIASES=$(modinfo -F alias \
+	"$EXTRACT_ROOT/usr/lib/modules/$ISO_KERNEL_RELEASE/updates/kait2en/t2_precision_trackpad.ko")
+for product in 0278 027A 027B 027C 027D 027E 027F 0280 0340; do
+	grep -Fq "v000005ACp0000$product" <<<"$TRACKPAD_ALIASES"
+done
+
+bash "$SOURCE_ROOT/scripts/tests/transition-rpm.sh" "$RPM_PATH" "$ISO_KERNEL_RELEASE"
 
 mkdir -p "$LAYOUT/scripts/macos"
 install -m 0644 "$SOURCE_ROOT/LICENSE" "$LAYOUT/LICENSE"
@@ -200,7 +206,7 @@ mkdir -p \
 	"$TRANSITION_SOURCE/auto-installer"
 install -m 0644 "$SOURCE_ROOT/LICENSE" "$TRANSITION_SOURCE/"
 printf '%s\n' "$SOURCE_DATE_EPOCH" >"$TRANSITION_SOURCE/source-date-epoch"
-for module in t2bce_dma t2bce_core t2bce_vhci t2touchbar hid_t2magicmouse; do
+for module in t2bce_dma t2bce_core t2bce_vhci t2touchbar hid_t2magicmouse t2_precision_trackpad t2_trackpad_actuator; do
 	cp -a "$SOURCE_ROOT/modules/$module" "$TRANSITION_SOURCE/modules/"
 done
 install -m 0755 "$SOURCE_ROOT/auto-installer/build-input-kmod.sh" \
@@ -237,7 +243,7 @@ mkdir -p \
 	"$INITRAMFS_ROOT/var/lib/dracut/hooks/pre-trigger" \
 	"$INITRAMFS_ROOT/var/lib/dracut/hooks/pre-pivot"
 ln -s kmod "$INITRAMFS_ROOT/usr/bin/insmod"
-for module in t2bce_dma t2bce_core t2bce_vhci t2hid hid_t2magicmouse; do
+for module in t2bce_dma t2bce_core t2bce_vhci t2hid hid_t2magicmouse t2_precision_trackpad t2_trackpad_actuator; do
 	install -m 0644 \
 		"$EXTRACT_ROOT/usr/lib/modules/$ISO_KERNEL_RELEASE/updates/kait2en/$module.ko" \
 		"$MODULE_TARGET/"
@@ -309,6 +315,12 @@ gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 	grep -Fx 'usr/share/kait2en-installer/transition-source/auto-installer/build-input-kmod.sh' >/dev/null
 gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 	grep -Fx 'usr/share/kait2en-installer/transition-source/modules/t2bce_core/t2bce_main.c' >/dev/null
+for module in t2_precision_trackpad t2_trackpad_actuator; do
+	gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
+		grep -Fx "usr/share/kait2en-installer/transition-source/modules/$module/$module.c" >/dev/null
+	gzip -dc "$INITRAMFS_IMAGE" | cpio -it --quiet |
+		grep -Fx "usr/lib/modules/$ISO_KERNEL_RELEASE/updates/kait2en/$module.ko" >/dev/null
+done
 ! gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 	grep -F 'transition-source/auto-installer/patches/' >/dev/null
 gzip -dc "$INITRAMFS_IMAGE" | cpio -it --quiet |

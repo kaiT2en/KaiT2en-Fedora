@@ -5,7 +5,6 @@ set -Eeuo pipefail
 SOURCE_ROOT=${1:?source root is required}
 KERNEL_RELEASE=${2:?kernel release is required}
 OUTPUT_DIR=${3:?output directory is required}
-COMPAT_PATCH=${4:-}
 
 [[ "$KERNEL_RELEASE" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+\.fc[0-9]+\.([a-z0-9_]+)$ ]] || {
 	printf 'invalid Fedora kernel release: %s\n' "$KERNEL_RELEASE" >&2
@@ -27,13 +26,6 @@ for command in make rpmbuild tar; do
 		exit 1
 	}
 done
-if [[ -n "$COMPAT_PATCH" ]]; then
-	command -v patch >/dev/null 2>&1 || {
-		printf 'missing input-kmod build command: patch\n' >&2
-		exit 1
-	}
-fi
-
 if [[ -n ${KAIT2EN_KMOD_WORK_ROOT:-} ]]; then
 	work=$KAIT2EN_KMOD_WORK_ROOT
 	rm -rf "$work"
@@ -52,18 +44,9 @@ mkdir -p "$rpm_root"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} \
 	"$source_stage/modules" "$OUTPUT_DIR"
 
 install -m 0644 "$SOURCE_ROOT/LICENSE" "$source_stage/LICENSE"
-for module in t2bce_dma t2bce_core t2bce_vhci t2touchbar hid_t2magicmouse; do
+for module in t2bce_dma t2bce_core t2bce_vhci t2touchbar hid_t2magicmouse t2_precision_trackpad t2_trackpad_actuator; do
 	cp -a "$SOURCE_ROOT/modules/$module" "$source_stage/modules/$module"
 done
-
-if [[ -n "$COMPAT_PATCH" ]]; then
-	[[ "$COMPAT_PATCH" == /* ]] || COMPAT_PATCH="$SOURCE_ROOT/$COMPAT_PATCH"
-	[[ -f "$COMPAT_PATCH" ]] || {
-		printf 'input compatibility patch is missing: %s\n' "$COMPAT_PATCH" >&2
-		exit 1
-	}
-	patch --directory="$source_stage" --strip=1 --input="$COMPAT_PATCH"
-fi
 
 tar --sort=name \
 	--mtime="@$SOURCE_DATE_EPOCH" \

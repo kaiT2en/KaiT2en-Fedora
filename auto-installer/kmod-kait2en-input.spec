@@ -3,7 +3,7 @@
 
 Name:           kmod-kait2en-input
 Version:        0.1
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Temporary T2 Mac input drivers for the Fedora installer kernel
 License:        GPL-2.0-only OR GPL-2.0-or-later
 URL:            https://github.com/kait2en/KaiT2en-Fedora
@@ -29,6 +29,8 @@ make -C modules/t2bce_core KVERSION=%{kernel_release}
 make -C modules/t2bce_vhci KVERSION=%{kernel_release}
 make -C modules/t2touchbar KDIR=/usr/src/kernels/%{kernel_release} KVER=%{kernel_release}
 make -C modules/hid_t2magicmouse KDIR=/usr/src/kernels/%{kernel_release} KVER=%{kernel_release}
+make -C modules/t2_precision_trackpad KDIR=/usr/src/kernels/%{kernel_release} KVER=%{kernel_release}
+make -C modules/t2_trackpad_actuator KDIR=/usr/src/kernels/%{kernel_release} KVER=%{kernel_release}
 
 %install
 install -d -m 0755 %{buildroot}/usr/lib/modules/%{kernel_release}/updates/kait2en
@@ -43,6 +45,11 @@ install -m 0644 modules/t2touchbar/t2hid.ko \
 install -m 0644 modules/hid_t2magicmouse/hid_t2magicmouse.ko \
     %{buildroot}/usr/lib/modules/%{kernel_release}/updates/kait2en/
 
+install -m 0644 modules/t2_precision_trackpad/t2_precision_trackpad.ko \
+    %{buildroot}/usr/lib/modules/%{kernel_release}/updates/kait2en/
+install -m 0644 modules/t2_trackpad_actuator/t2_trackpad_actuator.ko \
+    %{buildroot}/usr/lib/modules/%{kernel_release}/updates/kait2en/
+
 %post
 /usr/sbin/depmod -a %{kernel_release} >/dev/null 2>&1 || :
 
@@ -54,5 +61,8 @@ install -m 0644 modules/hid_t2magicmouse/hid_t2magicmouse.ko \
 /usr/lib/modules/%{kernel_release}/updates/kait2en/*.ko
 
 %changelog
+* Tue Nov 03 2026 KaiT2en maintainers <maintainers@kait2en.invalid> - 0.1-2
+- Include the precision trackpad and haptic actuator drivers
+
 * Tue Jul 14 2026 KaiT2en maintainers <maintainers@kait2en.invalid> - 0.1-1
 - Initial Fedora installer transition package

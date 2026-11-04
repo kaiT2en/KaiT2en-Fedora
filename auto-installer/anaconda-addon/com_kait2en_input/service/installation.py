@@ -1,3 +1,4 @@
+import io
 import os
 import shutil
 
@@ -220,10 +221,15 @@ class InstallTransitionDriversTask(Task):
         shutil.copy2(source_rpm, target_rpm)
 
         try:
-            util.execWithRedirect(
+            self._run_checked(
                 "rpm",
-                ["--install", "--replacepkgs", os.path.join("/tmp", RPM_FILENAME)],
-                root=sysroot,
+                [
+                    "--install",
+                    "--replacepkgs",
+                    "--nosignature",
+                    os.path.join("/tmp", RPM_FILENAME),
+                ],
+                sysroot,
             )
         finally:
             if os.path.exists(target_rpm):
@@ -237,26 +243,40 @@ class InstallTransitionDriversTask(Task):
             if not os.path.isfile(path):
                 raise RuntimeError("Installed KaiT2en module is missing: " + path)
 
-        util.execWithRedirect("depmod", ["-a", KERNEL_RELEASE], root=sysroot)
+        self._run_checked("depmod", ["-a", KERNEL_RELEASE], sysroot)
         initramfs = "/boot/initramfs-{}.img".format(KERNEL_RELEASE)
-        util.execWithRedirect(
+        self._run_checked(
             "dracut",
             [
                 "--force",
-                "--add-drivers",
+                "--force-drivers",
                 " ".join(MODULES),
                 initramfs,
                 KERNEL_RELEASE,
             ],
-            root=sysroot,
+            sysroot,
         )
 
-        listing = util.execWithCapture("lsinitrd", [initramfs], root=sysroot)
+        listing = self._run_checked("lsinitrd", [initramfs], sysroot)
         for module in MODULES:
             if module + ".ko" not in listing:
                 raise RuntimeError(
                     "KaiT2en module is missing from the target initramfs: " + module
                 )
+
+    @staticmethod
+    def _run_checked(command, arguments, sysroot):
+        output = io.StringIO()
+        status = util.execWithRedirect(
+            command, arguments, root=sysroot, stdout=output
+        )
+        if status != 0:
+            raise RuntimeError(
+                "KaiT2en {} failed (exit {}):\n{}".format(
+                    command, status, output.getvalue().strip()
+                )
+            )
+        return output.getvalue()
 
 
 class ConfigureKernelArgumentsTask(Task):

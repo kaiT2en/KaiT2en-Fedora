@@ -12,28 +12,8 @@ permissions:
   contents: read
 
 jobs:
-  targets:
-    runs-on: ubuntu-24.04
-    outputs:
-      matrix: ${{ steps.targets.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@v5
-      - id: targets
-        shell: bash
-        run: |
-          matrix="$({
-            git ls-files 'auto-installer/targets/fedora-*.conf' |
-              sed -e 's|.*/||' -e 's|\.conf$||'
-          } | jq -R -s -c 'split("\n") | map(select(length > 0))')"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-
   build:
-    needs: targets
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        target: ${{ fromJSON(needs.targets.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v5
       - name: Static checks
@@ -44,12 +24,12 @@ jobs:
             --output /tmp/fedora-releases.json \
             https://fedoraproject.org/releases.json
           FEDORA_RELEASES_JSON=/tmp/fedora-releases.json \
-            bash scripts/tests/edition-catalog.sh "${{ matrix.target }}"
-      - name: Build ${{ matrix.target }}
-        run: ./scripts/fedora/build-installer.sh --target "${{ matrix.target }}"
+            bash scripts/tests/edition-catalog.sh
+      - name: Build installer kit
+        run: ./scripts/fedora/build-installer.sh
       - uses: actions/upload-artifact@v6
         with:
-          name: installer-${{ matrix.target }}
+          name: installer-kit
           path: dist/*
           if-no-files-found: error
 
@@ -63,16 +43,15 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v7
         with:
+          name: installer-kit
           path: release-assets
-          merge-multiple: true
       - name: Generate macOS curl bootstrap
         shell: bash
         run: |
-          archive="$({
-            find release-assets -maxdepth 1 -type f \
-              -name 'KaiT2en-Fedora-*-Installer-x86_64.zip'
-          } | sort -V | tail -n 1)"
-          test -n "$archive"
+          archives=(release-assets/KaiT2en-Fedora-*-Installer-x86_64.zip)
+          test "${#archives[@]}" -eq 1
+          archive=${archives[0]}
+          test -f "$archive"
           basename="${archive##*/}"
           basename="${basename%.zip}"
           sed \

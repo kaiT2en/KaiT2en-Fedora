@@ -138,7 +138,11 @@ run_project_installer() {
 		return 1
 	fi
 	if [[ "$mode" == initial ]]; then
-		sudo "$prepare" --complete
+		if ! sudo "$prepare" --complete; then
+			printf '\nKaiT2en setup could not finalize the configured boot kernel.\n' >&2
+			printf 'The installation is not marked complete. Run kait2en-install again to retry.\n' >&2
+			return 1
+		fi
 	fi
 
 	printf '\nKaiT2en %s completed successfully.\n' "$result_label"

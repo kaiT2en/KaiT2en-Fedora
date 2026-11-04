@@ -3,7 +3,7 @@
 kernel_release="@KERNEL_RELEASE@"
 module_root="/usr/lib/modules/$kernel_release/updates/kait2en"
 
-for module in t2bce_dma t2hid hid_t2magicmouse t2bce_core t2bce_vhci; do
+for module in t2bce_dma t2hid hid_t2magicmouse t2_trackpad_actuator t2_precision_trackpad t2bce_core t2bce_vhci; do
     if grep -q "^${module} " /proc/modules; then
         continue
     fi
