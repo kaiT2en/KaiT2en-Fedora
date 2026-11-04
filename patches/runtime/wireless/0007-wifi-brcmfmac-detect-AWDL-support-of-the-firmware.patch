@@ -1,8 +1,8 @@
 From: Andre Eikmeyer <dev@deq.rocks>
 Subject: [PATCH] wifi: brcmfmac: detect AWDL support of the firmware
 
-The Apple firmware of the BCM4355, BCM4364 and BCM4377 runs Apple
-Wireless Direct Link (AWDL) itself and announces it with "awdl" in its
+The Apple firmware of the BCM4364 and BCM4377 runs Apple Wireless
+Direct Link (AWDL) itself and announces it with "awdl" in its
 capabilities. Add the feature flag for it.
 
 An AWDL interface is created with interface_create version 3 and
@@ -10,15 +10,20 @@ interface type 2. The host gives the MAC address, the interface index
 and the BSSID, which the flags 0x2, 0x8 and 0x10 select. Add the
 definitions for the interface type and the two new flags.
 
+The capability alone is not enough. The BCM4350 firmware 7.35.180.133
+lists "awdl" too but answers every interface_create, including the
+version query, with BCME_UNSUPPORTED. Keep the flag only when the
+firmware reports interface_create version 3.
+
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
- drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c    | 1 +
- drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h    | 3 ++-
- drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h | 3 +++
- 3 files changed, 6 insertions(+), 1 deletion(-)
+ .../broadcom/brcm80211/brcmfmac/feature.c     | 26 +++++++++++++++++++
+ .../broadcom/brcm80211/brcmfmac/feature.h     |  3 ++-
+ .../broadcom/brcm80211/brcmfmac/fwil_types.h  |  3 +++
+ 3 files changed, 31 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
-index 0677f76..56bf68e 100644
+index 0677f76..b8baf12 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
 @@ -45,6 +45,7 @@ static const struct brcmf_feat_fwcap brcmf_fwcap_map[] = {
@@ -29,6 +34,45 @@ index 0677f76..56bf68e 100644
  };
  
  #ifdef DEBUG
+@@ -292,6 +293,29 @@ static int brcmf_feat_fwcap_debugfs_read(struct seq_file *seq, void *data)
+ 	return 0;
+ }
+ 
++/**
++ * brcmf_feat_awdl_check() - keep AWDL only with interface_create version 3.
++ *
++ * @ifp: interface to query.
++ *
++ * The AWDL interface is created with interface_create version 3. The
++ * BCM4350 firmware 7.35.180.133 lists "awdl" but answers every
++ * interface_create with BCME_UNSUPPORTED.
++ */
++static void brcmf_feat_awdl_check(struct brcmf_if *ifp)
++{
++	u32 ver = 0;
++	s32 err;
++
++	err = brcmf_fil_bsscfg_int_query(ifp, "interface_create", &ver);
++	if (!err && ver == WL_INTERFACE_CREATE_VER_3)
++		return;
++
++	brcmf_dbg(INFO, "disabling AWDL, interface_create version %u (%d)\n",
++		  ver, err);
++	ifp->drvr->feat_flags &= ~BIT(BRCMF_FEAT_AWDL);
++}
++
+ void brcmf_feat_attach(struct brcmf_pub *drvr)
+ {
+ 	struct brcmf_if *ifp = brcmf_get_ifp(drvr, 0);
+@@ -301,6 +325,8 @@ void brcmf_feat_attach(struct brcmf_pub *drvr)
+ 	s32 err;
+ 
+ 	brcmf_feat_firmware_capabilities(ifp);
++	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_AWDL))
++		brcmf_feat_awdl_check(ifp);
+ 	memset(&gscan_cfg, 0, sizeof(gscan_cfg));
+ 	if (drvr->bus_if->chip != BRCM_CC_43430_CHIP_ID &&
+ 	    drvr->bus_if->chip != BRCM_CC_4345_CHIP_ID &&
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
 index 31f8695..3927240 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h

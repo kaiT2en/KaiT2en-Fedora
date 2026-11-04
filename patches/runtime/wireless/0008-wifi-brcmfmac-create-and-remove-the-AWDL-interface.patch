@@ -59,7 +59,7 @@ index e5ca0f5..36c6341 100644
  		fwsignal.o
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 new file mode 100644
-index 0000000..98f2506
+index 0000000..485ed74
 --- /dev/null
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 @@ -0,0 +1,268 @@
@@ -67,7 +67,7 @@ index 0000000..98f2506
 +/*
 + * Copyright (c) 2026 André Eikmeyer <dev@deq.rocks>
 + *
-+ * AWDL interface of the Apple firmware of the BCM4355, BCM4364 and BCM4377.
++ * AWDL interface of the Apple firmware of the BCM4364 and BCM4377.
 + *
 + * The firmware runs Apple Wireless Direct Link itself once the host creates
 + * an interface of type AWDL with interface_create and configures it through
