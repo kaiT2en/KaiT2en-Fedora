@@ -1,37 +1,33 @@
 From 47f161682166494214a503bb9ce60a02e81f1d0a Mon Sep 17 00:00:00 2001
 From: Andre Eikmeyer <dev@deq.rocks>
 Date: Tue, 29 Sep 2026 23:08:19 +0200
-Subject: [PATCH] platform/x86: apple-gmux: follow AppleMuxControl2 on T2 Macs
+Subject: [PATCH] platform/x86: apple-gmux: fix mailbox, interrupt and dGPU power on T2 Macs
 
-T2 Macs reach gmux through a mailbox in the eSPI window. Several parts of
-the driver differ from what macOS does there, and on the MacBookPro16,1 the
-differences end in hard lockups reported by the T2 as "x86 CPU CATERR".
-Align the driver with AppleMuxControl2 8.1.11:
+T2 Macs reach gmux through a mailbox in the eSPI window. On the
+MacBookPro16,1 the driver ends in hard lockups reported by the T2 as
+"x86 CPU CATERR". Change the driver as follows:
 
 - Poll the mailbox command register once per millisecond for up to 200 ms
   and skip an access while the mailbox is still busy, instead of busy
   polling every 100 us for 20 ms and writing the next command anyway.
 
 - Install a handler for the gmux GPE instead of relying on the _L15
-  notification. Like the macOS interrupt source, keep the GPE disabled
-  until the interrupt has been handled: ignore a zero status, mask gmux
+  notification. Keep the GPE disabled until the interrupt has been handled: ignore a zero status, mask gmux
   interrupts, evaluate GMLV, call GMSP(0), acknowledge until the status
   reads zero and unmask. This ends the flood of status=0 interrupts after
   every discrete GPU power-up.
 
-- Serialize power sequences and interrupt handling, as both run on the
-  same workloop in macOS, so the interrupt raised by the first power port
-  write is handled after the sequence.
+- Serialize power sequences and interrupt handling, so the interrupt
+  raised by the first power port write is handled after the sequence.
 
-- Add the dGPU power sequences AppleMuxControl2 uses on the
-  MacBookPro15,1 (PWG1/PWG3) and MacBookPro16,1/16,4 (PWRD with saved and
+- Add the dGPU power sequences of the MacBookPro15,1 (PWG1/PWG3) and MacBookPro16,1/16,4 (PWRD with saved and
   restored PCI state of the GPU, its HDA function and the bridges above
   them).
 
 - On resume, only power down a dGPU that came back powered.
 
 - Store the GPU driving the panel in the gpu-active EFI variable before
-  sleep and power-off, as AppleMuxControl2 does.
+  sleep and power-off.
 
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
@@ -60,7 +56,7 @@ index 9c728ac..019572a 100644
  	acpi_handle dhandle;
  	int gpe;
 +	bool gpe_enabled;
-+	/* Serializes power sequences and interrupt handling like the AGC workloop. */
++	/* Serializes power sequences and interrupt handling. */
 +	struct mutex power_lock;
 +	struct work_struct interrupt_work;
  	bool external_switchable;
@@ -82,24 +78,24 @@ index 9c728ac..019572a 100644
  static struct apple_gmux_data *apple_gmux_data;
  
 +/*
-+ * MacBookPro16,1 and 16,4 use the PWRD path, not PWG1/PWG3: AppleMuxControl2
-+ * maps both board-ids to the same config, which does not set the
-+ * PowerUpCompensation property that gates the two PWG methods, and calls
-+ * PWRD(0) on power-up and PWRD(1) on power-down instead. It brackets that
-+ * with save/restoreDeviceState on the GPU, its HDA function and the bridges
-+ * above them, since all of them lose config space when the rails drop.
++ * MacBookPro16,1 and 16,4 power the dGPU through PWRD, PWRD(0) on
++ * power-up and PWRD(1) on power-down. PWG1 and PWG3 stay unused on these
++ * models. The GPU, its HDA function and the bridges above them lose their
++ * config space when the rails drop, so their PCI state is saved before
++ * power-down and restored after power-up.
 + *
 + * On power-up it writes no gmux port: PWRD(0) calls PUPD(1), which writes
 + * GMUX_PORT_DISCRETE_POWER 3 through the gmux mailbox itself.
 + *
-+ * SaveRootPort is 6 in that config, which is the capacity of the bridge
-+ * array; the kext stops at the first empty slot, so walk to the root port.
++ * The state is saved for each bridge from the GPU up to the root port, at
++ * most GMUX_DGPU_MAX_BRIDGES of them, stopping at the first missing
++ * bridge.
 + */
 +#define GMUX_DGPU_MAX_BRIDGES 6
 +
-+/* GPUMinimumOffTime of the AppleMuxControl2 config for these models. */
++/* Minimum time the dGPU stays off. */
 +#define GMUX_DGPU_MIN_OFF_MS 200
-+/* Config space wait of AppleMuxControl2 after power-up. */
++/* Wait before config space access after power-up. */
 +#define GMUX_DGPU_CFG_WAIT_MS 180
 +
 +static int gmux_call_pwrd(struct apple_gmux_data *gmux_data, bool power_down)
@@ -164,8 +160,8 @@ index 9c728ac..019572a 100644
 +
 +/*
 + * Restore, then read BAR0 back and compare it against what was saved: the
-+ * writes are silently dropped if the device is not answering yet, which is
-+ * how the kext detects a restore that did not take.
++ * writes are silently dropped if the device is not answering yet, so a
++ * mismatch shows a restore that did not take.
 + */
 +static int gmux_restore_function(struct pci_dev *pdev, u32 bar0)
 +{
@@ -304,12 +300,12 @@ index 9c728ac..019572a 100644
  }
  
 -static int gmux_mmio_wait(struct apple_gmux_data *gmux_data)
-+/* AppleMuxControl2 returns this when the mailbox stays busy. */
++/* Read value while the mailbox stays busy. */
 +#define GMUX_MMIO_BUSY_VALUE	0xdeadbeef
 +#define GMUX_MMIO_WAIT_TRIES	200
 +
 +/*
-+ * Like AppleMuxControl2: poll the command register once per millisecond for
++ * Poll the command register once per millisecond for
 + * up to 200 ms. Returns true while the mailbox is still busy.
 + */
 +static bool gmux_mmio_busy(struct apple_gmux_data *gmux_data)
@@ -336,7 +332,7 @@ index 9c728ac..019572a 100644
  }
  
 -static u8 gmux_mmio_read8(struct apple_gmux_data *gmux_data, int port)
-+/* Like AppleMuxControl2, skip the access while the mailbox is busy. */
++/* Skip the access while the mailbox is busy. */
 +static u32 gmux_mmio_read(struct apple_gmux_data *gmux_data, int port,
 +			  int size)
  {
@@ -585,7 +581,7 @@ index 9c728ac..019572a 100644
 - * path. On MMIO gmux's, this seems to lead to us being unable to clear interrupts,
 - * unless we call GMSP(0). Without this, there is a flood of status=0 interrupts
 - * that can't be cleared. This issue seems to be unique to MMIO gmux's.
-+ * Like AppleMuxControl2, the driver installs its own handler for the GPE, which
++ * The driver installs its own handler for the GPE, which
 + * replaces _L15, and calls GMSP(0) on MMIO gmux's before unmasking interrupts.
   */
  
@@ -609,7 +605,7 @@ index 9c728ac..019572a 100644
  }
  
 -static void gmux_notify_handler(acpi_handle device, u32 value, void *context)
-+/* AppleMuxControl2 enables and disables its GPE interrupt source like this. */
++/* Enable and disable the GPE interrupt source. */
 +static void gmux_start_interrupts(struct apple_gmux_data *gmux_data)
 +{
 +	gmux_reset_interrupt_polarity(gmux_data);
@@ -629,7 +625,7 @@ index 9c728ac..019572a 100644
 +}
 +
 +/*
-+ * Like macOS, handle the level-triggered gmux GPE directly instead of through
++ * Handle the level-triggered gmux GPE directly instead of through
 + * _L15, and keep it disabled until the interrupt has been handled.
 + */
 +static u32 gmux_gpe_handler(acpi_handle gpe_device, u32 gpe_number,
@@ -642,7 +638,7 @@ index 9c728ac..019572a 100644
 +}
 +
 +/*
-+ * Like AppleMuxControl2: ignore interrupts without a pending status, mask
++ * Ignore interrupts without a pending status, mask
 + * interrupts, acknowledge until the status reads 0, then unmask.
 + */
 +static void gmux_interrupt_work(struct work_struct *work)
@@ -702,7 +698,7 @@ index 9c728ac..019572a 100644
 +static efi_char16_t gmux_gpu_active_name[] = L"gpu-active";
 +
 +/*
-+ * AppleMuxControl2 stores the GPU driving the panel in gpu-active before
++ * Store the GPU driving the panel in gpu-active before
 + * sleep and power-off: 1 for the integrated GPU, 0 for the discrete one.
 + */
 +static void gmux_write_gpu_active(struct apple_gmux_data *gmux_data)
@@ -754,7 +750,7 @@ index 9c728ac..019572a 100644
 +	gmux_start_interrupts(gmux_data);
  	gmux_write_switch_state(gmux_data);
 -	if (gmux_data->power_state == VGA_SWITCHEROO_OFF)
-+	/* Like AppleMuxControl2, only power down a dGPU that came back powered. */
++	/* Only power down a dGPU that came back powered. */
 +	if (gmux_data->power_state == VGA_SWITCHEROO_OFF &&
 +	    (gmux_read8(gmux_data, GMUX_PORT_DISCRETE_POWER) & 3) == 3)
  		gmux_set_discrete_state(gmux_data, gmux_data->power_state);

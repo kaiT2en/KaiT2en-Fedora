@@ -20,11 +20,16 @@ S22 Ultra as client:
   offload not advertised: 4-way handshake by wpa_supplicant completes,
                           AP-STA-CONNECTED, DHCP lease, traffic flows
 
-Clear BRCMF_FEAT_FWAUTH on the BCM4355, BCM4364 and BCM4377, the chips
-in Apple's T2 Macs, so the host runs the handshake.
+Clear BRCMF_FEAT_FWAUTH on the chips in Apple's T2 Macs, so the host
+runs the handshake.
 
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
+Tested-by: Aditya Garg <aditya.garg@linux.dev>
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
+The KaiT2en community runs this patch with its kernels, no regression
+was reported.
+
  .../wireless/broadcom/brcm80211/brcmfmac/feature.c | 14 ++++++++++++++
  1 file changed, 14 insertions(+)
 

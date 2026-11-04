@@ -1,0 +1,98 @@
+From f10518845053103aaf98394190cd0212b14a5f9a Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Wed, 4 Nov 2026 13:18:51 +0100
+Subject: [PATCH 0/7] wifi: brcmfmac: AWDL for AirDrop on Apple T2 Macs
+
+
+This series adds AWDL support to brcmfmac, so Linux on the Apple T2 Macs
+can send and receive files over AirDrop with Macs, iPhones and iPads.
+
+AirDrop runs over Apple Wireless Direct Link (AWDL). On these Macs the
+Apple firmware runs AWDL itself. The host creates an AWDL interface and
+sets its parameters. From then on the firmware keeps the AWDL schedule,
+sends the AWDL frames it gets from the host and carries data frames to
+and from the peers. Election, peer discovery and AirDrop run in user
+space.
+
+The driver enables AWDL on any firmware that announces "awdl" in its
+capabilities and supports interface_create version 3. The linux-firmware
+image for the BCM4350 (7.35.180.133) on a pre-T2 MacBookPro14,1
+announces "awdl" and answers interface_create with BCME_UNSUPPORTED, so
+it stays without the feature. Other Apple chips, such as the BCM4355,
+are untested.
+
+The KaiT2en community, about 280 members, runs this series with its
+kernels. Users reported it working with the BCM4364 and BCM4377 on the
+MacBookPro15,1, 15,2, 15,3, 15,4, 16,1, 16,4, MacBookAir9,1 and
+iMac20,1, and nobody reported a regression. AirDrop transfers on the
+MacBookPro16,1 and 16,4 are slower than on the other models, the cause
+is still open.
+
+  1    match firmware capabilities as whole words
+  2    move the interface_create definitions to fwil_types.h
+  3    detect AWDL support of the firmware
+  4    create and remove the AWDL interface
+  5    add the AWDL data path
+  6    add vendor commands for AWDL
+  7    pass AWDL frames and role changes to user space
+
+Patch 1 is a fix on its own and carries a Fixes tag. It is here because
+patch 3 adds an entry next to the lines it changes.
+
+The AWDL interface is a network device "awdl%d" outside cfg80211. User
+space talks to the driver through typed vendor commands and events of
+the Broadcom OUI: start, stop, frames, sync, peer add and remove, and
+events for received frames and role changes. Creating the interface
+needs RTNL and vendor commands run with the wiphy lock only, so
+AWDL_START and AWDL_STOP run in a work item and report their result as
+vendor events. The driver sets the firmware parameters itself.
+
+The firmware interface was worked out by tracing. A dtrace script
+recorded the iovar calls macOS 15.4.1 made to the firmware on a
+MacBookAir9,1 (BCM4377) while AirDrop was opened and closed in Finder.
+The other way round, the MacBookAir9,1 was traced as AWDL peer while a
+MacBookPro15,1 (BCM4364) brought AWDL up under Linux, together with the
+AWDL frames macOS received and the console and events of the BCM4364
+firmware. The BCM4364 handling in patch 6 comes from these runs. The
+iovars, their order, their values and the AWDL frames come from these
+traces and from the frames the firmware passes up.
+
+The user space side is t2-drop, part of KaiT2en-Fedora and published
+under the GPL:
+
+  https://github.com/kaiT2en/KaiT2en-Fedora/tree/main/apps/t2-drop
+
+With it, AirDrop works in both directions.
+
+Comments on the vendor command interface are welcome in particular.
+nl80211 has no AWDL interface type, and the AWDL schedule and frame
+exchange run in the firmware here.
+
+Andre Eikmeyer (7):
+  wifi: brcmfmac: match firmware capabilities as whole words
+  wifi: brcmfmac: move the interface_create definitions to fwil_types.h
+  wifi: brcmfmac: detect AWDL support of the firmware
+  wifi: brcmfmac: create and remove the AWDL interface
+  wifi: brcmfmac: add the AWDL data path
+  wifi: brcmfmac: add vendor commands for AWDL
+  wifi: brcmfmac: pass AWDL frames and role changes to user space
+
+ .../broadcom/brcm80211/brcmfmac/Makefile      |    3 +-
+ .../broadcom/brcm80211/brcmfmac/awdl.c        | 1043 +++++++++++++++++
+ .../broadcom/brcm80211/brcmfmac/awdl.h        |  113 ++
+ .../broadcom/brcm80211/brcmfmac/cfg80211.c    |   50 +-
+ .../broadcom/brcm80211/brcmfmac/core.c        |   80 +-
+ .../broadcom/brcm80211/brcmfmac/core.h        |    7 +
+ .../broadcom/brcm80211/brcmfmac/feature.c     |   40 +-
+ .../broadcom/brcm80211/brcmfmac/feature.h     |    3 +-
+ .../broadcom/brcm80211/brcmfmac/fweh.c        |   19 +
+ .../broadcom/brcm80211/brcmfmac/fweh.h        |    5 +
+ .../broadcom/brcm80211/brcmfmac/fwil_types.h  |   46 +
+ .../broadcom/brcm80211/brcmfmac/vendor.c      |   86 ++
+ .../broadcom/brcm80211/brcmfmac/vendor.h      |   98 ++
+ 13 files changed, 1537 insertions(+), 56 deletions(-)
+ create mode 100644 drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
+ create mode 100644 drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
+
+
+base-commit: 991a73f4909f1348ffb4b38765cdb522a775e4c2

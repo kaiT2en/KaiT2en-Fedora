@@ -1,0 +1,47 @@
+From 226b763e602980f73628e9896d7e4163bb053f2a Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Wed, 4 Nov 2026 13:14:30 +0100
+Subject: [PATCH 3/4] Revert "Bluetooth: hci_event: strip Broadcom vendor bits
+ from legacy adv report type"
+
+This reverts commit 88397423671f2b54119a6162a1834d207dcf1a81.
+
+The commit clears the upper bits of the legacy LE Advertising Report
+event type for every controller with manufacturer 15, Broadcom. The
+reports of these bits, in its own commit message and here, all come
+from the Broadcom controllers of the Apple T2 Macs.
+
+The previous patch clears the bits in hci_bcm on Apple machines and in
+hci_bcm4377, the drivers of these controllers, before the event reaches
+the core. That makes the check in hci_le_adv_report_evt() redundant
+for them.
+
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
+Tested-by: Aditya Garg <aditya.garg@linux.dev>
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ net/bluetooth/hci_event.c | 11 -----------
+ 1 file changed, 11 deletions(-)
+
+diff --git a/net/bluetooth/hci_event.c b/net/bluetooth/hci_event.c
+index 736dd2f741e..0675c224f6c 100644
+--- a/net/bluetooth/hci_event.c
++++ b/net/bluetooth/hci_event.c
+@@ -6683,17 +6683,6 @@ static void hci_le_adv_report_evt(struct hci_dev *hdev, void *data,
+ 
+ 		hci_store_wake_reason(hdev, &info->bdaddr, info->bdaddr_type);
+ 
+-		/* Broadcom ROM firmware (BCM4364B3 on Apple T2 Macs, no
+-		 * patchram) sets vendor bits in the legacy Event_Type.
+-		 */
+-		if (hdev->manufacturer == 15 && info->type > LE_ADV_SCAN_RSP) {
+-			/* 0x0f masks out upper vendor bits (0x10, 0x20, 0x80),
+-			 * extracting the standard legacy advertising type
+-			 * (0x00-0x04) stored in the low nibble (bits 0-3).
+-			 */
+-			info->type &= 0x0f;
+-		}
+-
+ 		if (info->length <= max_adv_len(hdev)) {
+ 			rssi = info->data[info->length];
+ 			process_adv_report(hdev, info->type, &info->bdaddr,

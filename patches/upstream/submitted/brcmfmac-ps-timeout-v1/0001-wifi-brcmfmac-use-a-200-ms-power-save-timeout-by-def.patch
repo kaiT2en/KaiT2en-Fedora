@@ -1,0 +1,53 @@
+From e855f451dd2aa41fce970af962ae88e8bf488c2a Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Wed, 4 Nov 2026 13:17:14 +0100
+Subject: [PATCH] wifi: brcmfmac: use a 200 ms power save timeout by default
+
+cfg80211 calls set_power_mgmt with timeout -1 when userspace leaves the
+dynamic power save timeout to the driver, as NetworkManager does. brcmfmac clamps that to BRCMF_PS_MAX_TIMEOUT_MS, so the firmware
+stays awake for 2 s after every frame in PM_FAST mode and rarely sleeps
+with the background traffic of a typical network.
+
+Use 200 ms for -1. macOS 15.4.1 sets pm2_sleep_ret to 200 ms on the
+BCM4377 of a MacBookAir9,1, seen in a trace of its iovar calls across a
+sleep and wake cycle. Measured on a MacBookPro15,1, idle with WLAN
+associated:
+
+  pm2_sleep_ret 2000 ms: 11.2 W system power
+  pm2_sleep_ret  200 ms:  9.2 W
+  WLAN off:               8.8 W
+
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
+Tested-by: Aditya Garg <aditya.garg@linux.dev>
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+The KaiT2en community runs this patch with its kernels, no regression
+was reported.
+
+ drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
+index 46714d87126..e7b21703e34 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
+@@ -88,6 +88,7 @@
+ #define BRCMF_ND_INFO_TIMEOUT		msecs_to_jiffies(2000)
+ 
+ #define BRCMF_PS_MAX_TIMEOUT_MS		2000
++#define BRCMF_PS_DEFAULT_TIMEOUT_MS	200
+ 
+ /* Dump obss definitions */
+ #define ACS_MSRMNT_DELAY		80
+@@ -3378,6 +3379,9 @@ brcmf_cfg80211_set_power_mgmt(struct wiphy *wiphy, struct net_device *ndev,
+ 			bphy_err(drvr, "error (%d)\n", err);
+ 	}
+ 
++	/* cfg80211 passes -1 when userspace asks for no particular timeout */
++	if (timeout < 0)
++		timeout = BRCMF_PS_DEFAULT_TIMEOUT_MS;
+ 	err = brcmf_fil_iovar_int_set(ifp, "pm2_sleep_ret",
+ 				min_t(u32, timeout, BRCMF_PS_MAX_TIMEOUT_MS));
+ 	if (err)
+
+base-commit: 991a73f4909f1348ffb4b38765cdb522a775e4c2

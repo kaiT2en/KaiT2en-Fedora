@@ -1,8 +1,8 @@
-
-From c9adb3bf3cd3b9c66c6336af3343231831e9d3cd Mon Sep 17 00:00:00 2001
+From b086069aec510181007a78b125a3d7c537a3750b Mon Sep 17 00:00:00 2001
 From: Andre Eikmeyer <dev@deq.rocks>
-Date: Wed, 28 Oct 2026 16:25:51 +0100
-Subject: [PATCH] wifi: brcmfmac: match firmware capabilities as whole words
+Date: Wed, 4 Nov 2026 13:16:06 +0100
+Subject: [PATCH 1/7] wifi: brcmfmac: match firmware capabilities as whole
+ words
 
 brcmf_feat_firmware_capabilities() looks for each capability with
 strnstr() in the space separated reply of the "cap" iovar, so a
@@ -20,21 +20,25 @@ BCME_UNSUPPORTED:
   brcmf_p2p_create_p2pdev: set p2p_disc error
   brcmf_cfg80211_add_iface: add iface p2p-dev-wlp3s0 type 10 failed: err=-52
 
-Split the reply at spaces and compare whole words. The trailing space
-in "sae", which kept it from matching "sae-ap" and "sae_ext", is no
-longer needed.
+Split the reply at spaces and compare whole words. The trailing spaces
+in "sae", which kept it from matching "sae-ap" and "sae_ext", and in
+"fbt" can go.
 
 Fixes: ec64241c9fd2 ("brcmfmac: obtain feature info using 'cap' firmware command")
+Reported-by: Aditya Garg <aditya.garg@linux.dev>
+Closes: https://lore.kernel.org/all/MA0P287MB021718EE92FC809CB2BB0F82B8BD2@MA0P287MB0217.INDP287.PROD.OUTLOOK.COM/
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
+Tested-by: Aditya Garg <aditya.garg@linux.dev>
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
- .../wireless/broadcom/brcm80211/brcmfmac/feature.c   | 12 +++++++++---
- 1 file changed, 9 insertions(+), 3 deletions(-)
+ .../wireless/broadcom/brcm80211/brcmfmac/feature.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
 
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
-index 488364e..9e557e0 100644
+index cc19e5e7ebf..b324eb53a69 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
-@@ -42,7 +42,7 @@ static const struct brcmf_feat_fwcap brcmf_fwcap_map[] = {
+@@ -42,10 +42,10 @@ static const struct brcmf_feat_fwcap brcmf_fwcap_map[] = {
  	{ BRCMF_FEAT_MONITOR_FLAG, "rtap" },
  	{ BRCMF_FEAT_MONITOR_FMT_RADIOTAP, "rtap" },
  	{ BRCMF_FEAT_DOT11H, "802.11h" },
@@ -42,8 +46,12 @@ index 488364e..9e557e0 100644
 +	{ BRCMF_FEAT_SAE, "sae" },
  	{ BRCMF_FEAT_FWAUTH, "idauth" },
  	{ BRCMF_FEAT_SAE_EXT, "sae_ext" },
+-	{ BRCMF_FEAT_FBT, "fbt " },
++	{ BRCMF_FEAT_FBT, "fbt" },
+ 	{ BRCMF_FEAT_OKC, "okc" },
  };
-@@ -229,6 +229,7 @@ static void brcmf_feat_firmware_capabilities(struct brcmf_if *ifp)
+ 
+@@ -231,6 +231,7 @@ static void brcmf_feat_firmware_capabilities(struct brcmf_if *ifp)
  {
  	struct brcmf_pub *drvr = ifp->drvr;
  	char caps[MAX_CAPS_BUFFER_SIZE];
@@ -51,7 +59,7 @@ index 488364e..9e557e0 100644
  	enum brcmf_feat_id id;
  	int i, err;
  
-@@ -238,10 +239,15 @@ static void brcmf_feat_firmware_capabilities(struct brcmf_if *ifp)
+@@ -240,10 +241,15 @@ static void brcmf_feat_firmware_capabilities(struct brcmf_if *ifp)
  		return;
  	}
  
@@ -69,6 +77,3 @@ index 488364e..9e557e0 100644
  			id = brcmf_fwcap_map[i].feature;
  			brcmf_dbg(INFO, "enabling feature: %s\n",
  				  brcmf_feat_names[id]);
--- 
-2.56.0
-

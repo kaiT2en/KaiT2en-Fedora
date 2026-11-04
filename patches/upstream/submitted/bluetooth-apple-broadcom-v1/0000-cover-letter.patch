@@ -1,0 +1,60 @@
+From 7d87302b178a6bbbf6d6f0dff1788535e3dc8d95 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Wed, 4 Nov 2026 13:19:45 +0100
+Subject: [PATCH 0/4] Bluetooth: Broadcom controllers of the Apple T2 Macs
+
+Hello everyone,
+
+This series is for the Broadcom Bluetooth controllers of the Apple T2
+Macs, the BCM4364 over UART (hci_bcm) and the BCM4377 over PCIe
+(hci_bcm4377).
+
+  1    raise ACL priority on Apple Broadcom controllers
+  2    clear vendor bits in LE advertising report types
+  3    Revert "Bluetooth: hci_event: strip Broadcom vendor bits from
+       legacy adv report type"
+  4    set the strict duplicate filter quirk on Apple Broadcom controllers
+
+Patch 2 and 3 belong together. Commit 88397423671f ("Bluetooth:
+hci_event: strip Broadcom vendor bits from legacy adv report type") in
+bluetooth-next masks the event type of legacy LE Advertising Reports for
+every controller with manufacturer 15. The controllers known to set these
+bits are the ones of the T2 Macs. Aditya Garg asked about this on the
+list:
+
+  https://lore.kernel.org/linux-bluetooth/F4853998-F2A8-4AFE-99EA-544657EAB0E8@linux.dev/
+
+Masking the type to its low nibble goes back to a t2linux patch by Jose
+Miguel Ochoa. Patch 2 clears the bits in the two drivers of these
+controllers before the event reaches the core, and patch 3 reverts the
+check in hci_event.c. Patch 2 comes first, so every commit in between
+keeps the reports.
+
+Patch 1 builds on a vendor command the Android Broadcom vendor library
+uses, 0xfc57, to keep A2DP from dropping out while WLAN runs on 2.4 GHz.
+Patch 4 sets the strict duplicate filter quirk in both drivers, so a
+discovery reports changed advertisement data before its next cycle.
+
+The KaiT2en community, about 280 members, runs these patches with its
+kernels. Users reported them working on the MacBookPro15,1, 15,2, 15,3,
+15,4, 16,1, 16,4, MacBookAir9,1 and iMac20,1, and nobody reported a
+regression.
+
+Andre Eikmeyer (4):
+  Bluetooth: btbcm: raise ACL priority on Apple Broadcom controllers
+  Bluetooth: btbcm: clear vendor bits in LE advertising report types
+  Revert "Bluetooth: hci_event: strip Broadcom vendor bits from legacy
+    adv report type"
+  Bluetooth: set the strict duplicate filter quirk on Apple Broadcom
+    controllers
+
+ drivers/bluetooth/Kconfig       |   1 +
+ drivers/bluetooth/btbcm.c       | 102 ++++++++++++++++++++++++++++++++
+ drivers/bluetooth/btbcm.h       |  12 ++++
+ drivers/bluetooth/hci_bcm.c     |  28 ++++++++-
+ drivers/bluetooth/hci_bcm4377.c |   9 +++
+ net/bluetooth/hci_event.c       |  11 ----
+ 6 files changed, 149 insertions(+), 14 deletions(-)
+
+
+base-commit: 3f425f95ba3923d605f6a8b382e8fcdc59d479db

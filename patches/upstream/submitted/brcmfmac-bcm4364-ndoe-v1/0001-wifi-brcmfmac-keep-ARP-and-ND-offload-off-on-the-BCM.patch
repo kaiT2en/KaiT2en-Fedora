@@ -1,0 +1,58 @@
+From 8a1d8dfbe75feb94cd179a9fb22c022f82146465 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Wed, 4 Nov 2026 13:17:15 +0100
+Subject: [PATCH] wifi: brcmfmac: keep ARP and ND offload off on the BCM4364
+
+brcmfmac enables the firmware's ARP and IPv6 ND offload (ndoe) whenever
+the interface is up and not promiscuous. On the Apple firmware for the
+BCM4364, ndoe makes IPv6 downloads collapse. IPv6 downloads topped out
+at 55 Mbit/s on a MacBookPro15,1 with the BCM4364/3 and on the
+MacBookPro16,1 with the later revision. The BCM4377 is not affected.
+
+macOS enables ND offload for associated sleep only. A trace under
+macOS 26.6.1 on a MacBookPro16,2 shows nd_hostip_clear, ndoe=1 and the
+IPv6 addresses before sleep and ndoe cleared again on wake, see the
+first report below. Keep them off on the BCM4364.
+
+Closes: https://github.com/t2linux/kernel/issues/34
+Closes: https://github.com/t2linux/T2-Debian-and-Ubuntu-Kernel/issues/227
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
+Tested-by: Aditya Garg <aditya.garg@linux.dev>
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+The KaiT2en community runs this patch with its kernels, no regression
+was reported.
+
+ .../net/wireless/broadcom/brcm80211/brcmfmac/core.c    | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c
+index 92ec269f43b..6eae7135aeb 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c
+@@ -13,6 +13,7 @@
+ #include <net/addrconf.h>
+ #include <net/ieee80211_radiotap.h>
+ #include <net/ipv6.h>
++#include <brcm_hw_ids.h>
+ #include <brcmu_utils.h>
+ #include <brcmu_wifi.h>
+ 
+@@ -103,6 +104,15 @@ void brcmf_configure_arp_nd_offload(struct brcmf_if *ifp, bool enable)
+ 		return;
+ 	}
+ 
++	/* With ND offload on while awake, the Apple firmware for the BCM4364
++	 * makes IPv6 downloads drop to low rates. macOS runs ARP and ND
++	 * offload only in sleep, keep both off on this chip.
++	 */
++	if (enable && ifp->drvr->bus_if->chip == BRCM_CC_4364_CHIP_ID) {
++		brcmf_dbg(TRACE, "Skip ARP/ND offload enable on BCM4364\n");
++		enable = false;
++	}
++
+ 	if (enable)
+ 		mode = BRCMF_ARP_OL_AGENT | BRCMF_ARP_OL_PEER_AUTO_REPLY;
+ 	else
+
+base-commit: 991a73f4909f1348ffb4b38765cdb522a775e4c2
