@@ -75,7 +75,7 @@
     },
     "btbcm-acl-priority": {
       "message_id": "1567559781986603140",
-      "hash": "ca7ea253aeaa5b2add715f5f404f506e428981b49443c28050c5c642bc347e95"
+      "hash": "f73235973d6d159466b0280abee1a058d0380d0755588766d24cc73b3eca167d"
     },
     "brcmfmac-ps-timeout": {
       "message_id": "1567559786172649515",
@@ -95,7 +95,7 @@
     },
     "hci-bcm-le-scan": {
       "message_id": "1567559803453313107",
-      "hash": "8d52d6aa4d3b98aa4dc1ce5639e188963de493590ed4f7acd6ca282a9003802c"
+      "hash": "23fd7505fa6a914e1806049fe7dd57dc4f0bb13fc2a64ac29f45215264af3afd"
     },
     "brcmfmac-bcm4364-ndoe": {
       "message_id": "1567559807760597002",
