@@ -69,6 +69,10 @@
       "message_id": "1563590381638131894",
       "hash": "e45af73a65fef34aa6ed57d94ee67139fa4a43cbe46344c30482fafc67c9b893"
     },
+    "imac-5k": {
+      "message_id": "1567828330827358279",
+      "hash": "ed5b92744668776939a68a25ec9f9e755d6071c76b34ab4ba47a43893aec48b6"
+    },
     "brcmfmac-bcm4364-txbf": {
       "message_id": "1567559777305764021",
       "hash": "2d60d673a6b0b5ea120fb2f3dab362657434086dce5ab7dad0e64bc9eb2c85c8"
