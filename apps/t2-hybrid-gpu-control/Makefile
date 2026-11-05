@@ -15,6 +15,9 @@ STATUS_POLICY_SRC := contrib/org.t2hybridgpucontrol.status.policy
 LEGACY_UNITS := kait2en-dgpu-off.service kait2en-dgpu-suspend.service \
 	kait2en-amdgpu-profile.service kait2en-amdgpu-profile-resume.service
 ICON_SRC := assets/icons/hicolor/scalable/apps/$(APP_ID).svg
+PREBOOT_TARGET := x86_64-unknown-uefi
+PREBOOT_SRC := $(or $(CARGO_TARGET_DIR),preboot/target)/$(PREBOOT_TARGET)/release/t2-gpu-preboot.efi
+PREBOOT_DIR ?= /boot/efi/EFI/kait2en
 
 PREFIX ?= /usr/local
 BIN_DIR := $(PREFIX)/bin
@@ -41,9 +44,11 @@ endef
 
 build:
 	$(CARGO) build --release --locked
+	$(CARGO) build --release --locked --manifest-path preboot/Cargo.toml --target $(PREBOOT_TARGET)
 
 check-build:
 	@test -x "$(BIN_SRC)" || { echo "error: $(BIN_SRC) is missing; run 'make build' as your normal user first" >&2; exit 1; }
+	@test -f "$(PREBOOT_SRC)" || { echo "error: $(PREBOOT_SRC) is missing; run 'make build' as your normal user first" >&2; exit 1; }
 
 install: check-build
 	$(remove_legacy_units)
@@ -59,9 +64,14 @@ install: check-build
 	if command -v flatpak >/dev/null; then flatpak override --system --env=GSK_RENDERER=ngl; fi
 	$(GTK_UPDATE_ICON_CACHE) --force --ignore-theme-index $(ICON_THEME_DIR)
 	systemctl daemon-reload
+	# vfat rejects chmod, so plain copies instead of install.
+	mkdir -p $(PREBOOT_DIR)
+	cp $(PREBOOT_SRC) $(PREBOOT_DIR)/t2-gpu-preboot.efi
+	-$(LIBEXEC_DIR)/$(HELPER_NAME) sync-preboot
 
 uninstall:
 	$(remove_legacy_units)
+	if [ -x $(LIBEXEC_DIR)/$(HELPER_NAME) ]; then $(LIBEXEC_DIR)/$(HELPER_NAME) remove-preboot; fi
 	rm -f $(BIN_DIR)/$(BIN_NAME) $(LIBEXEC_DIR)/$(HELPER_NAME) $(LIBEXEC_DIR)/$(STATUS_HELPER_NAME)
 	rm -f $(APPS_DIR)/$(APP_ID).desktop $(ICONS_DIR)/$(APP_ID).svg
 	rm -f $(POLICY_DIR)/$(APP_ID).policy $(POLICY_DIR)/$(APP_ID).status.policy
@@ -72,3 +82,4 @@ uninstall:
 
 clean:
 	$(CARGO) clean
+	$(CARGO) clean --manifest-path preboot/Cargo.toml

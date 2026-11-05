@@ -351,7 +351,7 @@ All KAIT2EN desktop applications use the shared header wordmark at
 | T2 Keyboard Backlight | `/usr/local/bin/t2-kbd-backlight`, `/usr/local/lib/systemd/system/t2-kbd-backlight.service`, `/etc/kait2en/kbd-backlight.toml`. MacBooks only |
 | T2 Touch Bar | `/usr/local/bin/kait2en-touchbar`, `/usr/local/lib/systemd/user/kait2en-touchbar.service`, `/usr/local/lib/systemd/system/kait2en-touchbar-attach.service`, `/usr/local/lib/udev/rules.d/99-zz-kait2en-touchbar.rules`, `/etc/kait2en/touchbar.toml`, `/usr/local/share/licenses/kait2en-touchbar/THIRD-PARTY-NOTICES.md` |
 | Automatic brightness | `/usr/local/bin/t2-autobrightness`, `/usr/local/lib/systemd/user/kait2en-t2-autobrightness.service` (enabled with `--global`), `/usr/local/share/gnome-shell/extensions/kait2en-autobrightness@kait2en/`, per user `~/.local/state/t2-autobrightness/curve` and, while it runs, `~/.local/state/t2-autobrightness/gnome-settings` |
-| T2 Hybrid GPU Control | `/usr/local/bin/t2-hybrid-gpu-control`, `/usr/local/libexec/t2-hybrid-gpu-control-helper`, `/usr/local/libexec/t2-hybrid-gpu-control-status`, `/usr/local/share/applications/org.t2hybridgpucontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2hybridgpucontrol.gtk.svg`, `/usr/share/polkit-1/actions/org.t2hybridgpucontrol.gtk.policy`, `/usr/share/polkit-1/actions/org.t2hybridgpucontrol.gtk.status.policy`, `/etc/environment.d/90-kait2en-gsk-renderer.conf` |
+| T2 Hybrid GPU Control | `/usr/local/bin/t2-hybrid-gpu-control`, `/usr/local/libexec/t2-hybrid-gpu-control-helper`, `/usr/local/libexec/t2-hybrid-gpu-control-status`, `/usr/local/share/applications/org.t2hybridgpucontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2hybridgpucontrol.gtk.svg`, `/usr/share/polkit-1/actions/org.t2hybridgpucontrol.gtk.policy`, `/usr/share/polkit-1/actions/org.t2hybridgpucontrol.gtk.status.policy`, `/etc/environment.d/90-kait2en-gsk-renderer.conf`, `/boot/efi/EFI/kait2en/t2-gpu-preboot.efi`, the UEFI boot entry `KaiT2en GPU`, the EFI variable `boot-gpu-cf9aa22b-9505-4c88-aed0-5673e31b00c2` and the build package `rust-std-static-x86_64-unknown-uefi` |
 | T2 GPU Control | `/usr/local/bin/t2-dgpu-control`, `/usr/local/libexec/t2-dgpu-control-helper`, `/usr/local/libexec/t2-dgpu-control-status`, `/usr/local/share/applications/org.t2dgpucontrol.gtk.desktop`, `/usr/local/share/icons/hicolor/scalable/apps/org.t2dgpucontrol.gtk.svg`, `/usr/local/lib/systemd/system/kait2en-dgpu-off.service`, `/usr/local/lib/systemd/system/kait2en-dgpu-suspend.service`, `/usr/local/lib/systemd/system/kait2en-amdgpu-profile.service`, `/usr/local/lib/systemd/system/kait2en-amdgpu-profile-resume.service`, `/usr/share/polkit-1/actions/org.t2dgpucontrol.gtk.policy`, `/usr/share/polkit-1/actions/org.t2dgpucontrol.gtk.status.policy` |
 
 T2 Fan Control's service starts immediately and persists fan curves across
@@ -359,6 +359,9 @@ boot and resume. `t2-drop.service` is not enabled. D-Bus starts it when
 T2 AirShare receives or sends over AirDrop, it runs as root because AWDL needs
 CAP_NET_ADMIN, stays while T2 AirShare is visible and exits a minute after
 the last caller. T2 Hybrid GPU Control does not install system services.
+Enabling hybrid graphics puts its `KaiT2en GPU` boot entry first in
+`BootOrder`, ahead of Fedora's shim entry. Uninstalling the app removes the
+entry, the EFI image and the variable.
 T2 GPU Control enables its units only when the corresponding options are
 applied in the app. Both privileged helpers validate the GPU layout and accept
 only the fixed operations exposed by their UI.

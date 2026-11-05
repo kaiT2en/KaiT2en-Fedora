@@ -6,7 +6,7 @@ source "$APP_DIR/../../scripts/fedora/lib.sh"
 require_root
 install_kait2en_fonts
 require_fedora
-require_command cargo make sudo
+require_command cargo dnf efibootmgr make sudo
 
 is_supported_model() {
 	local class dev model vendor has_intel=0 has_amd=0
@@ -49,6 +49,10 @@ fi
 target_user="${SUDO_USER:-}"
 [[ -n "$target_user" && "$target_user" != root ]] ||
 	fail "t2-hybrid-gpu-control must be built for the user who invoked sudo"
+
+# The preboot image is built for the UEFI target, Fedora packages its std.
+dnf install -y rust-std-static-x86_64-unknown-uefi ||
+	fail "unable to install the Rust UEFI target"
 
 info "building and installing t2-hybrid-gpu-control"
 build_cargo_project "$APP_DIR" "$target_user"

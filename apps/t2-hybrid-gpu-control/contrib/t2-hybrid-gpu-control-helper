@@ -3,6 +3,12 @@ set -euo pipefail
 
 readonly EFI_VAR=/sys/firmware/efi/efivars/gpu-power-prefs-fa4ce28d-b62f-4c99-9cc3-6815686e30f9
 readonly SWITCH_PATH=/sys/kernel/debug/vgaswitcheroo/switch
+# Wanted boot mode for t2-gpu-preboot: mode byte (1 = hybrid), attempt counter.
+readonly PREBOOT_VAR=/sys/firmware/efi/efivars/boot-gpu-cf9aa22b-9505-4c88-aed0-5673e31b00c2
+readonly ESP_MOUNT=/boot/efi
+readonly PREBOOT_FILE=$ESP_MOUNT/EFI/kait2en/t2-gpu-preboot.efi
+readonly PREBOOT_LOADER='\EFI\kait2en\t2-gpu-preboot.efi'
+readonly PREBOOT_LABEL='KaiT2en GPU'
 
 fail() {
 	printf 't2-hybrid-gpu-control: %s\n' "$*" >&2
@@ -76,6 +82,90 @@ write_boot_gpu() {
 	trap - EXIT
 }
 
+write_preboot_mode() {
+	local mode=$1
+
+	[[ -w /sys/firmware/efi/efivars ]] || fail "EFI variables are not writable"
+	if [[ -e "$PREBOOT_VAR" ]]; then
+		chattr -i "$PREBOOT_VAR" 2>/dev/null || true
+	fi
+	case "$mode" in
+		hybrid) printf '\x07\x00\x00\x00\x01\x00' >"$PREBOOT_VAR" ;;
+		off) printf '\x07\x00\x00\x00\x00\x00' >"$PREBOOT_VAR" ;;
+		*) fail "invalid preboot mode: $mode" ;;
+	esac
+}
+
+preboot_entry() {
+	efibootmgr | awk -v loader="$PREBOOT_LOADER" '
+		BEGIN { loader = tolower(loader) }
+		/^Boot[0-9A-Fa-f]{4}/ && index(tolower($0), loader) {
+			print substr($1, 5, 4)
+			exit
+		}'
+}
+
+# Puts the t2-gpu-preboot entry first in BootOrder, creating it if needed.
+ensure_preboot_entry() {
+	local disk entry order part source
+
+	[[ -f "$PREBOOT_FILE" ]] || fail "t2-gpu-preboot is not installed at $PREBOOT_FILE"
+	command -v efibootmgr >/dev/null || fail "efibootmgr is not installed"
+
+	entry=$(preboot_entry)
+	if [[ -z "$entry" ]]; then
+		source=$(findmnt -no SOURCE "$ESP_MOUNT") || fail "$ESP_MOUNT is not mounted"
+		disk=$(lsblk -no PKNAME "$source") || fail "no disk found for $source"
+		read -r part <"/sys/class/block/${source##*/}/partition" ||
+			fail "no partition number found for $source"
+		efibootmgr --quiet --create --disk "/dev/$disk" --part "$part" \
+			--label "$PREBOOT_LABEL" --loader "$PREBOOT_LOADER" ||
+			fail "creating the t2-gpu-preboot boot entry failed"
+		entry=$(preboot_entry)
+		[[ -n "$entry" ]] || fail "the t2-gpu-preboot boot entry was not created"
+	fi
+
+	order=$(efibootmgr | sed -n 's/^BootOrder: //p')
+	[[ "${order%%,*}" == "$entry" ]] && return 0
+	order=$(tr ',' '\n' <<<"$order" | grep -vix "$entry" | paste -sd,)
+	efibootmgr --quiet --bootorder "$entry${order:+,$order}" ||
+		fail "moving the t2-gpu-preboot boot entry first failed"
+}
+
+remove_preboot() {
+	local entry
+
+	if command -v efibootmgr >/dev/null; then
+		entry=$(preboot_entry)
+		if [[ -n "$entry" ]]; then
+			efibootmgr --quiet --bootnum "$entry" --delete-bootnum ||
+				fail "removing the t2-gpu-preboot boot entry failed"
+		fi
+	fi
+	if [[ -e "$PREBOOT_VAR" ]]; then
+		chattr -i "$PREBOOT_VAR" 2>/dev/null || true
+		rm -f "$PREBOOT_VAR"
+	fi
+	rm -f "$PREBOOT_FILE"
+	rmdir "${PREBOOT_FILE%/*}" 2>/dev/null || true
+}
+
+# Called on install so systems configured before t2-gpu-preboot existed get it.
+sync_preboot() {
+	local mode prefs
+
+	if [[ -r "$PREBOOT_VAR" ]]; then
+		mode=$(od -An -tu1 -j4 -N1 "$PREBOOT_VAR" | tr -d ' ')
+	elif [[ -r "$EFI_VAR" ]]; then
+		prefs=$(od -An -tu1 -j4 -N1 "$EFI_VAR" | tr -d ' ')
+		[[ "$prefs" == 1 ]] || return 0
+		write_preboot_mode hybrid
+		mode=1
+	fi
+	[[ "${mode:-}" == 1 ]] || return 0
+	ensure_preboot_entry
+}
+
 enable_hybrid_graphics() {
 	local amd
 
@@ -87,13 +177,26 @@ enable_hybrid_graphics() {
 
 	printf 'auto\n' >"$amd/power/control"
 	write_boot_gpu integrated
+	write_preboot_mode hybrid
+	ensure_preboot_entry
 }
 
 use_discrete_gpu() {
 	write_boot_gpu discrete
+	if [[ -e "$PREBOOT_VAR" ]]; then
+		write_preboot_mode off
+	fi
 }
 
 ((EUID == 0)) || fail "root privileges are required"
+
+# Uninstall also runs on models without hybrid graphics.
+if [[ "${1:-}" == remove-preboot ]]; then
+	[[ $# -eq 1 ]] || fail "usage: $0 remove-preboot"
+	remove_preboot
+	exit 0
+fi
+
 is_supported_macbook || fail "this Mac does not have the supported Intel/AMD hybrid GPU layout"
 
 case "${1:-}" in
@@ -104,6 +207,10 @@ case "${1:-}" in
 	use-discrete)
 		[[ $# -eq 1 ]] || fail "usage: $0 use-discrete"
 		use_discrete_gpu
+		;;
+	sync-preboot)
+		[[ $# -eq 1 ]] || fail "usage: $0 sync-preboot"
+		sync_preboot
 		;;
 	reboot)
 		[[ $# -eq 1 ]] || fail "usage: $0 reboot"

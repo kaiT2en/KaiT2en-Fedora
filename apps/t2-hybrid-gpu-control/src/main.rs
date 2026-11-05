@@ -319,7 +319,7 @@ fn build_ui(app: &adw::Application) {
                     next_row.set_subtitle(Gpu::Integrated.label());
                     set_status(
                         &message,
-                        "Hybrid graphics configured. Reboot to use the integrated display GPU.",
+                        "Hybrid graphics configured. Reboot to use the integrated display GPU. After booting macOS, the setting is restored automatically on the next Linux start.",
                         false,
                     );
                     reboot.set_sensitive(true);

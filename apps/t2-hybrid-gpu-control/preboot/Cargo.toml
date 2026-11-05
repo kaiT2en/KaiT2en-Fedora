@@ -1,0 +1,13 @@
+[package]
+name = "t2-gpu-preboot"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+uefi = { version = "0.41", features = ["panic_handler"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"
