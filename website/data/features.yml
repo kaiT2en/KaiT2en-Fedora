@@ -425,16 +425,19 @@ items:
   - id: imac-5k
     title: "5K display on iMac20,1 and iMac20,2"
     state: available
-    upstream: downstream
-    project: KAIT2EN Fedora
+    upstream: submitted
+    version: v1
+    project: Linux kernel
     subsystem: DRM / amdgpu
     authors:
       - byte
-    updated: "2026-10-03"
+    link: "https://lore.kernel.org/all/20261104193649.8158-1-atharvatiwarilinuxdev@gmail.com/"
+    updated: "2026-11-04"
     notes: >-
       Drives the internal 5K panel at full resolution by genlocking the two
-      display streams that feed it. Ships as an amdgpu patch in the KAIT2EN
-      kernel builds.
+      display streams that feed it, with resolution changes. Ships as an
+      amdgpu patch in the KAIT2EN kernel builds. Closes drm/amd#4455 and
+      #4895.
 
   - id: smc-power-limits
     title: "No more prochot throttling under load"
