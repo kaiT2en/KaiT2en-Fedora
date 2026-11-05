@@ -96,24 +96,26 @@ write_preboot_mode() {
 	esac
 }
 
-preboot_entry() {
-	efibootmgr | awk -v loader="$PREBOOT_LOADER" '
-		BEGIN { loader = tolower(loader) }
+# Boot numbers of all entries that start t2-gpu-preboot. The loader goes
+# through the environment because awk -v would eat its backslashes.
+preboot_entries() {
+	efibootmgr | LOADER="$PREBOOT_LOADER" awk '
+		BEGIN { loader = tolower(ENVIRON["LOADER"]) }
 		/^Boot[0-9A-Fa-f]{4}/ && index(tolower($0), loader) {
 			print substr($1, 5, 4)
-			exit
 		}'
 }
 
 # Puts the t2-gpu-preboot entry first in BootOrder, creating it if needed.
 ensure_preboot_entry() {
-	local disk entry order part source
+	local disk entry extra order part source
+	local -a entries
 
 	[[ -f "$PREBOOT_FILE" ]] || fail "t2-gpu-preboot is not installed at $PREBOOT_FILE"
 	command -v efibootmgr >/dev/null || fail "efibootmgr is not installed"
 
-	entry=$(preboot_entry)
-	if [[ -z "$entry" ]]; then
+	mapfile -t entries < <(preboot_entries)
+	if ((${#entries[@]} == 0)); then
 		source=$(findmnt -no SOURCE "$ESP_MOUNT") || fail "$ESP_MOUNT is not mounted"
 		disk=$(lsblk -no PKNAME "$source") || fail "no disk found for $source"
 		read -r part <"/sys/class/block/${source##*/}/partition" ||
@@ -121,9 +123,16 @@ ensure_preboot_entry() {
 		efibootmgr --quiet --create --disk "/dev/$disk" --part "$part" \
 			--label "$PREBOOT_LABEL" --loader "$PREBOOT_LOADER" ||
 			fail "creating the t2-gpu-preboot boot entry failed"
-		entry=$(preboot_entry)
-		[[ -n "$entry" ]] || fail "the t2-gpu-preboot boot entry was not created"
+		mapfile -t entries < <(preboot_entries)
+		((${#entries[@]} > 0)) || fail "the t2-gpu-preboot boot entry was not created"
 	fi
+
+	# Earlier versions could create the entry more than once.
+	entry=${entries[0]}
+	for extra in "${entries[@]:1}"; do
+		efibootmgr --quiet --bootnum "$extra" --delete-bootnum ||
+			fail "removing the duplicate boot entry $extra failed"
+	done
 
 	order=$(efibootmgr | sed -n 's/^BootOrder: //p')
 	[[ "${order%%,*}" == "$entry" ]] && return 0
@@ -136,11 +145,10 @@ remove_preboot() {
 	local entry
 
 	if command -v efibootmgr >/dev/null; then
-		entry=$(preboot_entry)
-		if [[ -n "$entry" ]]; then
+		for entry in $(preboot_entries); do
 			efibootmgr --quiet --bootnum "$entry" --delete-bootnum ||
-				fail "removing the t2-gpu-preboot boot entry failed"
-		fi
+				fail "removing the t2-gpu-preboot boot entry $entry failed"
+		done
 	fi
 	if [[ -e "$PREBOOT_VAR" ]]; then
 		chattr -i "$PREBOOT_VAR" 2>/dev/null || true

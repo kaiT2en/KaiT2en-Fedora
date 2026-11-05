@@ -88,15 +88,16 @@ fn show(lines: &[&str]) {
         dims: (width, height),
     });
 
-    // The longest line of all messages takes at most 80 % of the width, so
-    // every message renders at the same size.
+    // One glyph row per 540 screen rows, rounded, gives 24 px tall glyphs on
+    // the 1800 px panel. The longest line of all messages takes at most 80 %
+    // of the width, so every message renders at the same size.
     let longest = RESTORE_TEXT
         .iter()
         .chain(FAILED_TEXT.iter())
         .map(|line| line.chars().count())
         .max()
         .unwrap_or(1);
-    let scale = (height / 180)
+    let scale = ((height + 270) / 540)
         .min(width * 4 / 5 / (longest * font::ADVANCE))
         .max(1);
     let line_height = font::LINE_HEIGHT * scale;
