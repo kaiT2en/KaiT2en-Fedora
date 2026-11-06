@@ -160,12 +160,13 @@ KAIT2EN adds these arguments to every installed kernel through `grubby`:
 
 ```text
 amdgpu.aspm=1
+i915.enable_guc=2
 intel_iommu=on
 iommu=pt
-brcmfmac.p2pon=0
 pcie_aspm=force
 pcie_aspm.policy=powersave
 pcie_ports=compat
+pci=noaer
 mem_sleep_default=deep
 initcall_blacklist=cmos_init,magicmouse_driver_init
 module_blacklist=acpi_tad,applesmc,macsmc,hid_apple,hid_appletb_bl,hid_appletb_kbd,hid_magicmouse,appletbdrm,apple_bce,apple_mfi_fastcharge,apple_gmux,sbs

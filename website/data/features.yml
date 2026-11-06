@@ -20,24 +20,6 @@
 
 items:
 
-  - id: brcmfmac-bcm4377-d3-ack
-    title: "Wi-Fi suspend on BCM4377 T2 Macs"
-    state: available
-    upstream: superseded
-    version: v2
-    project: Linux kernel
-    subsystem: Wi-Fi / brcmfmac
-    authors:
-      - deqrocks
-    link: "https://lore.kernel.org/all/20261001085308.1688049-1-dev@deq.rocks/"
-    updated: "2026-10-04"
-    notes: >-
-      The downstream systemd suspend service handles BCM4377 today. Our v2
-      kernel patch was superseded by Sebastian Reichel's accepted generic
-      brcmfmac fix, which ignores a missing D3 ACK when Wake-on-WLAN is not
-      armed and uses the cold-reprobe recovery path on resume:
-      https://lore.kernel.org/linux-wireless/20260915-brcmfmac-bcm43752-suspend-fix-v2-1-1bd84914998b@collabora.com/
-
   - id: brcmfmac-pm-max-power-management
     title: "Wi-Fi PM_MAX power management"
     state: in-progress
@@ -510,24 +492,6 @@ items:
       200 ms, the value macOS sets on the BCM4377. Idle system power
       on the MacBookPro15,1 dropped from 11.3 W to 9.2 W with Wi-Fi connected.
 
-  - id: brcmfmac-fwcap-whole-words
-    title: "No more Wi-Fi P2P errors on BCM4364"
-    state: available
-    upstream: submitted
-    version: v1
-    project: Linux kernel
-    subsystem: Wi-Fi / brcmfmac
-    authors:
-      - deqrocks
-    link: "https://lore.kernel.org/all/20261104151547.70333-2-dev@deq.rocks/"
-    updated: "2026-11-04"
-    notes: >-
-      brcmfmac searched the firmware capability list for "p2p" as a substring
-      and found it in Apple's "hp2p". It then offered Wi-Fi Direct, which the
-      BCM4364 firmware does not support, and every boot logged three P2P
-      errors. Capabilities are now matched as whole words. Submitted as
-      patch 1 of the AWDL series.
-
   - id: brcmfmac-bcm4364-ap-fwauth
     title: "Wi-Fi hotspot clients can connect on BCM4364"
     state: available
@@ -573,14 +537,15 @@ items:
     authors:
       - deqrocks
     link: "https://lore.kernel.org/all/20261104151547.70333-1-dev@deq.rocks/"
-    updated: "2026-11-04"
+    updated: "2026-11-05"
     notes: >-
       The Apple firmware of the BCM4364 and BCM4377 runs AWDL itself once
       the host sets it up. brcmfmac now creates the AWDL interface, passes
       its firmware events to user space and carries AWDL data over awdl0.
       The t2-drop system service drives it as macOS does: it follows the
       AWDL master, announces the AirDrop service and removes the interface
-      before suspend.
+      before suspend. Patch 1 is dropped for the same fix in Michael Reeves'
+      BCM4388 series, v2 follows on top of that series.
 
   - id: hci-bcm-le-scan
     title: "Bluetooth LE devices show up within a second"
@@ -622,21 +587,55 @@ items:
       off on this chip while the Mac is awake. Closes t2linux/kernel#34 and
       T2-Debian-and-Ubuntu-Kernel#227.
 
-  - id: brcmfmac-d3-ack-reload
-    title: "Wi-Fi works after a suspend without D3 ACK"
+  - id: brcmfmac-cold-resume
+    title: "Wi-Fi comes back after suspend without unloading the driver"
     state: available
-    upstream: submitted
-    version: v1
+    upstream: preparing
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-      - Klizas
-    link: "https://lore.kernel.org/all/20261104151616.70623-1-dev@deq.rocks/"
-    updated: "2026-11-04"
+    updated: "2026-11-06"
     notes: >-
-      When the firmware does not acknowledge D3 at suspend, brcmfmac now
-      reloads it on resume. Before, the association came back while the
-      data path stayed dead, or every firmware command timed out. Follows
-      up Sebastian Reichel's accepted suspend fix and replaces our v2
-      BCM4377 patch.
+      The Wi-Fi chip is powered off during S3 and comes back without its
+      firmware, but its registers can read back as if it were still running.
+      brcmfmac then took the hot resume path and every firmware command timed
+      out. It now loads the firmware again when the platform firmware handled
+      the resume and Wake-on-WLAN is off. The suspend service no longer
+      unloads the drivers, so sleep starts 10 to 15 seconds sooner on BCM4377
+      Macs. The BCM4377 acknowledges D3 again with patch 5 of Michael Reeves'
+      BCM4388 series, which moves the mailbox to the control ring and which
+      KAIT2EN carries until it is merged:
+      https://lore.kernel.org/all/20260925-brcm4388-submit-v1-5-b5cbc2cde2fb@gmail.com/
+
+  - id: bluetooth-bcm4377-cold-resume
+    title: "Bluetooth comes back after suspend on BCM4377 Macs"
+    state: available
+    upstream: preparing
+    project: Linux kernel
+    subsystem: Bluetooth / hci_bcm4377
+    authors:
+      - deqrocks
+    updated: "2026-11-06"
+    notes: >-
+      The Bluetooth controller of the BCM4377 loses its firmware in S3, and
+      hci_bcm4377 woke a controller that no longer ran, so every command timed
+      out. It now probes the controller again after such a resume, and skips
+      the ring teardown messages that each waited a second for the lost
+      firmware.
+
+  - id: brcmfmac-flowring-delete
+    title: "Faster Wi-Fi disconnects on BCM4377"
+    state: available
+    upstream: preparing
+    project: Linux kernel
+    subsystem: Wi-Fi / brcmfmac
+    authors:
+      - deqrocks
+    updated: "2026-11-06"
+    notes: >-
+      The BCM4377 firmware reports the packets still queued on a connection
+      only once the host deletes it. brcmfmac waited up to 100 ms per
+      connection for them first, on every disconnect and so on every suspend,
+      and then miscounted them. It now deletes right away.
+

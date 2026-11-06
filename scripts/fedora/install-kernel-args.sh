@@ -42,10 +42,12 @@ repair_empty_grub_cmdline() {
 	info "restored GRUB_CMDLINE_LINUX from the installed kernel command line"
 }
 
-# With the runtime wireless patches the BCM4377 and BCM4364 pass S3 with
-# asynchronous suspend and resume, so drop pm_async=off from older installs.
+# Arguments older installs set that current ones leave out. With the runtime
+# wireless patches the BCM4377 and BCM4364 pass S3 with asynchronous suspend
+# and resume.
 REMOVE_ARGS=(
 	"pm_async=off"
+	"brcmfmac.p2pon=0"
 )
 
 ADD_ARGS=(
