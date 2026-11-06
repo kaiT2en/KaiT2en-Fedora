@@ -225,7 +225,7 @@ audio behavior and diagnostics.
 | Path | Purpose |
 | --- | --- |
 | `/etc/systemd/system/kait2en-suspend.service` | Calls the suspend helper before `sleep.target` and again after resume |
-| `/usr/local/libexec/kait2en/kait2en-suspend.sh` | Handles the BCM4377 suspend workaround described below |
+| `/usr/local/libexec/kait2en/kait2en-suspend.sh` | Handles the BCM4350 suspend workaround described below |
 | `/etc/systemd/system/kait2en-macos-mount.service` | Mounts the readable macOS volumes read-only under `/media/macOS` at boot |
 | `/usr/local/libexec/kait2en/kait2en-macos-mount` | Finds the readable volumes in the internal APFS container and mounts them as subdirectories by role |
 | `/etc/udev/rules.d/90-kait2en-macos.rules` | Hides the internal APFS partition from file managers, the volumes are reached through `/media/macOS` |
@@ -247,15 +247,15 @@ audio behavior and diagnostics.
 | `/boot/initramfs-<running-kernel>.img` | Rebuilt by Dracut after modules and ACPI handling are complete |
 
 `kait2en-suspend.service` is enabled on every installation. Before suspend, it
-checks for a Broadcom PCI device with vendor ID `0x14e4` and device ID `0x5f69`,
-`0x5f71`, `0x5f72` or `0x5fa0`. If one is present, it unloads `brcmfmac_wcc`,
-  `brcmfmac` and `hci_bcm4377` in that order. After resume it loads `brcmfmac`
-  and `brcmfmac_wcc`, waits five seconds, then loads `hci_bcm4377`.
+checks for the BCM4350 WLAN chip of the MacBookPro14,1 (vendor ID `0x14e4`,
+device ID `0x43a3`). If it is present, it unloads `brcmfmac_wcc` and `brcmfmac`,
+and after resume it loads them again.
 
-Without a BCM4377, it checks for the BCM4350 WLAN chip (device ID `0x43a3`).
+The BCM4377 needs no unload. Its WLAN and Bluetooth drivers load the firmware
+again after S3 themselves.
 
-If neither controller is present, the service logs that the fix is not needed
-and does not unload a module. State files for modules successfully unloaded by
+Without a BCM4350, the service logs that the fix is not needed and does not
+unload a module. State files for modules successfully unloaded by
 the helper exist only until resume below `/run/kait2en-suspend/`.
 
 The installer checks the running kernel log for two known Apple ACPI firmware

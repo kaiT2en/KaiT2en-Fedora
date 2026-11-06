@@ -1,0 +1,125 @@
+From: Andre Eikmeyer <dev@deq.rocks>
+Subject: [PATCH] Bluetooth: hci_bcm4377: probe again after a resume through firmware
+
+On the MacBookAir9,1 (BCM4377) the controller is powered off during ACPI
+S3. After resume the boot stage, RTI status and context address in BAR2
+read back random values, the driver writes UNQUIESCE and every HCI
+command times out:
+
+  Bluetooth: hci0: command 0x0c01 tx timeout
+
+Unloading the driver also waits for a reply to each ring destroy message,
+one second per ring.
+
+When the platform firmware handled the resume, probe the controller again
+from a work item, which loads its firmware and sets up the rings, and skip
+the ring destroy messages to the lost firmware. Probing stays blocked
+until the system resume completes, so device_reprobe() returns
+-EPROBE_DEFER and the driver core retries the probe right after.
+
+Suspend to idle leaves pm_resume_via_firmware() false and keeps the
+existing quiesce and unquiesce path.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+--- a/drivers/bluetooth/hci_bcm4377.c
++++ b/drivers/bluetooth/hci_bcm4377.c
+@@ -16,6 +16,9 @@
+ #include <linux/of.h>
+ #include <linux/pci.h>
+ #include <linux/printk.h>
++#include <linux/slab.h>
++#include <linux/suspend.h>
++#include <linux/workqueue.h>
+ 
+ #include <linux/unaligned.h>
+ 
+@@ -568,6 +571,9 @@ struct bcm4377_data {
+ 	struct pci_dev *pdev;
+ 	struct hci_dev *hdev;
+ 
++	/* set when the controller lost its firmware during system sleep */
++	bool fw_lost;
++
+ 	void __iomem *bar0;
+ 	void __iomem *bar2;
+ 
+@@ -1021,6 +1027,11 @@ static int bcm4377_destroy_completion_ring(struct bcm4377_data *bcm4377,
+ 	struct bcm4377_destroy_completion_ring_msg msg;
+ 	int ret;
+ 
++	if (bcm4377->fw_lost) {
++		ring->enabled = false;
++		return 0;
++	}
++
+ 	memset(&msg, 0, sizeof(msg));
+ 	msg.msg_type = BCM4377_CONTROL_MSG_DESTROY_COMPLETION_RING;
+ 	msg.ring_id = cpu_to_le16(ring->ring_id);
+@@ -1111,6 +1122,11 @@ static int bcm4377_destroy_transfer_ring(struct bcm4377_data *bcm4377,
+ 	struct bcm4377_destroy_transfer_ring_msg msg;
+ 	int ret;
+ 
++	if (bcm4377->fw_lost) {
++		ring->enabled = false;
++		return 0;
++	}
++
+ 	memset(&msg, 0, sizeof(msg));
+ 	msg.msg_type = BCM4377_CONTROL_MSG_DESTROY_XFER_RING;
+ 	msg.ring_id = cpu_to_le16(ring->ring_id);
+@@ -2441,11 +2457,54 @@ static int bcm4377_suspend(struct device *dev)
+ 	return 0;
+ }
+ 
++struct bcm4377_reprobe {
++	struct work_struct work;
++	struct pci_dev *pdev;
++};
++
++static void bcm4377_reprobe_work(struct work_struct *work)
++{
++	struct bcm4377_reprobe *reprobe =
++		container_of(work, struct bcm4377_reprobe, work);
++	int ret;
++
++	/*
++	 * Probing stays blocked until the system resume completes, the driver
++	 * core then retries the deferred probe.
++	 */
++	ret = device_reprobe(&reprobe->pdev->dev);
++	if (ret && ret != -EPROBE_DEFER)
++		dev_err(&reprobe->pdev->dev, "re-probe after resume failed (%d)\n",
++			ret);
++
++	pci_dev_put(reprobe->pdev);
++	kfree(reprobe);
++}
++
+ static int bcm4377_resume(struct device *dev)
+ {
+ 	struct pci_dev *pdev = to_pci_dev(dev);
+ 	struct bcm4377_data *bcm4377 = pci_get_drvdata(pdev);
+ 
++	/*
++	 * The controller is powered off when the platform firmware handles
++	 * the system sleep, as with ACPI S3 on x86 Macs, and comes back
++	 * without its firmware. Probe it again.
++	 */
++	if (pm_resume_via_firmware()) {
++		struct bcm4377_reprobe *reprobe;
++
++		reprobe = kzalloc_obj(*reprobe);
++		if (!reprobe)
++			return -ENOMEM;
++
++		bcm4377->fw_lost = true;
++		reprobe->pdev = pci_dev_get(pdev);
++		INIT_WORK(&reprobe->work, bcm4377_reprobe_work);
++		schedule_work(&reprobe->work);
++		return 0;
++	}
++
+ 	iowrite32(BCM4377_BAR0_SLEEP_CONTROL_UNQUIESCE,
+ 		  bcm4377->bar0 + BCM4377_BAR0_SLEEP_CONTROL);
+ 

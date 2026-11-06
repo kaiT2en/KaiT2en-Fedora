@@ -1,0 +1,43 @@
+From: Andre Eikmeyer <dev@deq.rocks>
+Subject: [PATCH] wifi: brcmfmac: pcie: probe again after a resume through firmware
+
+On the MacBookAir9,1 (BCM4377) the chip is powered off during ACPI S3.
+After resume the interrupt mask reads back nonzero, so
+brcmf_pcie_pm_leave_D3() takes the hot resume path, and every firmware
+command times out afterwards:
+
+  brcmf_msgbuf_query_dcmd: Timeout on response for query command
+
+When the platform firmware handled the resume and WoWL is off, the
+firmware is gone, so go straight to the remove and re-probe path, which
+loads it again. Suspend to idle and resume with WoWL keep the existing
+check.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -7,6 +7,7 @@
+ #include <linux/module.h>
+ #include <linux/firmware.h>
+ #include <linux/pci.h>
++#include <linux/suspend.h>
+ #include <linux/vmalloc.h>
+ #include <linux/delay.h>
+ #include <linux/interrupt.h>
+@@ -2835,6 +2836,15 @@ static int brcmf_pcie_pm_leave_D3(struct device *dev)
+ 	devinfo = bus->bus_priv.pcie->devinfo;
+ 	brcmf_dbg(PCIE, "Enter, dev=%p, bus=%p\n", dev, bus);
+ 
++	/*
++	 * Without WoWL the device is powered off when the platform firmware
++	 * handles the system sleep, as with ACPI S3, and comes back without
++	 * its firmware. Its registers can still read back nonzero, so probe
++	 * it again.
++	 */
++	if (pm_resume_via_firmware() && !devinfo->wowl_enabled)
++		goto cleanup;
++
+ 	/* Check if device is still up and running, if so we are ready */
+ 	if (brcmf_pcie_read_pcie32(devinfo, devinfo->reginfo->intmask) != 0) {
+ 		brcmf_dbg(PCIE, "Try to wakeup device....\n");

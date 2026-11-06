@@ -1,0 +1,37 @@
+From: Andre Eikmeyer <dev@deq.rocks>
+Subject: [PATCH] wifi: brcmfmac: set the PCIe state before D0_INFORM on resume
+
+With the mailbox moved to the control ring, brcmf_pcie_pm_leave_D3()
+sends D0_INFORM while devinfo->state is still DOWN. The ring write path
+refuses that with -EIO, so every hot resume falls back to remove and
+re-probe:
+
+  brcmf_pcie_send_mb_data: Failed to send H2D mailbox data (-5)
+
+Set the state to UP before D0_INFORM and back to DOWN when the hot
+resume fails.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -2838,10 +2838,10 @@ static int brcmf_pcie_pm_leave_D3(struct device *dev)
+ 	/* Check if device is still up and running, if so we are ready */
+ 	if (brcmf_pcie_read_pcie32(devinfo, devinfo->reginfo->intmask) != 0) {
+ 		brcmf_dbg(PCIE, "Try to wakeup device....\n");
++		devinfo->state = BRCMFMAC_PCIE_STATE_UP;
+ 		if (brcmf_pcie_send_mb_data(devinfo, BRCMF_H2D_HOST_D0_INFORM))
+ 			goto cleanup;
+ 		brcmf_dbg(PCIE, "Hot resume, continue....\n");
+-		devinfo->state = BRCMFMAC_PCIE_STATE_UP;
+ 		brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+ 		brcmf_bus_change_state(bus, BRCMF_BUS_UP);
+ 		brcmf_pcie_intr_enable(devinfo);
+@@ -2851,6 +2851,7 @@ static int brcmf_pcie_pm_leave_D3(struct device *dev)
+ 	}
+ 
+ cleanup:
++	devinfo->state = BRCMFMAC_PCIE_STATE_DOWN;
+ 	brcmf_chip_detach(devinfo->ci);
+ 	devinfo->ci = NULL;
+ 	pdev = devinfo->pdev;

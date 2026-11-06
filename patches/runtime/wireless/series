@@ -13,4 +13,10 @@
 0013-Bluetooth-set-the-strict-duplicate-filter-quirk-on-Apple-Broadcom-controllers.patch
 0014-wifi-brcmfmac-keep-ARP-and-ND-offload-off-on-the-BCM4364-while-awake.patch
 0015-wifi-brcmfmac-Improve-D3-substate-entering-timeout-handling.patch
-0016-wifi-brcmfmac-reload-the-firmware-after-a-missing-D3-ACK.patch
+0016-wifi-brcmfmac-pcie-Report-the-detected-chip-ID-to-the-bus.patch
+0017-wifi-brcmfmac-Support-newer-PCIe-core-startup-and-interrupts.patch
+0018-wifi-brcmfmac-Negotiate-PCIe-mailbox-transport-with-firmware.patch
+0019-wifi-brcmfmac-set-the-PCIe-state-before-D0-INFORM-on-resume.patch
+0020-wifi-brcmfmac-pcie-probe-again-after-a-resume-through-firmware.patch
+0021-Bluetooth-hci-bcm4377-probe-again-after-a-resume-through-firmware.patch
+0022-wifi-brcmfmac-msgbuf-send-the-flowring-delete-without-waiting-for-tx-status.patch
