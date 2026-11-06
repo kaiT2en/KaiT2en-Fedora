@@ -42,14 +42,17 @@ repair_empty_grub_cmdline() {
 	info "restored GRUB_CMDLINE_LINUX from the installed kernel command line"
 }
 
-REMOVE_ARGS=()
+# With the runtime wireless patches the BCM4377 and BCM4364 pass S3 with
+# asynchronous suspend and resume, so drop pm_async=off from older installs.
+REMOVE_ARGS=(
+	"pm_async=off"
+)
 
 ADD_ARGS=(
 	"amdgpu.aspm=1"
 	"i915.enable_guc=2"
 	"intel_iommu=on"
 	"iommu=pt"
-	"pm_async=off"
 	"pcie_aspm=force"
 	"pcie_aspm.policy=powersave"
 	"pcie_ports=compat"
