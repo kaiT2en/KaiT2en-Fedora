@@ -8,7 +8,7 @@ use std::net::Ipv6Addr;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -24,6 +24,9 @@ const AVE_SERVICE: &str = "com.apple.aveservice";
 const SIDECAR_SERVICE: &str = "com.apple.videoprocessingd.encode.remote";
 const SIDECAR_VENDOR: &str = "05ac";
 const SIDECAR_PRODUCT: &str = "9312";
+/// Upper bound for the T2 to remove the SideCar AVE USB device after the
+/// connection closes.
+const SIDECAR_TEARDOWN_TIMEOUT: Duration = Duration::from_secs(3);
 
 struct Manager {
     interface: String,
@@ -86,7 +89,22 @@ impl Manager {
 
     fn pre_suspend(&mut self) -> Result<()> {
         self.sleeping = true;
+        let sidecar = sidecar_device_present();
         self.close_live();
+        // The T2 removes the SideCar AVE USB device after the connection
+        // closes. A suspend that starts while it does fails in t2bce_vhci
+        // with quiesce error 2, so let the removal finish first.
+        if sidecar {
+            let start = Instant::now();
+            while sidecar_device_present() {
+                if start.elapsed() >= SIDECAR_TEARDOWN_TIMEOUT {
+                    eprintln!("SideCar AVE USB device still present after closing the connection");
+                    break;
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+            eprintln!("SideCar AVE USB device removed after {} ms", start.elapsed().as_millis());
+        }
         Ok(())
     }
 
