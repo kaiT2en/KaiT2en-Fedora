@@ -1,10 +1,6 @@
 {
   "version": 1,
   "messages": {
-    "brcmfmac-bcm4377-d3-ack": {
-      "message_id": "1550620841786740856",
-      "hash": "d1aa40106deee6e5967edd1389670e2fbb421b7969d59297b37253e5c013bc84"
-    },
     "brcmfmac-pm-max-power-management": {
       "message_id": "1536401557581602927",
       "hash": "b097d8f910b260e44b3ff6f83666ddebc22e316c98610d8f121af1efa1c5fead"
@@ -85,17 +81,13 @@
       "message_id": "1567559786172649515",
       "hash": "de86024d47672f6794e5047f8c86f3d7c263c4b5edfe573cb9465d988451254b"
     },
-    "brcmfmac-fwcap-whole-words": {
-      "message_id": "1567559789851050075",
-      "hash": "d76ab4d766021d9efa486c99979708be1982638fa07c9996098451642192c3d4"
-    },
     "brcmfmac-bcm4364-ap-fwauth": {
       "message_id": "1567559795186204756",
       "hash": "c88edbd40cbbac3902a7ac756e8c8987011cff6ffb7554d8a1a257764f4c5beb"
     },
     "brcmfmac-awdl": {
       "message_id": "1567559799921713182",
-      "hash": "5eeb4d0fade81f4fbf82cb00416e0c5691715e0feb6f11aba0b6525c712372b3"
+      "hash": "8f61ba514588748e3904fe73162d631806921e8cbd75923d67780ab416b74328"
     },
     "hci-bcm-le-scan": {
       "message_id": "1567559803453313107",
@@ -105,9 +97,17 @@
       "message_id": "1567559807760597002",
       "hash": "4366db6efad62e25febd3c0bdcd03a6477c1634468b644e8804d9c3227e6dd08"
     },
+    "brcmfmac-bcm4377-d3-ack": {
+      "message_id": "1550620841786740856",
+      "hash": "d1aa40106deee6e5967edd1389670e2fbb421b7969d59297b37253e5c013bc84"
+    },
     "brcmfmac-d3-ack-reload": {
       "message_id": "1567559811908903124",
       "hash": "e7addf73bc7bfb7ff1ea1a47d5e6f14537fe975a325aadd135e3e4dc48c8e36d"
+    },
+    "brcmfmac-fwcap-whole-words": {
+      "message_id": "1567559789851050075",
+      "hash": "d76ab4d766021d9efa486c99979708be1982638fa07c9996098451642192c3d4"
     }
   }
 }
