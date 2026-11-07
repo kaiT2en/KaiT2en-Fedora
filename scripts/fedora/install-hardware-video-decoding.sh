@@ -79,14 +79,17 @@ install_intel_drivers() {
 }
 
 # Checks whether $2 (vainfo output) lists an entrypoint matching $4 for any
-# profile matching $3, and reports the result as $1: $5 available/missing.
+# profile matching $3. A missing capability is a hardware limit of the GPU,
+# so it is only reported, unless $6 is "required".
 check_capability() {
-	local dev=$1 output=$2 profile_pattern=$3 entrypoint_pattern=$4 label=$5
+	local dev=$1 output=$2 profile_pattern=$3 entrypoint_pattern=$4 label=$5 need=${6:-}
 
 	if grep -qE "${profile_pattern}[[:space:]]*:[[:space:]]*${entrypoint_pattern}" <<<"$output"; then
 		info "$dev: $label available"
-	else
+	elif [[ $need == required ]]; then
 		warn "$dev: $label not available"
+	else
+		info "$dev: $label not supported by this GPU"
 	fi
 }
 
@@ -101,8 +104,10 @@ verify_render_nodes() {
 			continue
 		fi
 
-		check_capability "$dev" "$output" 'VAProfileH264[A-Za-z]*' 'VAEntrypointVLD' "H.264 decoding"
+		check_capability "$dev" "$output" 'VAProfileH264[A-Za-z]*' 'VAEntrypointVLD' "H.264 decoding" required
 		check_capability "$dev" "$output" 'VAProfileH264[A-Za-z]*' 'VAEntrypointEnc[A-Za-z]*' "H.264 encoding"
+		check_capability "$dev" "$output" 'VAProfileHEVCMain[0-9]*' 'VAEntrypointVLD' "HEVC decoding"
+		check_capability "$dev" "$output" 'VAProfileHEVCMain[0-9]*' 'VAEntrypointEnc[A-Za-z]*' "HEVC encoding"
 		check_capability "$dev" "$output" 'VAProfileVP9Profile[0-9]' 'VAEntrypointVLD' "VP9 decoding"
 		check_capability "$dev" "$output" 'VAProfileVP9Profile[0-9]' 'VAEntrypointEnc[A-Za-z]*' "VP9 encoding"
 	done
@@ -135,4 +140,4 @@ done < <(gpu_vendor_ids)
 verify_render_nodes
 
 info "hardware video decoding drivers installed"
-info "see howto/postinstall/hardware-video-decoding.md for further details"
+info "see website/docs/post-install/hardware-video-decoding.md for further details"

@@ -22,8 +22,11 @@ sudo bash ./scripts/fedora/install-hardware-video-decoding.sh
 
 The script enables RPM Fusion, installs the appropriate VA-API drivers for every
 detected Intel and AMD GPU, and checks each render node. Review the final output:
-H.264 and VP9 decoding and encoding are reported as `available` or `missing` for
-each GPU.
+H.264, HEVC and VP9 decoding and encoding are reported as `available` or
+`not supported by this GPU` for each GPU. Only missing H.264 decoding is a
+warning, since every T2 Mac GPU supports it. The other gaps are hardware limits,
+for example the Coffee Lake iGPU has no VP9 encoder and the Polaris dGPUs
+have no VP9 decoder.
 
 No general system upgrade is performed. Browser configuration is still required
 as described below.
