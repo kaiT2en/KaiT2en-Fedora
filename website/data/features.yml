@@ -590,12 +590,14 @@ items:
   - id: brcmfmac-cold-resume
     title: "Wi-Fi comes back after suspend without unloading the driver"
     state: available
-    upstream: preparing
+    upstream: submitted
+    version: v1
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    updated: "2026-11-06"
+    link: "https://lore.kernel.org/all/20261107154810.89780-1-dev@deq.rocks/"
+    updated: "2026-11-07"
     notes: >-
       The Wi-Fi chip is powered off during S3 and comes back without its
       firmware, but its registers can read back as if it were still running.
@@ -611,12 +613,14 @@ items:
   - id: bluetooth-bcm4377-cold-resume
     title: "Bluetooth comes back after suspend on BCM4377 Macs"
     state: available
-    upstream: preparing
+    upstream: submitted
+    version: v1
     project: Linux kernel
     subsystem: Bluetooth / hci_bcm4377
     authors:
       - deqrocks
-    updated: "2026-11-06"
+    link: "https://lore.kernel.org/all/20261107154839.89941-1-dev@deq.rocks/"
+    updated: "2026-11-07"
     notes: >-
       The Bluetooth controller of the BCM4377 loses its firmware in S3, and
       hci_bcm4377 woke a controller that no longer ran, so every command timed
@@ -627,12 +631,14 @@ items:
   - id: brcmfmac-flowring-delete
     title: "Faster Wi-Fi disconnects on BCM4377"
     state: available
-    upstream: preparing
+    upstream: submitted
+    version: v1
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    updated: "2026-11-06"
+    link: "https://lore.kernel.org/all/20261107154810.89780-1-dev@deq.rocks/"
+    updated: "2026-11-07"
     notes: >-
       The BCM4377 firmware reports the packets still queued on a connection
       only once the host deletes it. brcmfmac waited up to 100 ms per

@@ -1,0 +1,45 @@
+From b5a1d334fe18b3eee7be8cf7c80025862c6a4cb4 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Fri, 6 Nov 2026 15:07:23 +0100
+Subject: [PATCH 1/4] wifi: brcmfmac: pcie: set the state before D0_INFORM on
+ resume
+
+With the mailbox on the control ring, D0_INFORM goes through the ring
+write path, which refuses to write while devinfo->state is DOWN.
+brcmf_pcie_pm_leave_D3() sets the state only after D0_INFORM, so every
+hot resume fails and falls back to remove and re-probe:
+
+  brcmf_pcie_send_mb_data: Failed to send H2D mailbox data (-5)
+
+Set the state before D0_INFORM and back to DOWN when the hot resume
+fails.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+index 4de157d18ff..231a2fb89f0 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -2838,10 +2838,10 @@ static int brcmf_pcie_pm_leave_D3(struct device *dev)
+ 	/* Check if device is still up and running, if so we are ready */
+ 	if (brcmf_pcie_read_pcie32(devinfo, devinfo->reginfo->intmask) != 0) {
+ 		brcmf_dbg(PCIE, "Try to wakeup device....\n");
++		devinfo->state = BRCMFMAC_PCIE_STATE_UP;
+ 		if (brcmf_pcie_send_mb_data(devinfo, BRCMF_H2D_HOST_D0_INFORM))
+ 			goto cleanup;
+ 		brcmf_dbg(PCIE, "Hot resume, continue....\n");
+-		devinfo->state = BRCMFMAC_PCIE_STATE_UP;
+ 		brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+ 		brcmf_bus_change_state(bus, BRCMF_BUS_UP);
+ 		brcmf_pcie_intr_enable(devinfo);
+@@ -2851,6 +2851,7 @@ static int brcmf_pcie_pm_leave_D3(struct device *dev)
+ 	}
+ 
+ cleanup:
++	devinfo->state = BRCMFMAC_PCIE_STATE_DOWN;
+ 	brcmf_chip_detach(devinfo->ci);
+ 	devinfo->ci = NULL;
+ 	pdev = devinfo->pdev;
