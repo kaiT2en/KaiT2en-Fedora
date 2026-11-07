@@ -1,0 +1,26 @@
+From: Andre Eikmeyer <dev@deq.rocks>
+Subject: [PATCH] Bluetooth: hci_bcm4377: treat only negative hci_register_dev() returns as errors
+
+If another controller already holds hci0, a USB Bluetooth dongle for
+example, the BCM4377 is registered as hci1 and probe returns 1. The PCI
+core takes that as success, but the devm action that unregisters the
+controller is never added, so it stays registered after unbind while
+its driver data is freed.
+
+hci_register_dev() returns the index of the new controller on success.
+Check for a negative return, as the other drivers do.
+
+Fixes: 8a06127602de ("Bluetooth: hci_bcm4377: Add new driver for BCM4377 PCIe boards")
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+--- a/drivers/bluetooth/hci_bcm4377.c
++++ b/drivers/bluetooth/hci_bcm4377.c
+@@ -2435,7 +2435,7 @@ static int bcm4377_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 		return ret;
+ 
+ 	ret = hci_register_dev(hdev);
+-	if (ret)
++	if (ret < 0)
+ 		return ret;
+ 	return devm_add_action_or_reset(&pdev->dev, bcm4377_hci_unregister_dev,
+ 					hdev);
