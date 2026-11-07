@@ -97,6 +97,18 @@
       "message_id": "1567559807760597002",
       "hash": "4366db6efad62e25febd3c0bdcd03a6477c1634468b644e8804d9c3227e6dd08"
     },
+    "brcmfmac-cold-resume": {
+      "message_id": "1568654937867555029",
+      "hash": "4ee9bb65b6229f0d66e89322eaf5e782cf7acdbd01b3e4d49b62b2d769c704b1"
+    },
+    "bluetooth-bcm4377-cold-resume": {
+      "message_id": "1568654941910736956",
+      "hash": "694871ca009eaa57d21504bf81c4985d45753919db09c9f1bf8e5c50addace96"
+    },
+    "brcmfmac-flowring-delete": {
+      "message_id": "1568654946235191326",
+      "hash": "f803f2addbb3bc7f52aef21b9e9cff30b535016f9c3df55d75219d318f700b49"
+    },
     "brcmfmac-bcm4377-d3-ack": {
       "message_id": "1550620841786740856",
       "hash": "d1aa40106deee6e5967edd1389670e2fbb421b7969d59297b37253e5c013bc84"
