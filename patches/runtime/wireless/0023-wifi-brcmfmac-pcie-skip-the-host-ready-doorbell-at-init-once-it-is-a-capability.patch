@@ -1,0 +1,59 @@
+From: Andre Eikmeyer <dev@deq.rocks>
+Subject: [PATCH] wifi: brcmfmac: pcie: skip the host ready doorbell at init once it is a capability
+
+Since the host capabilities are written, brcmfmac enables host ready
+when the firmware reports BRCMF_PCIE_SHARED_HOSTRDY_DB1, and still rings
+the host ready doorbell in brcmf_pcie_preinit(). The BCM4364B3 firmware
+of the MacBookPro16,1 halts on that doorbell before it answers the first
+ioctl, and the BCM4364B2 firmware of the MacBookPro15,1 does so on some
+loads:
+
+  brcmf_pcie_handle_mb_data D2H_MB_DATA: FW HALT
+  brcmf_attach: dongle is not responding: err=-5
+
+Without the host ready capability the BCM4377 firmware leaves the first
+ioctl unanswered, so the capability stays. With host ready enabled the
+firmware takes the doorbell as the exit from D3, which is where Broadcom's
+DHD driver rings it, after D0_INFORM. Ring it at init only when host ready
+is not a capability. brcmf_pcie_pm_leave_D3() keeps ringing it after
+D0_INFORM.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -326,6 +326,7 @@ struct brcmf_pcie_shared_info {
+ 	dma_addr_t ringupd_dmahandle;
+ 	u8 version;
+ 	bool mb_via_ctl;
++	bool hostrdy;
+ };
+ 
+ #define BRCMF_OTP_MAX_PARAM_LEN 16
+@@ -1600,7 +1601,13 @@ static int brcmf_pcie_preinit(struct device *dev)
+ 	brcmf_dbg(PCIE, "Enter\n");
+ 
+ 	brcmf_pcie_intr_enable(buspub->devinfo);
+-	brcmf_pcie_hostready(buspub->devinfo);
++	/*
++	 * Once the host capabilities enable host ready, the firmware takes the
++	 * doorbell as the exit from D3 only. The BCM4364 firmware halts on it
++	 * here.
++	 */
++	if (!buspub->devinfo->shared.hostrdy)
++		brcmf_pcie_hostready(buspub->devinfo);
+ 
+ 	return 0;
+ }
+@@ -1807,8 +1814,10 @@ brcmf_pcie_init_share_ram_info(struct brcmf_pciedev_info *devinfo,
+ 			!(shared->flags & BRCMF_PCIE_SHARED_USE_MAILBOX);
+ 
+ 		host_cap = shared->version;
+-		if (shared->flags & BRCMF_PCIE_SHARED_HOSTRDY_DB1)
++		if (shared->flags & BRCMF_PCIE_SHARED_HOSTRDY_DB1) {
+ 			host_cap |= BRCMF_HOSTCAP_H2D_ENABLE_HOSTRDY;
++			shared->hostrdy = true;
++		}
+ 		if (shared->flags & BRCMF_PCIE_SHARED_DAR)
+ 			host_cap |= BRCMF_HOSTCAP_H2D_DAR;
+ 		host_cap |= BRCMF_HOSTCAP_DS_NO_OOB_DW;
