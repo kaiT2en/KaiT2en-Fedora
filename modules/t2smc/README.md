@@ -1,19 +1,12 @@
 # t2smc
 
-Minimal SMC driver for T2 Macs. Provides fan control, battery charge limit,
-temperature, current, voltage and power sensors, a watchdog, SMC event
-handling and RTC access. Hardware monitoring is exposed via
-the standard Linux hwmon interface. Requires no other SMC driver.
-
-This is based on applesmc with macsmc patches but rebuilt from scratch.
-The idea is to only use keys we really need and leave the rest to ACPI and drivers
-for maximum stability.
+SMC driver for T2 Macs: fan control, battery charge limit, sensors through
+hwmon, a watchdog, SMC events and the RTC. It replaces applesmc and only uses
+the keys it needs, everything else stays with ACPI and other drivers.
 
 ## Installation
 
-### One-time test / non persistent
-
-Build and load the module for the currently running kernel without persistant installation:
+### Test without installing
 
 ```sh
 make
@@ -21,17 +14,13 @@ sudo modprobe -r applesmc # (if installed)
 sudo insmod t2smc.ko
 ```
 
-This is enough to test fan control, temperature sensors, battery charge limit,
-and RTC registration without installing anything. If another RTC driver already
-registered `rtc0`, the t2smc RTC appears as the next free `rtcN`.
+If another RTC driver already registered `rtc0`, the t2smc RTC becomes the
+next free `rtcN`.
 
-### Persistent Installation with RTC
+### Install with RTC (Fedora)
 
-This is for Fedora (dracut). For other distros please use equivalent commands.
-
-To make `t2smc` available early enough to become `rtc0` and set the system clock,
-install it for the current kernel and rebuild only that kernel's initramfs with
-the driver included:
+To become `rtc0` and set the system clock, the driver has to be in the
+initramfs:
 
 ```sh
 make
@@ -40,47 +29,34 @@ sudo make install
 sudo dracut --force --add-drivers "t2smc" /boot/initramfs-$(uname -r).img $(uname -r)
 ```
 
-For the matching boot entry, add these kernel command line parameters:
+Add to the kernel command line, so that neither `rtc_cmos`, the ACPI TAD RTC
+nor applesmc gets there first:
 
 ```text
 initcall_blacklist=cmos_init module_blacklist=acpi_tad,applesmc
 ```
 
-`initcall_blacklist=cmos_init` prevents the built-in `rtc_cmos` driver from
-registering as `rtc0`. `module_blacklist=acpi_tad,applesmc` prevents the ACPI
-TAD RTC and `applesmc` module from loading. With `t2smc` in the initramfs, the
-expected result is:
+The kernel log then shows:
 
 ```text
 t2smc APP0001:00: registered as rtc0
 t2smc APP0001:00: setting system clock ...
 ```
 
-To uninstall the module:
-
-```sh
-sudo make uninstall
-```
+`sudo make uninstall` removes it again.
 
 ## Usage
 
-After loading, the hwmon device appears at `/sys/class/hwmon/hwmonN/` with
-`name` set to `t2smc`. The exact number `N` depends on your system and can
-change across boots. This commands will list available paths:
+The hwmon device is named `t2smc`. Its number changes across boots:
 
 ```sh
-for f in /sys/class/hwmon/hwmon*/name; do
-    echo "$f: $(cat "$f")"
-done
-
 HWMON="$(dirname "$(grep -l '^t2smc$' /sys/class/hwmon/hwmon*/name)")"
 ```
 
 ## Sensors
 
-Sensors are discovered dynamically by key prefix. Every key with a float or
-fixed point type becomes a standard hwmon channel. The label is the
-four-character SMC key:
+Every float or fixed point key with one of these prefixes becomes a hwmon
+channel, labeled with the SMC key:
 
 | Prefix | hwmon files                   | Unit              |
 |--------|-------------------------------|-------------------|
@@ -89,8 +65,8 @@ four-character SMC key:
 | `V`    | `inN_label`, `inN_input`      | millivolt         |
 | `P`    | `powerN_label`, `powerN_input`| microwatt         |
 
-Integer keys in these ranges are skipped because their unit differs between
-models. Channel numbers depend on the machine, so match sensors by label:
+Integer keys are skipped because their unit differs between models. Channel
+numbers depend on the machine, so match sensors by label:
 
 ```sh
 paste "$HWMON"/power*_label "$HWMON"/power*_input
@@ -98,9 +74,8 @@ paste "$HWMON"/power*_label "$HWMON"/power*_input
 
 ## Power telemetry
 
-`t2smc` leaves the system battery and charger under the control of the
-mainline ACPI SBS drivers. It exposes additional SMC telemetry on its hwmon
-device without registering another battery:
+Battery and charger stay with the ACPI SBS drivers. The hwmon device adds
+SMC telemetry without registering another battery:
 
 ```text
 power_event_count
@@ -122,36 +97,16 @@ smc_battery_charge_voltage_uv
 smc_battery_cell_voltage_max_uv
 ```
 
-The time files return no data while the battery is neither charging nor
-discharging. Battery current and battery power are positive while charging
-and negative while discharging.
-
-Files for SMC keys not available on a particular model return no data. Values
-are read on demand. There is no periodic kernel polling.
-
-The driver subscribes to the standard power-supply notifier chain. An ACPI SBS
-battery or adapter notification schedules an SMC status snapshot and increments
-`power_event_count`.
-
-To verify the event path, read the counter, connect or disconnect the charger,
-and read it again:
-
-```sh
-HWMON="$(dirname "$(grep -l '^t2smc$' /sys/class/hwmon/hwmon*/name)")"
-cat "$HWMON/power_event_count"
-# Connect or disconnect the charger.
-cat "$HWMON/power_event_count"
-```
+Battery current and power are positive while charging. Files whose key the
+model lacks, and the time files while the battery idles, return no data.
+Values are read on demand, without polling. Every ACPI SBS power-supply
+notification increments `power_event_count`.
 
 ### Fan control
 
-We do offer a program to control the fans on T2 MacBooks (https://github.com/deqrocks/t2-fancontrol)
-Anyways here are examples to manual control the fans:
+T2 Fan Control (`apps/t2-fan-control`) is the GUI. By hand:
 
 ```sh
-# Identify the t2smc hwmon device
-HWMON="$(dirname "$(grep -l '^t2smc$' /sys/class/hwmon/hwmon*/name)")"
-
 # Read current fan speeds
 cat "$HWMON/fan1_input"
 cat "$HWMON/fan2_input"
@@ -163,16 +118,8 @@ echo 3000 | sudo tee "$HWMON/fan1_target"
 echo 0 | sudo tee "$HWMON/fan1_target"
 ```
 
-The fan speed values are in RPM. Writing to `fanN_target` switches the fan to
-manual mode and sets the target speed. Writing `0` returns the fan to the SMC
-fan control.
-
-The attributes `fanN_min` and `fanN_max` are limits reported by the SMC.
-`fanN_min` is writable and `fanN_max` is read-only. If the SMC provides a fan
-name (`FnID`), it appears in `fanN_label`.
-
-After resume the driver restores manual mode and the last target speed for
-every fan that was set through `fanN_target` and not handed back.
+`fanN_min` (writable) and `fanN_max` are the SMC limits, `fanN_label` is the
+SMC fan name if there is one. Manual targets survive suspend.
 
 ### Raw SMC key access
 
@@ -185,33 +132,20 @@ written this way.
 
 ### Battery charge limit
 
-`t2smc` sets the charge limit through the SMC key `CHLS`, the way powerd does
-on macOS. It attaches the limit to `BAT0` as the standard
-`charge_control_end_threshold` property, so any desktop environment that
-speaks that interface can set it through its own power settings.
-
-T2 SMC Control (`apps/t2-smc-control`) shows sensor data and the battery
-charge limit. To set the limit manually:
+The limit uses the SMC key `CHLS` like macOS and appears on `BAT0` as
+`charge_control_end_threshold`, so desktop power settings can set it. T2 SMC
+Control (`apps/t2-smc-control`) does too:
 
 ```sh
-# Read current charge limit
-cat "$HWMON/battery_charge_limit"
-
-# Set charge limit to 80 percent
 echo 80 | sudo tee /sys/class/power_supply/BAT0/charge_control_end_threshold
 ```
 
-Valid range is 1-100, 100 means no limit. The SMC keeps the limit over
-reboots and across operating systems.
+1-100, 100 means no limit. The SMC keeps it across reboots and operating
+systems. A leftover limit in the pre-T2 key `BCLM`, which macOS cannot lift
+on T2 Macs, is cleared at probe.
 
-The legacy key `BCLM` of Macs before the T2 still limits charging, but macOS
-does not use it on T2 Macs and cannot lift it. `t2smc` clears a `BCLM` limit
-at probe.
-
-A permanent limit keeps the gauge from recalibrating. macOS therefore lifts
-it for a full charge from time to time. User space does the same through
-`battery_charge_limit_suspended` and decides on the gauge data the SMC
-reports per cell:
+A permanent limit keeps the gauge from recalibrating, so user space lifts it
+for a full charge from time to time, based on the per-cell gauge data:
 
 | Attribute | SMC keys | Meaning |
 |---|---|---|
@@ -221,16 +155,7 @@ reports per cell:
 
 ### Temperature sensors
 
-```sh
-# List all sensor labels
-cat "$HWMON"/temp*_label
-
-# Read a specific sensor, e.g. GPU proximity
-cat "$HWMON/temp21_input"
-```
-
-Temperature sensor labels are the SMC key names. Relevant GPU sensors on T2
-Macs include:
+Common keys on T2 Macs:
 
 | Label  | Sensor                  |
 |--------|-------------------------|
@@ -243,56 +168,33 @@ Macs include:
 | TC0P   | CPU proximity           |
 | TB0T   | Battery temperature     |
 
-Values are in millidegrees Celsius. Divide by 1000 for degrees.
-
 ### Watchdog
 
-If the SMC has the `OSWD` key, or `NATi` and `NATJ` on older firmware,
-`t2smc` registers a standard Linux watchdog (`/dev/watchdogN`). systemd can
-use it through `RuntimeWatchdogSec=` in `/etc/systemd/system.conf`. The
-SMC itself accepts at most 255 seconds. Longer timeouts, such as the 10
-minutes systemd requests during shutdown (`RebootWatchdogSec=`), are emulated
-by the kernel watchdog core, which keeps pinging the SMC within that limit.
-The watchdog is stopped before system sleep and restarted on resume, and it
-is stopped on reboot and poweroff. Start, stop and timeout changes are logged.
+With `OSWD`, or `NATi` and `NATJ` on older firmware, `t2smc` registers a
+watchdog for systemd's `RuntimeWatchdogSec=`. The SMC accepts at most 255
+seconds, the watchdog core emulates longer timeouts. It pauses over sleep and
+stops on reboot and poweroff.
 
 ### SMC events
 
-SMC events work like in macOS AppleSMC. When the SMC interrupt and the I/O
-port window that carries the event ID are available, the driver sets `NTOK`
-right after mapping MMIO. Before that write it drains pending events, because
-the interrupt is edge triggered. From then on every SMC command sleeps until
-the KeyDone interrupt. Without the interrupt, the port window or a working
-`NTOK` the driver polls the key status every millisecond instead. If a
-KeyDone interrupt goes missing, it reverts to polling and retries `NTOK` on
-the next resume. The kernel log shows which mode is active.
+With the SMC interrupt and the event port window available, the driver sets
+`NTOK` and every SMC command sleeps until the KeyDone interrupt. Otherwise, or
+when a KeyDone goes missing, it polls every millisecond and retries `NTOK` on
+the next resume. The kernel log shows the active mode.
 
-When the SMC reports imminent power loss (event `0x40`), the driver syncs
-all filesystems and flushes the block devices. macOS reacts to the same event
-by telling every AHCI and NVMe disk to prepare for abrupt power loss. Log
-messages from the SMC (event `0x4c`) appear in the kernel log as `SMC log:`.
-A BridgeOS panic is logged as a warning. Thermal level changes are only
-logged at debug level because the SMC sends them about once per second under
-load. A command that gets no KeyDone within one second fails unless its
-status already reports completion.
+On imminent power loss (event `0x40`) the driver syncs filesystems and
+flushes block devices. SMC log messages (event `0x4c`) appear as `SMC log:`,
+a BridgeOS panic as a warning, thermal level changes only at debug level.
 
-At load the driver logs the cause of the previous shutdown from `MSSD`, the
-same value macOS prints as `Previous shutdown cause`. Like macOS it clears
-the one-shot causes -64 and -62 after reporting them.
+At load the driver logs the previous shutdown cause from `MSSD` and clears the
+one-shot causes -64 and -62 like macOS. A T2 panic leaves `MSSD` unchanged,
+so the raw x86 state keys `MSPP`, `MSPR`, `EFBS` and `MSPU` are logged as
+well, as `previous x86 state:`.
 
-`MSSD` only reflects how the SMC shut down the x86 side. It stays unchanged
-when the T2 panics and takes the x86 side down, so a T2 panic still shows
-the previous cause. For that case the driver also logs the raw x86 state keys
-that bridgeOS records in its own panic log (`MSPP`, `MSPR`, `EFBS` and
-`MSPU`) as `previous x86 state:`, in the byte order `smcDiagnose` prints.
-
-Each logged cause carries its source. `Apple` descriptions come from Apple's
-PowerManagement sources (`common/CommonLib.c`, PowerManagement-1846).
-`community` descriptions come from the Eclectic Light Company and George
-Garside lists. Only causes on which those lists agree, or that only one of
-them names, are included. Apple wins every conflict. The community entries
-are unverified and the log is meant to confirm or refute them. Any other
-value is logged as `unknown`.
+`Apple` descriptions come from Apple's PowerManagement sources
+(`common/CommonLib.c`, PowerManagement-1846). `community` descriptions come
+from the Eclectic Light Company and George Garside lists and are unverified.
+Apple wins every conflict, other values are logged as `unknown`.
 
 | Cause | Source    | Meaning |
 |-------|-----------|---------|
@@ -323,11 +225,8 @@ value is logged as `unknown`.
 | -104 | community | Unknown battery fault |
 | -127 | community | PMU/SMC forced shutdown for another cause |
 
-The SMC publishes its current thermal levels for CPU, IO and GPU. They are
-read on demand from the hwmon files `smc_thermal_level_cpu`,
-`smc_thermal_level_io` and `smc_thermal_level_gpu`. When the SMC reports a
-thermal level change, the driver notifies pollers of each file whose value
-changed, so readers can wait with `poll()` instead of rereading them.
+The thermal levels for CPU, IO and GPU are in `smc_thermal_level_cpu`,
+`smc_thermal_level_io` and `smc_thermal_level_gpu`, which support `poll()`.
 
 ### Module parameters
 
@@ -338,17 +237,10 @@ changed, so readers can wait with `poll()` instead of rereading them.
 
 ### RTC
 
-If the SMC RTC keys are present, `t2smc` registers a standard Linux RTC device.
-The exact number `N` depends on load order. With early setup it can be `rtc0`;
-with a late `insmod` it may be `rtc1`, `rtc2`, or higher.
+With the SMC RTC keys present, `t2smc` registers an RTC. Its number depends
+on load order.
 
 ```sh
-# List RTC devices
-for f in /sys/class/rtc/rtc*/name; do
-    echo "$f: $(cat "$f")"
-done
-
-# Select the t2smc RTC
 RTC="$(dirname "$(grep -l '^t2smc ' /sys/class/rtc/rtc*/name)")"
 RTC_DEV="/dev/$(basename "$RTC")"
 
@@ -359,33 +251,17 @@ sudo hwclock --rtc "$RTC_DEV" --show
 sudo hwclock --rtc "$RTC_DEV" --systohc
 ```
 
-The RTC follows Apple's key protocol.`CLKO` is read and sign-extended during
-probe, while `CLKR` supplies the counter frequency (32768 Hz if unavailable).
-If an initial `CLKL` read succeeds, each RTC operation obtains the counter with
-Apple's asynchronous latch exchange. Write six `0xff` bytes, wait 20 ms, then
-poll the 48-bit result.  Machines without that path use the direct `CLKM`
-counter. Calendar time is `(counter + CLKO) / CLKR`. Setting the RTC changes
-`CLKO`.
+Calendar time is `(counter + CLKO) / CLKR`. The counter comes from the `CLKL`
+latch (write six `0xff` bytes, wait 20 ms, poll the 48-bit result) or from
+`CLKM` where that is missing. `CLKR` defaults to 32768 Hz. Setting the RTC
+writes `CLKO`, only when the offset changed by more than a quarter second.
 
-As with AppleSMCRTC, `CLKL` traffic is generated when clients request
-RTC/calendar time. As AppleSMCRTC, the driver writes `CLKO` only when the
-offset changed. Setting the RTC tolerates a quarter second, since the time
-comes in whole seconds.
+Before sleep and at shutdown the driver syncs `CLKO` with the system clock,
+since the T2 keeps its own time from the SMC RTC while the host is off.
+Kait2en also sets the RTC once chrony has synchronized. The kernel's NTP sync
+writes the CMOS clock instead and does not reach this RTC.
 
-Before system sleep and at shutdown the driver synchronizes `CLKO` with the
-system clock at nanosecond resolution, like macOS does before power
-transitions. The T2 derives its own clock from the SMC RTC while the host
-sleeps or is off. Kait2en also sets the RTC once chrony has synchronized at
-boot. The kernel's NTP sync does not reach this RTC on x86, because it writes
-the legacy CMOS clock instead.
-
-`tools/t2smc-rtc-client.c` reads the RTC at a fixed interval to exercise the
-`CLKL` path while testing. It is not built with the module:
-
-```bash
-cc -O2 -Wall -Wextra -o t2smc-rtc-client tools/t2smc-rtc-client.c
-sudo ./t2smc-rtc-client /dev/rtc0 1000
-```
+`tools/t2smc-rtc-client.c` reads the RTC at an interval to exercise `CLKL`.
 
 ## License
 

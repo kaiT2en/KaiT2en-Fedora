@@ -49,11 +49,11 @@
 /* I/O port window, only used to fetch the event ID of an interrupt */
 #define T2SMC_PORT_MIN_SIZE       32
 #define T2SMC_PORT_EVENT          0x1f
-#define T2SMC_PORT_THERMAL_CPU    0x18  /* thermal levels, read by */
-#define T2SMC_PORT_THERMAL_IO     0x19  /* AppleSMC::smcGetThermalLevel */
+#define T2SMC_PORT_THERMAL_CPU    0x18  /* thermal levels */
+#define T2SMC_PORT_THERMAL_IO     0x19
 #define T2SMC_PORT_THERMAL_GPU    0x1a
-#define T2SMC_PORT_PLIMIT         0x10  /* CPU, GPU, memory, idle steps, */
-#define T2SMC_PORT_PLIMIT_GPU     0x14  /* read by AppleSMC::smcGetPLimits */
+#define T2SMC_PORT_PLIMIT         0x10  /* CPU, GPU, memory, idle steps */
+#define T2SMC_PORT_PLIMIT_GPU     0x14
 
 /* SMC log text that comes with event 0x4c */
 #define T2SMC_IOMEM_LOG           0x0080
@@ -132,7 +132,7 @@
 #define T2SMC_WDT_LEGACY_MODE   "NATJ"  /* r-w legacy watchdog action */
 /*
  * Keys that select the PLimit data layout and hold the GPU step counts.
- * X86PlatformPlugin::setPLimitRange uses HE0N and HI0N for the discrete and
+ * macOS uses HE0N and HI0N for the discrete and
  * the integrated GPU, or HE2N and HE0N when HE2N exists.
  */
 #define T2SMC_PLIMIT_GEN        "RGEN"
@@ -142,7 +142,7 @@
 #define T2SMC_PLIMIT_EGPU3_STEPS "HE2N"
 enum { T2SMC_DGPU, T2SMC_IGPU, T2SMC_GPUS };
 /*
- * X86PlatformPlugin::setCPUFloor writes the turbo P-state count to MSTS and
+ * macOS writes the turbo P-state count to MSTS and
  * the non-turbo P-states above CPUFloor to MSPC, in that order.
  */
 #define T2SMC_CPU_TURBO_STATES  "MSTS"
@@ -160,7 +160,7 @@ enum { T2SMC_DGPU, T2SMC_IGPU, T2SMC_GPUS };
 /* Sampling the system clock and latching the counter are a few ms apart */
 #define T2SMC_RTC_SYNC_TOLERANCE_MS    50
 #define T2SMC_WDT_LEGACY_RESTART 2
-/* Shutdown causes that AppleSMC::smcPublishShutdownCause treats specially */
+/* Shutdown causes that macOS treats specially */
 #define T2SMC_CAUSE_FLAGGED      0xc0  /* -64, only valid while MSSW is 1 */
 #define T2SMC_CAUSE_ONE_SHOT     0xc2  /* -62, reset to 6 once reported */
 #define T2SMC_CAUSE_RESET        6
@@ -293,9 +293,8 @@ static inline bool iomem_cmd_done(struct t2smc_device *t2)
 }
 
 /*
- * The KeyDone wait follows AppleSMC::waitForKeyDone. With SMC events enabled
- * it sleeps until the KeyDone interrupt, otherwise it polls the key status
- * every millisecond like waitForKeyDoneUsingPolling.
+ * With SMC events enabled the KeyDone wait sleeps until the KeyDone
+ * interrupt, otherwise it polls the key status every millisecond.
  */
 static int iomem_wait_poll(struct t2smc_device *t2)
 {
@@ -1793,7 +1792,7 @@ static const char *t2smc_gpu_steps_key(struct t2smc_device *t2, int gpu)
 }
 
 /*
- * Step counts of the GPUs. AGPM reports them only for GPUs it drives, and
+ * Step counts of the GPUs. macOS reports them only for GPUs it drives, and
  * only user space knows which GPUs are there and their ranges.
  */
 static ssize_t t2smc_gpu_steps_show(struct device *dev,
@@ -1848,7 +1847,7 @@ static int t2smc_write_cpu_floor(struct t2smc_device *t2, const u8 *floor)
 }
 
 /*
- * CPU P-state range as X86PlatformPlugin::setCPUFloor reports it. Only user
+ * CPU P-state range as macOS reports it. Only user
  * space knows CPUFloor of the board and the P-state table.
  */
 static ssize_t smc_cpu_floor_show(struct device *dev,
@@ -2091,7 +2090,7 @@ static int t2smc_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	return 0;
 }
 
-/* Like AppleSMCRTC, only write CLKO when the offset changed. */
+/* Like macOS, only write CLKO when the offset changed. */
 static int t2smc_rtc_write_offset(struct t2smc_device *t2, s64 off,
 				  s64 tolerance)
 {
@@ -2599,7 +2598,7 @@ static irqreturn_t t2smc_irq(int irq, void *data)
 }
 
 /*
- * Mirrors the NTOK case of AppleSMC::smcWriteKeyMMIO. Events that are still
+ * Handles an NTOK reply to a key write. Events that are still
  * pending are drained first, because the interrupt is edge triggered and
  * would not fire again for the KeyDone of the NTOK write. Interrupt mode is
  * switched on before the write so that its KeyDone already arrives by
@@ -2976,8 +2975,7 @@ static const struct {
 
 /*
  * Log the cause of the previous shutdown like macOS does at boot ("Previous
- * shutdown cause: %d"). The writes mirror AppleSMC::smcPublishShutdownCause
- * so that a one-shot cause is not reported again on the next boot.
+ * shutdown cause: %d"). The writes match macOS so that a one-shot cause is not reported again on the next boot.
  */
 static void t2smc_log_shutdown_cause(struct t2smc_device *t2)
 {
@@ -3023,7 +3021,7 @@ static void t2smc_log_shutdown_cause(struct t2smc_device *t2)
 /*
  * MSSD stays unchanged when the T2 panics and takes the x86 side down.
  * bridgeOS records these keys in its own panic log, so they are logged raw
- * in the byte order smcDiagnose prints, to compare them across boots.
+ * in the byte order of that log, to compare them across boots.
  */
 static void t2smc_log_x86_state(struct t2smc_device *t2)
 {
@@ -3077,7 +3075,7 @@ static void t2smc_log_plimit_keys(struct t2smc_device *t2)
 
 /*
  * The SMC forgets the step counts over sleep, user space set them once.
- * X86PlatformPlugin rewrites the CPU floor on wake as well.
+ * macOS rewrites the CPU floor on wake as well.
  */
 static void t2smc_set_plimit_ranges(struct t2smc_device *t2)
 {
@@ -3103,9 +3101,9 @@ static void t2smc_set_plimit_ranges(struct t2smc_device *t2)
 }
 
 /*
- * As AppleSMC::smcInitPLimits: RGEN 3 means data version 3. Otherwise the
+ * RGEN 3 means data version 3. Otherwise the
  * data size of DPLM selects it, 5 for version 3, 4 for 2 and 3 for 1, and a
- * missing DPLM means version 1. X86PlatformPlugin only acts on version 2 and
+ * missing DPLM means version 1. macOS only acts on version 2 and
  * later.
  */
 static void t2smc_read_plimit_version(struct t2smc_device *t2)
@@ -3287,7 +3285,7 @@ static int t2smc_resume(struct device *dev)
 	struct t2smc_device *t2 = dev_get_drvdata(dev);
 	int ret;
 
-	/* Like AppleSMC::setPowerState, retry NTOK after a revert to polling */
+	/* Like macOS, retry NTOK after a revert to polling */
 	if (t2->has_events && !READ_ONCE(t2->cmd_irq)) {
 		ret = t2smc_enable_notifications(t2);
 		if (ret)
