@@ -17,10 +17,9 @@ The installation starts in macOS and continues in Fedora:
 
 The USB drive is a live installer. It only carries the drivers needed to install KAIT2EN.
 
-The installer currently supports Fedora Workstation, Fedora KDE Desktop and
-Fedora COSMIC Spin. We strongly recommend installing Workstation (Gnome)
-because that is what KAIT2EN devs use. We still rely on your feedback on
-other DE's. But if you want the most flawless experience, Gnome is the way.
+The installer supports Fedora Workstation, Fedora KDE Desktop and Fedora
+COSMIC Spin. We recommend Workstation (GNOME), which the KAIT2EN developers
+use and test. Feedback on the other desktops is welcome.
 
 ## Before you start
 
@@ -57,9 +56,9 @@ disabled.
 ### Create space for Fedora
 
 Open Disk Utility in macOS. Select the internal macOS disk or container, choose
-`Partition`, and add a real `exFAT` partition for Fedora. Do not add an APFS
-volume. Fedora will reformat this partition during installation; `exFAT` only
-makes it easy to identify.
+`Partition`, and add an `exFAT` partition for Fedora, not an APFS volume.
+Fedora reformats it during installation. `exFAT` only makes it easy to
+identify.
 
 Choose the size carefully because resizing the partitions later is not a small
 maintenance task. Keep at least `50 GB` for macOS so there is enough space for
@@ -80,11 +79,8 @@ Choose the Fedora desktop and USB drive. The script downloads and verifies the
 official Fedora image, finds the Apple Wi-Fi firmware used by this Mac and asks
 for an exact confirmation before erasing the USB drive.
 
-The official Fedora image itself is not modified. After writing the verified
-vanilla image, the script adds KAIT2EN boot files only to the USB drive's EFI
-partition. Separate initramfs overlays provide the temporary input drivers and
-installer integration at boot; Fedora's live system and installation payload
-remain unchanged.
+The KAIT2EN boot files go to the USB drive's EFI partition. Initramfs overlays
+add the input drivers and installer integration at boot.
 
 Be exact when selecting the drive. All data on it will be destroyed.
 
@@ -151,7 +147,7 @@ sudo /run/kait2en/kait2en-live-diagnostics --rerun
 ```
 
 This reruns the firmware setup while recording what happened. The archive lands
-on a second USB drive when one is mounted, otherwise in `/tmp`; the path is
+on a second USB drive when one is mounted, otherwise in `/tmp`. The path is
 printed at the end. It contains host names, MAC addresses, and the names of
 nearby wireless networks, so inspect it before attaching it to a bug report.
 

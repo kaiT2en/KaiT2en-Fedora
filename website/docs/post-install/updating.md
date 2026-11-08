@@ -1,13 +1,7 @@
 # Updating
 
-KAIT2EN is meant to disappear. It's part of the concept. It serves the purpose
-of upstreaming code fixes. Every module and fix that gets upstreamed will disappear from
-the repo. Until we are left with a few T2 specific apps and other things that can't be upstreamed.
-Maybe it will survive as a collection of helpful apps for T2 Macs.
-
-As long as this isn't the case, we need to update the Fedora kernel and our modules and apps.
-The question how to do that has kept us a bit busy. We could go COPR and offer .rpm.
-But the project is yet too small to fund itself.
+KAIT2EN carries fixes until they are upstream. Merged fixes leave the repo.
+Until then, updates bring new module, app and installer versions.
 
 ## Updating KAIT2EN
 
@@ -17,110 +11,70 @@ Open a terminal and run:
 kait2en-install
 ```
 
-This updates the KAIT2EN Git checkout and runs the regular project installer.
-Review its output and reboot after it completes successfully.
+This updates the KAIT2EN Git checkout and runs the project installer. Reboot
+after it completes successfully.
 
-If that fails for whatever reason, you can always clone our repo directly to
-a folder of your choice and run the main install script directly.
-So for example, open a terminal and type `cd`. This will take you to your
-username's home directory. Then type 
+If `kait2en-install` fails, clone the repo and run the installer from there:
 
 ```bash
-git clone https://github.com/kaiT2en/KaiT2en-Fedora.git
-```
-
-This will create a folder `KaiT2en-Fedora` in your home dir which contains our latest code.
-Then simply type:
-
-```bash
-cd KaiT2en-Fedora/scripts/fedora
+git clone https://github.com/kaiT2en/KaiT2en-Fedora.git ~/KaiT2en-Fedora
+cd ~/KaiT2en-Fedora/scripts/fedora
 sudo ./install.sh
 ```
 
-This will run the installer and update your KAIT2EN installation just like
-`kait2en-install` would do.
-
-### KaiT2en Update (experimental)
-
-KaiT2en Update is an app that installs only what changed since your last
-update. It is experimental. Everything above keeps working as before, and
-`kait2en-install` stays the recommended way to update.
-
-Open **KaiT2en Update** from the app drawer. It fetches the latest code from
-GitHub and lists the installer steps and apps whose sources changed. A change
-to a kernel module only rebuilds the DKMS modules and the initramfs, a change
-to one app only rebuilds that app. Changes to the website or the docs install
-nothing.
-
-Uncheck what you want to skip and press **Update**. Your password is asked
-once. Restart when the app tells you so. When the installer itself changed,
-the app offers **Install Everything**, which runs the full installer like
-`kait2en-install`.
-
-Every step records the commit it was installed from in
-`/var/lib/kait2en-installer/applied/`. Installations from before the app have
-no records yet. The app then compares with your local checkout, and the first
-update from the app writes the records.
-
-The optional parts, T2 Touch Bar, Automatic brightness and KaiT2en Vornehm,
-are never added or removed by an update. Switch them in the Optional section of the app and
-press **Update**.
-
-### Hybrid graphics and kernel updates
-
-On a MacBookPro15,1, 16,1 or 16,4, the patched graphics driver is rebuilt
-during every kernel update. dnf does not show its output, so the update simply
-takes a few minutes longer. Reboot only after dnf has finished. The build log
-is written to `/var/log/kait2en-gpu-runtime-pm.log`.
-
-If the build failed, rebuild the driver for the new kernel and reboot:
-
-```bash
-cd /usr/local/src/KaiT2en-Fedora/scripts/fedora
-sudo ./install-gpu-runtime-pm.sh install <kernel>
-```
-
-`<kernel>` is the version of the new kernel, for example the output of
-`uname -r` after booting it. `kait2en-install` rebuilds the driver for the
-running kernel as part of its normal run.
+[KaiT2en Update](applications/kait2en-update.md) is an experimental app that
+installs only what changed. [Multicall commands](multicall-commands.md) update
+only the modules or only the apps.
 
 ## Updating Fedora
 
-You just update Fedora like everyone else. DKMS will notice and recompile our modules against the
-latest kernel. On Macs that use the patched AMDGPU module (MacBookPro15,1, 16,1, 16,4 and the 5K
-iMacs), a KAIT2EN hook also rebuilds it for the new kernel. This needs network access and makes
-kernel updates take a few minutes longer. dnf stays quiet meanwhile; the build log is in
-`/var/log/kait2en-gpu-runtime-pm.log`. See [Configuring GPUs](configuring-gpus.md) if it fails. It's always worth visiting the [KAIT2EN community on Discord](https://discord.gg/AGfjRk4ydj) or [Matrix](https://matrix.to/#/%23kait2en:matrix.org) to make sure you won't run into issues like kernel regressions.
+Update Fedora as usual. DKMS rebuilds the KAIT2EN modules for each new kernel.
+
+On Macs with the patched AMDGPU module (MacBookPro15,1, 16,1, 16,4, iMac20,1
+and iMac20,2), a kernel-install hook also rebuilds AMDGPU for the new kernel.
+It downloads the kernel source RPM, so it needs network access and adds a few
+minutes to the update. dnf shows no output meanwhile. Reboot only after dnf has
+finished. The build log is `/var/log/kait2en-gpu-runtime-pm.log`.
+
+If that build failed, the new kernel boots with Fedora's stock AMDGPU. Rebuild
+it and reboot:
+
+```bash
+sudo /usr/local/libexec/kait2en/gpu-runtime-pm/install-gpu-runtime-pm.sh install <kernel>
+sudo reboot
+```
+
+`<kernel>` is the new kernel version, for example `uname -r` after booting it.
+See [Configuring GPUs](configuring-gpus.md) for details.
+
+Kernel regressions are reported on [Discord](https://discord.gg/AGfjRk4ydj) and
+[Matrix](https://matrix.to/#/%23kait2en:matrix.org).
 
 ## Repairing a broken kernel update
 
-You can mess up DKMS when upgrading the kernel. For example when interrupting DKMS while the new Kernel is booting.
-Then you are left with half broken KAIT2EN modules. To repair this, just boot into an older kernel and clean up the new.
+An interrupted DKMS build, for example by a reboot during the update, leaves
+incomplete modules for the new kernel. Boot an older kernel from GRUB and
+rebuild the new one:
 
-```
-#replace the kernel version 7.1.3-201.fc44.x86_64 with your own
-sudo dracut --force /boot/initramfs-7.1.3-201.fc44.x86_64.img 7.1.3-201.fc44.x86_64 
+```bash
+# replace 7.1.3-201.fc44.x86_64 with the broken kernel version
+sudo dracut --force /boot/initramfs-7.1.3-201.fc44.x86_64.img 7.1.3-201.fc44.x86_64
 sudo kernel-install add 7.1.3-201.fc44.x86_64 /lib/modules/7.1.3-201.fc44.x86_64/vmlinuz
 sudo grubby --set-default /boot/vmlinuz-7.1.3-201.fc44.x86_64
 ```
 
+A faulty update can disable the internal keyboard and trackpad or Wi-Fi. Keep an
+external keyboard and mouse at hand when updating, for example while traveling.
+
 ### When you can't boot at all
 
-If you can no longer boot your system or the input drivers are not loaded, use
-the KAIT2EN USB stick. Boot into a live desktop and run:
+If the system no longer boots or the input drivers are missing, boot the
+KAIT2EN USB drive into the live desktop and run:
 
 ```bash
 sudo kait2en-rescue
 ```
 
-The rescue tool finds and mounts your Fedora installation, chroots you into it,
-and lets you rebuild the initramfs, verify the T2 input drivers, or choose the
+The rescue tool finds and mounts your Fedora installation, chroots into it,
+and lets you rebuild the initramfs, verify the T2 input drivers or choose the
 default boot entry.
-
-## When we mess up
-
-We are humans. We will mess up at some point. We recommend not to update when
-you don't have an external keyboard/mouse around. Like when you are travelling.
-But you should always be able to use GRUB to boot into an older kernel anyways.
-But be warned that when we mess up, you could loose VHCI devices or WiFi.
-And remember we are not paid. We will waste your time and we don't accept complaints.

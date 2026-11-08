@@ -1,5 +1,7 @@
 # T2 Zone Power
 
+<img class="app-shot" src="img/apps/t2-zone-power.webp" alt="T2 Zone Power with zone power, applied limits and temperatures">
+
 Applies the power limits of the SMC the way macOS does. The SMC shares the
 cooling budget between CPU, integrated GPU and discrete GPU by itself and
 asks the operating system to lower each of them in steps. Linux used to

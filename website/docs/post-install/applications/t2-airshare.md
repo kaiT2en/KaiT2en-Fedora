@@ -1,8 +1,10 @@
 # T2 AirShare
 
+<img class="app-shot" src="img/apps/t2-airshare.webp" alt="T2 AirShare with receiving, sending and trusted devices">
+
 T2 AirShare shares files with Apple devices over AirDrop and with Android
-phones over Quick Share, both in one app. Air from AirDrop, Share from
-Quick Share. Receiving and sending work the same way for both.
+phones over Quick Share, both in one app. Receiving and sending work the
+same way for both.
 
 - Open T2 AirShare and switch on "Visible to nearby devices". This starts the
   user service `t2-airshare.service`, which also runs after the next login.
@@ -72,8 +74,7 @@ connection and the transfer moves there. The phone joins it on its own.
 ## Terminal, for debugging only
 
 `t2airshare` (Quick Share) and `t2drop` (AirDrop through `t2-drop.service`)
-send and receive from a terminal. They are meant for debugging, not for
-everyday use. While T2 AirShare is visible, the terminal commands compete
+send and receive from a terminal, for debugging. While T2 AirShare is visible, the terminal commands compete
 with it for the Bluetooth advertisements and the Quick Share ports, devices
 then show up late or not at all. Stop the user service first and start it
 again afterwards.
@@ -112,7 +113,3 @@ systemctl --user disable --now t2-airshare.service
 
 AirDrop is a trademark of Apple Inc. Quick Share is a trademark of Google
 LLC. T2 AirShare is not affiliated with or endorsed by either.
-
-T2 AirShare was called T2 Share before AirDrop implementation. Updating
-moves its settings and trusted devices over and switches the user service
-to the new name.

@@ -13,8 +13,7 @@ Adjusts the display brightness to the ambient light the way macOS does.
 - The slider and the brightness keys always start from the real brightness.
 
 While it runs, GNOME's own automatic brightness and the dimming of the screen
-when idle are switched off. Both come back when it is removed. But they need
-to stay deactivated to not interfere with our implementation. A small GNOME
+when idle are switched off. Both come back when it is removed. A small GNOME
 Shell extension, KaiT2en Auto Brightness, keeps the slider in sync and is
 switched on by the service.
 

@@ -1,29 +1,26 @@
 # Touch ID
 
 KAIT2EN lets the finger you enrolled under macOS unlock the login screen and
-confirm `sudo` on Linux. Nothing is enrolled on Linux: the Secure Enclave keeps
-the fingerprint, compares it, and Linux only receives its verdict.
+confirm `sudo` on Linux. Nothing is enrolled on Linux. The Secure Enclave keeps
+the fingerprint, compares it and sends Linux its verdict.
 
 ## Prerequisites
 
-You need a finger enrolled under macOS, in System Settings > Touch ID. 
+You need a finger enrolled under macOS, in System Settings > Touch ID.
 The macOS installer tells you if none is enrolled while you are
 still in macOS. Your macOS and Linux passwords do not have to match.
 
 The Secure Enclave also needs a password to have unlocked its biometric keybag
 once since the T2 itself last powered on. Rebooting the Mac does not power off
 the T2, it only sleeps bridgeOS, so log into macOS once and it stays unlocked
-across Linux reboots. If `journalctl -u kait2en-t2-touchid` says no macOS user
-has a finger enrolled despite one clearly being set up, this is why.
-
-**TLDR:** TouchID is bound to T2 powercycles. Once the T2 panics or power is cut
-off, it will reboot and it will disable TouchID until you reboot into macOS
-and enter your password at login.
+across Linux reboots. A T2 panic or a power cut restarts the T2, and Touch ID
+stays off until you log into macOS again with your password. If
+`journalctl -u kait2en-t2-touchid` says no macOS user has a finger enrolled
+although one is set up, this is why.
 
 ## Binding
 
-The Secure Enclave keeps the fingerprint and compares it. Linux only learns
-which enrolled finger it saw, and `fprintd` remembers which of them belong to
+Linux learns which enrolled finger the Secure Enclave saw, and `fprintd` remembers which of them belong to
 your account. That binding is made without touching the sensor, because it is
 only the statement that the macOS-enrolled fingers are yours, the same
 assumption macOS itself makes. The finger still has to be on the sensor at

@@ -1,7 +1,8 @@
 # KaiT2en Update
 
-Experimental. The previous way of updating with `kait2en-install` keeps
-working and stays the recommended one, see
+<img class="app-shot" src="img/apps/kait2en-update.webp" alt="KaiT2en Update listing the available updates">
+
+Experimental. `kait2en-install` stays the recommended way to update, see
 [Updating](../updating.md).
 
 Compares your installation with GitHub and installs only what changed. A full
@@ -16,6 +17,11 @@ Most updates only touch one or two of them.
 - Offers to install everything when the installer itself changed.
 - Adds or removes the optional parts, T2 Touch Bar, Automatic brightness and
   KaiT2en Vornehm. A switch only marks the change, Update carries it out.
+
+Each step records the commit it was installed from in
+`/var/lib/kait2en-installer/applied/`. Installations from before the app have
+no records, so the first check compares with the local checkout. Changes to
+the website or the docs install nothing.
 
 The installation runs through a restricted helper that asks for your password
 and only accepts the names of known installer steps and apps.

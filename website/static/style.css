@@ -2932,3 +2932,10 @@ a.board-title:hover {
     max-width: 100%;
     border: 1px solid var(--border);
 }
+
+.page-content img.app-shot {
+    display: block;
+    width: 100%;
+    max-width: 360px;
+    margin: 0 0 16px;
+}

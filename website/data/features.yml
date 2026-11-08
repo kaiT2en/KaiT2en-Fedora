@@ -48,7 +48,7 @@ items:
 
   - id: apple-t2-panel-self-refresh
     title: "Panel Self Refresh on T2 eDP panels"
-    state: in-progress
+    state: available
     upstream: submitted
     version: v4
     project: Linux kernel
@@ -59,7 +59,8 @@ items:
     updated: "2026-10-16"
     notes: >-
       Enables PSR with the sink-specific DPCD setup. Lowers idle display
-      power and allows package C-states up to PC10.
+      power and allows package C-states up to PC10. KAIT2EN ships it in a
+      patched i915 module until it is merged.
 
   - id: keyboard-backlight-reenumeration
     title: "Keyboard backlight after re-enumeration"

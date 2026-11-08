@@ -4,25 +4,20 @@ With the T2's Sidecar encoder, the desktop can be streamed to an Android tablet,
 iPad, a phone or another computer. [Sunshine](https://github.com/LizardByte/Sunshine)
 runs on the Mac and encodes with the T2, and
 [Moonlight](https://moonlight-stream.org) shows the stream on the other device
-and sends touch, mouse and keyboard input back. Thanks to the T2 being an ARM
-processor, this works significantly faster than on the x86 CPU while saving plenty
-of power.
+and sends touch, mouse and keyboard input back. The T2 encodes 1920x1080 at
+about 85 frames per second with about 20 ms latency and leaves the CPU free.
 
 The encoder is described in
 [Hardware video encoding](hardware-video-encoding.md#sidecar-encoder).
 
 ## Sunshine with V4L2 support
 
-Released Sunshine versions cannot use V4L2 encoders yet. The support is in
-[pull request #5717](https://github.com/LizardByte/Sunshine/pull/5717), which
-was opened in September 2026 for the Raspberry Pi and is still under review.
-Until it is merged, the `t2-sidecar` branch of
-[our Sunshine fork](https://github.com/deqrocks/Sunshine) carries that pull
-request unchanged. Nothing in it is specific to the T2. Once the pull request
-is merged, the regular Sunshine packages will work and this fork goes away.
-
-The pull request encodes without copies. The GPU converts every captured frame
-straight into the encoder's input buffers.
+V4L2 encoder support for Sunshine is in
+[pull request #5717](https://github.com/LizardByte/Sunshine/pull/5717), still
+under review. The `t2-sidecar` branch of
+[our Sunshine fork](https://github.com/deqrocks/Sunshine) carries it unchanged
+until it is merged. The GPU converts every captured frame directly into the
+encoder's input buffers.
 
 Install our Sunshine fork with
 
@@ -88,9 +83,8 @@ saved screen choice to it. That is why the dialog comes up each time.
 
 ## Moonlight settings
 
-- Resolution 1080p at 60 frames per second should run well on most modern WiFi
-  setups. While testing, we managed around 50 to 60FPS in 2560*1600 using WiFi6
-  and a rather modern Android tablet with Snapdragon CPU.
+- 1080p at 60 frames per second. 2560x1600 reached 50 to 60 frames per
+  second in our tests over Wi-Fi 6 with a Snapdragon Android tablet.
 - Video codec H.264 or automatic.
 - Sound plays on the tablet while streaming. To keep it on the Mac, enable
   playing audio on the PC in Moonlight's settings. To never stream sound from
@@ -98,11 +92,6 @@ saved screen choice to it. That is why the dialog comes up each time.
 
 ## Limitations
 
-- GNOME asks which screen to share again after every `t2-sidecar on`, see
-  [Extended display](#extended-display).
-- Locking the screen ends the Sidecar display, GNOME stops all screen sharing
-  then. Switch it on again after unlocking.
-- Sunshine logs "Encoder did not produce IDR frame when requested" while
-  streaming. The encoder returns frames asynchronously and Sunshine checks the
-  wrong packet. Keyframes on request arrive on the requested frame. Seems to be
-  a cosmetic issue only.
+Sunshine logs "Encoder did not produce IDR frame when requested" while
+streaming. The encoder returns frames asynchronously and Sunshine checks the
+wrong packet. Requested keyframes arrive on the requested frame.

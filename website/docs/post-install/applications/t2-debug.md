@@ -1,8 +1,10 @@
 # T2 Debug
 
-A live window into the T2's own operating system (bridgeOS), over the internal
-T2 network link. It talks to the T2's built-in Instruments diagnostic
-service and is read-only: it observes, it changes nothing.
+<img class="app-shot" src="img/apps/t2-debug.webp" alt="T2 Debug streaming the bridgeOS live log with the subsystem filter">
+
+Shows live data from bridgeOS, the T2's own operating system. It connects over
+the internal T2 network link, the same one [T2 Journal](t2-journal.md) uses,
+to the T2's Instruments diagnostic service. It only reads.
 
 Two tabs:
 
@@ -18,9 +20,7 @@ Two tabs:
 
 This is the tool for watching what the T2 does in the moment, for example the
 SMC and power events around a GPU switch or a suspend. Logs the T2 marks as
-private appear as `<private>`: that redaction happens inside bridgeOS and cannot
-be lifted from Linux.
+private appear as `<private>`. bridgeOS redacts them before they reach Linux.
 
-A headless command, `t2debug`, exposes the same data without a GUI, which is
-handy over SSH (`t2debug procs`, `t2debug logs --no-hid`,
+The command `t2debug` gives the same data without a GUI, for example over SSH (`t2debug procs`, `t2debug logs --no-hid`,
 `t2debug sysmon`). Run `t2debug --help` for all subcommands.

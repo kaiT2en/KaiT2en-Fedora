@@ -1,15 +1,12 @@
 # Audio DSP
 
-This page explains the audio DSP support that KAIT2EN installs automatically.
-It is not an installation guide. All profiles are installed together.
-Supported Macs select the matching profile at runtime. Unsupported models
-continue to use the native T2 audio devices.
+KAIT2EN installs the audio DSP automatically, with the profiles for all
+supported models. Other models keep the native T2 audio devices.
 
 ## DSP in general
 
-The T2 audio driver exposes the physical speaker channels, but the T2 does not
-apply the model-specific processing to audio coming from the host; macOS does
-that on the host as well. KAIT2EN provides that processing as a PipeWire
+The T2 audio driver exposes the physical speaker channels. The model-specific
+processing runs on the host, under macOS as well. KAIT2EN provides that processing as a PipeWire
 filter graph per model.
 
 Depending on the model, the graph
@@ -19,8 +16,6 @@ Depending on the model, the graph
 - applies a multiband compressor and limiters
 - widens the stereo image with crosstalk cancellation
 - adds virtual-bass processing
-
-The biquad chains are cheap compared with the FIR convolution used before.
 
 On supported Macs, the resulting output appears as **DSP Speakers** device. The
 unprocessed **Apple Internal Speakers** device remains available for comparison
@@ -44,31 +39,26 @@ and diagnostics. Headphones do not pass through the speaker DSP graph.
 | iMac 27-inch 2020 | `iMac20,1` |
 | iMac Pro 2017 | `iMacPro1,1` |
 
-udev identifies the model from DMI and assigns a short ALSA card ID.
-WirePlumber uses that ID and the UCM Speaker/Mic node to select a graph.
-There is no install-time PCI-address substitution. KAIT2EN does not reuse a
-profile on an unlisted model. Reboot after installing or removing `t2-dsp`.
+The installation reads the model from DMI and writes the matching graph to
+`/etc/pipewire/pipewire.conf.d/51-t2-dsp.conf`. At boot udev assigns a short
+ALSA card ID, for example `t2-15_1`, and WirePlumber matches that ID and the
+UCM Speaker/Mic nodes. Reboot after installing or removing `t2-dsp`.
 
 ## Automatic selection
 
-The WirePlumber software-DSP integration gives the DSP sink a higher session
-priority than the underlying speaker sink. WirePlumber should therefore select
-the DSP output automatically when the profile is first created.
+The DSP sink has session priority 1400, above the raw speaker sink, and the
+headphone sink 1500. While a T2 output is the default, the WirePlumber script
+`t2-default-output.lua` selects the headphones when they are plugged in and the
+DSP speakers otherwise. A USB, HDMI or Bluetooth output chosen by the user stays
+selected.
 
 ## Profile origins and support
 
-The speaker and microphone graphs are KAIT2EN's own work and are generated
-per model. The license information lives under `dsp/` in the repository and
-is shipped in `/usr/share/licenses/t2-dsp/` with the package.
-
-Thanks to [lemmyg](https://github.com/lemmyg/t2-apple-audio-dsp) for the
-pioneering work: the first PipeWire DSP graphs for T2 Macs were his, and they
-were the template KAIT2EN's audio DSP started from.
-
-Problems with these profiles must be reported to the
-[KAIT2EN issue tracker](https://github.com/kaiT2en/KaiT2en-Fedora/issues),
-not to lemmyg's project: the current graphs, routing and UCM integration are
-maintained here.
+The graphs are generated per model by KAIT2EN. License information is in
+`/usr/share/licenses/t2-dsp/`. Thanks to
+[lemmyg](https://github.com/lemmyg/t2-apple-audio-dsp), whose PipeWire DSP
+graphs for T2 Macs were the starting point. Report problems to the
+[KAIT2EN issue tracker](https://github.com/kaiT2en/KaiT2en-Fedora/issues).
 
 ## Check the active output
 
