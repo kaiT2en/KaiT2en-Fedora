@@ -6,10 +6,11 @@
  *
  *
  * Implemented: T2 reports, firmware geometry, path IDs, scalar Z proximity,
- * Force Touch/Click, and the strongest-path hysteretic force filter.
+ * Force Touch/Click, the strongest-path hysteretic force filter, and palm
+ * rejection from the firmware's own contact identity and touch state.
  *
- * Remaining: parts of contactZShape, diving-button, and resting-hand paths.
- * The latter is clearly libinput territory.
+ * Remaining: parts of the contact shape term, the button zone term, and
+ * resting-thumb and resting-hand refinements on top of palm rejection.
  *
  * Althouth I did not use any of their code, let's credit T2Linux for their
  * pioneer work, which gave us a reliable upstream driver in the last years.
@@ -76,6 +77,27 @@ static void t2_trackpad_fire_actuator(struct hid_device *hdev, u8 waveform_id, u
  * contact settling.
  */
 #define T2_CONTACT_PATH_ID_MASK		0x00ff
+#define T2_CONTACT_STATE_SHIFT		8
+
+/*
+ * Captured contacts pass through the high byte of path_id_and_state as
+ * 1 -> (2) -> 3 -> 4 -> 5 -> (6) -> 7 -> 0. The median proximity was about
+ * 30 in states 1, 2 and 6, about 110 and 160 in states 3 and 4, and 0 in
+ * state 7. Contacts also went from 2 straight to 7 without ever touching,
+ * so only states 3..5 are reported.
+ */
+#define T2_CONTACT_STATE_FIRST_TOUCH	3
+#define T2_CONTACT_STATE_LAST_TOUCH	5
+
+/*
+ * Low byte of identity: the firmware's classification of the contact.
+ * Captures produced 1 for a thumb, 2..5 for four fingers in hand order,
+ * 7 for palm heels and a flat hand, 12 for a thumb or palm heel resting on
+ * the bottom edge, and 0 only while a contact was entering range. Values
+ * above 5 are therefore not fingers. The high byte is not decoded.
+ */
+#define T2_CONTACT_IDENTITY_MASK	0x00ff
+#define T2_CONTACT_IDENTITY_FINGER_LAST	5
 
 #define T2_FORCE_Q16_ONE		65536
 #define T2_FORCE_HYSTERESIS_SCALE_Q16	1311
@@ -192,7 +214,8 @@ MODULE_PARM_DESC(position_hysteresis_invert,
 struct t2_trackpad_finger {
 	/* Firmware path ID in the low byte. The high byte is contact state. */
 	__le16 path_id_and_state;
-	__le16 unknown2;
+	/* Contact identity in the low byte. */
+	__le16 identity;
 	__le16 abs_x;
 	__le16 abs_y;
 	__le16 rel_x;
@@ -272,7 +295,7 @@ struct t2_slot_hysteresis {
 	s32 y;
 	u64 touch_start_ns;
 	u16 path_id;
-	/* T2 proximity_q8 is MTContact.proximity, not a reported input axis. */
+	/* Contact proximity, used for the Z-signal term, not a reported input axis. */
 	u16 previous_proximity_q8;
 	/* Set only while this firmware path is present in the current report. */
 	bool present_this_frame;
@@ -307,6 +330,29 @@ static u16 t2_trackpad_ellipse_axis(__le16 radius)
 {
 	/* Firmware shape values are ellipse radii. The MT ABI uses full axes. */
 	return min_t(int, max_t(int, t2_s16(radius), 0) * 2, U16_MAX);
+}
+
+static bool t2_trackpad_contact_touching(const struct t2_trackpad_finger *finger)
+{
+	u8 state = le16_to_cpu(finger->path_id_and_state) >> T2_CONTACT_STATE_SHIFT;
+
+	return state >= T2_CONTACT_STATE_FIRST_TOUCH &&
+	       state <= T2_CONTACT_STATE_LAST_TOUCH;
+}
+
+/*
+ * Palm and edge contacts stay visible to libinput as MT_TOOL_PALM instead
+ * of disappearing. Dropping the slot would look like a lift-off and can
+ * produce a tap, and a finger that turns into a palm mid-contact keeps its
+ * tracking ID, so the pointer does not jump.
+ */
+static unsigned int t2_trackpad_contact_tool(const struct t2_trackpad_finger *finger)
+{
+	u8 identity = le16_to_cpu(finger->identity) & T2_CONTACT_IDENTITY_MASK;
+
+	if (identity > T2_CONTACT_IDENTITY_FINGER_LAST)
+		return MT_TOOL_PALM;
+	return MT_TOOL_FINGER;
 }
 
 static s32 t2_mt_update_hysteretic_force(struct t2_mt_force_filter *filter,
@@ -698,7 +744,8 @@ static u32 t2_trackpad_z_signal_instability_q16(
 }
 
 static void t2_trackpad_report_finger(struct t2_trackpad *tp, int slot,
-				       const struct t2_trackpad_finger *finger)
+				       const struct t2_trackpad_finger *finger,
+				       unsigned int tool)
 {
 	struct t2_slot_hysteresis *hys = &tp->hysteresis[slot];
 	struct input_dev *input = tp->input;
@@ -712,7 +759,7 @@ static void t2_trackpad_report_finger(struct t2_trackpad *tp, int slot,
 	s32 budget;
 	s32 x, y;
 
-	/* MTParserPath state is reset at a new firmware contact lifetime. */
+	/* Filter state is reset at a new firmware contact lifetime. */
 	if (!hys->valid || hys->path_id != path_id) {
 		hys->valid = true;
 		hys->path_id = path_id;
@@ -738,7 +785,7 @@ static void t2_trackpad_report_finger(struct t2_trackpad *tp, int slot,
 	hys->present_this_frame = true;
 
 	input_mt_slot(input, slot);
-	input_mt_report_slot_state(input, MT_TOOL_FINGER, true);
+	input_mt_report_slot_state(input, tool, true);
 	/*
 	 * Keep the established Linux touch/width split for libinput: the firmware's
 	 * Q8 proximity channel remains the touch-size signal while tool_major/minor
@@ -816,9 +863,10 @@ static void t2_trackpad_trace_force_frame(struct t2_trackpad *tp,
 		const struct t2_trackpad_finger *finger = &frame->fingers[i];
 
 		hid_info(tp->hdev,
-			 "force contact[%d]: u1=%d u2=%d pos=%d,%d rel=%d,%d "
+			 "force contact[%d]: u1=%d identity=%#x pos=%d,%d rel=%d,%d "
 			 "proximity=%d touch_minor=%d tool=%d,%d pressure=%d multi=%d unused=%d,%d\n",
-			 i, t2_s16(finger->path_id_and_state), t2_s16(finger->unknown2),
+			 i, t2_s16(finger->path_id_and_state),
+			 le16_to_cpu(finger->identity),
 			 t2_s16(finger->abs_x), t2_s16(finger->abs_y),
 			 t2_s16(finger->rel_x), t2_s16(finger->rel_y),
 			 t2_s16(finger->proximity_q8), t2_s16(finger->touch_minor),
@@ -868,9 +916,11 @@ static int t2_trackpad_raw_event(struct hid_device *hdev,
 
 	for (i = 0; i < frame->num_fingers; i++) {
 		const struct t2_trackpad_finger *finger = &frame->fingers[i];
+		unsigned int tool;
 		int slot;
 
-		if (!t2_s16(finger->proximity_q8))
+		if (!t2_s16(finger->proximity_q8) ||
+		    !t2_trackpad_contact_touching(finger))
 			continue;
 
 		slot = t2_trackpad_path_slot(tp->input, finger);
@@ -880,8 +930,11 @@ static int t2_trackpad_raw_event(struct hid_device *hdev,
 				 T2_CONTACT_PATH_ID_MASK);
 			continue;
 		}
-		t2_trackpad_report_finger(tp, slot, finger);
-		t2_trackpad_forward_firmware_distributed_forces(tp, slot, finger);
+		tool = t2_trackpad_contact_tool(finger);
+		t2_trackpad_report_finger(tp, slot, finger, tool);
+		/* A resting palm must never become the click or force click source. */
+		if (tool == MT_TOOL_FINGER)
+			t2_trackpad_forward_firmware_distributed_forces(tp, slot, finger);
 	}
 	for (i = 0; i < T2_MAX_CONTACTS; i++) {
 		if (tp->hysteresis[i].valid &&
@@ -959,11 +1012,13 @@ static int t2_trackpad_input_configured(struct hid_device *hdev,
 	input_set_abs_params(input, ABS_MT_WIDTH_MAJOR, 0, U16_MAX, 0, 0);
 	input_set_abs_params(input, ABS_MT_WIDTH_MINOR, 0, U16_MAX, 0, 0);
 	/*
-	 * MTContact.force feeds MTForceFilter and is not advertised as
+	 * Per-contact force feeds the force filter and is not advertised as
 	 * ABS_MT_PRESSURE. libinput derives contact lifetime from MT slots.
 	 */
 	input_set_abs_params(input, ABS_MT_ORIENTATION, -T2_MAX_ORIENTATION,
 			     T2_MAX_ORIENTATION, 0, 0);
+	/* libinput enables its MT_TOOL_PALM handling when this axis exists. */
+	input_set_abs_params(input, ABS_MT_TOOL_TYPE, 0, MT_TOOL_MAX, 0, 0);
 
 	/* Placeholder bounds. t2_trackpad_query_dimensions() overwrites these. */
 	input_set_abs_params(input, ABS_MT_POSITION_X, SHRT_MIN, SHRT_MAX, 0, 0);
