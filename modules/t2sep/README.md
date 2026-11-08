@@ -44,5 +44,5 @@ insmod t2sep.ko start_sep=1 probe_testing=1
 insmod t2sep.ko probe_control=1
 ```
 
-`start_sep=1` performs the BAR4 writes from `AppleSEPIntelIOP::_startCPUGated()`
-and is an active hardware operation, disabled by default.
+`start_sep=1` performs the BAR4 IOP startup writes. It is an active hardware
+operation and off by default.

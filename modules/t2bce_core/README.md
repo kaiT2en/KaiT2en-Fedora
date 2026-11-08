@@ -1,40 +1,37 @@
 # t2bce_core
 
-Buffer Copy Engine fork for Intel Macs with a T2 chip with stateful and no-state resume support.
+Buffer Copy Engine driver for T2 Macs, with resume from both stateful and
+stateless bridgeOS.
 
-`t2bce_core` owns the T2 BCE PCI device, mailbox, PM coordination, and client
-transport API. The shared DMA queue engine lives next to it in `modules/t2bce_dma`
-and must be built/loaded before `t2bce_core`.
+`t2bce_core` owns the BCE PCI device, the mailbox, PM coordination and the
+client transport API. The DMA queue engine lives in `modules/t2bce_dma` and
+loads first.
 
-## Required kernel parameters
+## Kernel parameters
 
-These kernel parameters have to be set in Linux commandline:
-
-- `mem_sleep_default=deep` This is S3. S2 and 4 should also work
-
+- `mem_sleep_default=deep` (S3). s2idle and hibernation should work too.
 
 ## Workarounds
 
-A fixed t2bce doesn't fix suspend. While it was broken for many years, developers of other T2 patches/drivers did not take care of implementing suspend/resume methods because suspend was broken by t2bce anyways. Also Apple never cared for Linux (on some Macbooks ACPI tables have real issues). And finally we have the T2 and Apple-modified hardware/platform to deal with. Not all hope is lost though. We can work around most of it using systemd units.
-The below units will help you around the roughest cliffs. Note that you can combine them into one unit. Also note the minus sign in for example `ExecStart=-/usr/bin...` will let the systemd unit continue in case of error. For example if you haven't tiny-dfr installed, the service should still continue to execute - with cosmetic errors in journal. Feel free to remove what you don't need.
-The code blocks are full commands. They will create the units and activate them. Copy them, modify them to your needs if you want and execute them. But don't forget the important bits like daemon-reload and systemctl enable.
+Other drivers still lack parts of their suspend handling. The systemd units
+below cover that. Each block creates and enables its unit. The `-` in
+`ExecStart=-` keeps a unit going when a step fails, for example without
+tiny-dfr.
 
 ## Notes for MacBookPro15,1, MacBookPro16,1 and MacBookPro16,4 graphics
 
-KaiT2en carries the apple-gmux, AMDGPU and HDA patches required for hybrid
-graphics on the MacBookPro15,1, MacBookPro16,1 and MacBookPro16,4. Runtime dGPU
-power management and system suspend/resume work on all three models.
-
+KaiT2en carries the apple-gmux, AMDGPU and HDA patches for hybrid graphics on
+these models. Runtime dGPU power management and suspend work on all three.
 
 ## Notes for Macbooks with Touchbar
 
-The touchbar/keyboard drivers are missing proper PM paths and the Touchbar will be broken after resuming. On some macs the kbd backlight stops working. On Macs with tiny-dfr installed, tiny DFR will sit on old FD's before suspend.
+Without this unit the Touch Bar, and on some Macs the keyboard backlight,
+stay dead after resume, and tiny-dfr holds stale file descriptors. Replace
+`3-6` with the USB path from:
 
-Run
-
-`journalctl -b --grep="Product: Touch Bar Display"`
- 
-If needed, replace any occurencies of `3-6`  with the number from the output of the command above.
+```
+journalctl -b --grep="Product: Touch Bar Display"
+```
 
 ```
 sudo tee /etc/systemd/system/touchbar-suspend-fix.service >/dev/null <<'EOF'
@@ -71,7 +68,8 @@ sudo systemctl enable touchbar-suspend-fix.service
 
 ## Notes for Macbooks with BCM4377 Wifi
 
-The 4377 chip is notorious for not managing to transition between power states. Thus it will refuse to enter sleep and wake the system again with all VHCI devices, like keyboard and trackpad not working. Do this:
+The BCM4377 fails its power state transitions, so the system refuses to sleep
+or wakes with keyboard and trackpad dead:
 
 ```
 sudo tee /etc/systemd/system/4377-suspend-fix.service >/dev/null <<'EOF'
@@ -106,15 +104,11 @@ sudo systemctl enable 4377-suspend-fix.service
 
 ## Build and deploy
 
-Download the zip file and go into the extracted t2bce_core folder with terminal. Type
-
 ```bash
 make && sudo make install
 sudo depmod -a
 sudo reboot
 ```
-After reboot type `modinfo t2bce_core`. The output should show a version number > `0.04` and `author: André Eikmeyer <andre.eikmeyer@kait2en.org>`
- 
 
 ## DKMS
 
@@ -125,8 +119,11 @@ directory as a separate DKMS package.
 
 ## Dev Debug
 
-We use pr_debug instead of pr_info in most places to keep the logs clean for average users.
-Use `t2bce_vhci.dyndbg=+p t2bce_dma.dyndbg=+p t2bce_core.dyndbg=+p t2bce_audio.dyndbg=+p t2bce_ave.dyndbg=+p` to see full output.
+Most messages are `pr_debug`. For full output:
+
+```
+t2bce_vhci.dyndbg=+p t2bce_dma.dyndbg=+p t2bce_core.dyndbg=+p t2bce_audio.dyndbg=+p t2bce_ave.dyndbg=+p
+```
 
 ## Support
 

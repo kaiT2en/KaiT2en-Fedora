@@ -290,7 +290,7 @@ static int t2audio_suspend(struct device *dev)
 {
     struct t2audio_device *t2audio = pci_get_drvdata(to_pci_dev(dev));
 
-    /* BridgeAudioControllerPCI::_setPowerStateGated: Going to sleep */
+    /* Tell bridgeOS the host is going to sleep */
     iowrite32(T2AUDIO_SLEEP_MARKER, &t2audio->reg_mem_gpr[T2AUDIO_GPR_SLEEP_MARKER / 4]);
     pci_disable_device(t2audio->pci);
     t2audio->pm_suspended = true;
@@ -653,7 +653,7 @@ static void t2audio_remap_bs_stream(struct t2audio_device *a, struct t2audio_str
         struct t2audio_buffer_struct_stream *bs_strm);
 static void t2audio_init_bs_stream_host(struct t2audio_device *a, struct t2audio_stream *strm);
 
-/* BridgeAudioPCI::initWithBaseAddresses */
+/* Map the BufferStruct */
 static int t2audio_map_bs(struct t2audio_device *a, bool remap)
 {
     int i, j;
@@ -719,7 +719,7 @@ static int t2audio_map_bs(struct t2audio_device *a, bool remap)
     return 0;
 }
 
-/* BridgeAudioPCI::setInputBufferInfoForDeviceAtIndex(i, 0, 0) for every device */
+/* Clear the input buffer info of every device */
 static void t2audio_reset_input_streams(struct t2audio_device *a)
 {
     struct t2audio_buffer_struct_device *dev;
@@ -735,7 +735,7 @@ static void t2audio_reset_input_streams(struct t2audio_device *a)
     wmb();
 }
 
-/* BridgeAudioControllerPCI::_registerInputStreamGated with the host buffer */
+/* Register the input stream with the host buffer */
 static void t2audio_register_input_stream(struct t2audio_device *a, struct t2audio_subdevice *sdev)
 {
     struct t2audio_buffer_struct_device *dev = &a->bs->devices[sdev->buf_id];
@@ -783,8 +783,7 @@ static int t2audio_init_bs(struct t2audio_device *a)
 }
 
 /*
- * BridgeAudioControllerPCI::_resetBuffersGated, which coreaudiod runs after
- * wake. Without the sleep marker bridgeOS lost power and the BufferStruct is
+ * Buffer reset after wake. Without the sleep marker bridgeOS lost power and the BufferStruct is
  * mapped again. Either way every input entry is cleared and the host input
  * buffers are registered again before remote access returns.
  */

@@ -160,7 +160,7 @@ static void t2sep_record_discovery(struct t2sep_device *sep,
 
 static void t2sep_start_iop(struct t2sep_device *sep)
 {
-	/* Recovered from AppleSEPIntelIOP::_startCPUGated(). */
+	/* IOP startup: clear reset, run, then start. */
 	writel(0, sep->bar + T2SEP_IOP_RESET);
 	writel(1, sep->bar + T2SEP_IOP_RUN);
 	wmb();
@@ -169,7 +169,7 @@ static void t2sep_start_iop(struct t2sep_device *sep)
 	readl(sep->bar + T2SEP_IOP_CONTROL);
 	sep->sep_start_issued = true;
 	dev_info(&sep->pdev->dev,
-		 "issued recovered Apple SEP IOP startup sequence\n");
+		 "issued Apple SEP IOP startup sequence\n");
 }
 
 static int t2sep_probe_testing(struct t2sep_device *sep)
@@ -181,7 +181,7 @@ static int t2sep_probe_testing(struct t2sep_device *sep)
 	u8 sequence;
 	int ret;
 
-	/* AppleSEPTesting::query_tests(): endpoint, command, sequence, zero payload. */
+	/* Test query: endpoint, command, sequence, zero payload. */
 	request.word[0] = T2SEP_TESTING_ENDPOINT |
 		(T2SEP_TEST_QUERY << 8) | (T2SEP_TEST_SEQUENCE << 16);
 
@@ -232,7 +232,7 @@ static int t2sep_probe_control(struct t2sep_device *sep)
 	u8 tag = 1;
 	int ret;
 
-	/* AppleSEPControl::cmsgNOP(): zero message; _cmsgSend() supplies the tag. */
+	/* Control NOP: zero message plus the tag. */
 	request.word[0] = tag << 8;
 
 	mutex_lock(&sep->mailbox_lock);
@@ -587,11 +587,11 @@ static int t2sep_ool_exchange(struct t2sep_device *sep, u8 endpoint,
 	int ret;
 
 	/*
-	 * Two descriptor shapes, both recovered from AppleSEPIntelIOP::postMailbox.
+	 * Two descriptor shapes.
 	 *
 	 * AKS (endpoint 7): word0 = endpoint | op<<8 | 1<<16, word1 = len<<16.
 	 *
-	 * Credential endpoint (10, scrd): a live dtrace of postMailbox/getMailbox
+	 * Credential endpoint (10, scrd): a live dtrace of the mailbox
 	 * shows word0 = endpoint | 1<<8 | len<<16, word1 = 0. byte1 is a constant 1
 	 * and byte2 is the OOL request length; the command id is never in the
 	 * mailbox, it lives in the DRCS framing in the OOL input. The reply carries
