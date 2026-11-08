@@ -62,6 +62,24 @@ items:
       power and allows package C-states up to PC10. KAIT2EN ships it in a
       patched i915 module until it is merged.
 
+  - id: gmux-brightness-after-panel-power-on
+    title: "Display brightness after screen lock and resume in iGPU mode"
+    state: available
+    upstream: submitted
+    version: v1
+    project: Linux kernel
+    subsystem: DRM / i915
+    authors:
+      - deqrocks
+    link: "https://lore.kernel.org/all/20261108100926.28950-1-dev@deq.rocks/"
+    updated: "2026-11-08"
+    notes: >-
+      On dual GPU T2 MacBook Pros gmux resets the brightness when i915
+      powers the panel off, so the display came back at 80% after screen
+      lock, login and resume. i915 now writes the set level back once the
+      panel is on. KAIT2EN ships it in a patched i915 module until it is
+      merged.
+
   - id: keyboard-backlight-reenumeration
     title: "Keyboard backlight after re-enumeration"
     state: available
