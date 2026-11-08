@@ -20,21 +20,6 @@
 
 items:
 
-  - id: brcmfmac-pm-max-power-management
-    title: "Wi-Fi PM_MAX power management"
-    state: in-progress
-    upstream: revoked
-    version: v3
-    project: Linux kernel
-    subsystem: Wi-Fi / brcmfmac
-    authors:
-      - 4f1sh3r
-    link: "https://lore.kernel.org/linux-wireless/20260810150552.25375-1-alexander@fischermail.me/"
-    updated: "2026-08-15"
-    notes: >-
-      Withdrawn after extended BCM4364 testing found intermittent 50-250 ms
-      latency spikes with PM_MAX. PM_FAST remains the driver default.
-
   - id: audio-dsp
     title: "Audio DSP"
     state: available
@@ -46,7 +31,8 @@ items:
     link: post-install/audio-dsp.md
     updated: "2026-09-15"
     notes: >-
-      Reverse engineered T2 input/output audio DSP and exposed it to ALSA.
+      Speaker and microphone DSP graphs per model, derived from the
+      macOS processing.
 
   - id: package-c-states
     title: "Package C-states"
@@ -58,11 +44,10 @@ items:
       - deqrocks
     updated: "2026-08-03"
     notes: >-
-      Getting the platform into deep package C-states so idle power draw and
-      battery life come closer to macOS.
+      Deep package C-states at idle for lower power draw.
 
   - id: apple-t2-panel-self-refresh
-    title: "Panel Self Refresh on Apple T2 displays"
+    title: "Panel Self Refresh on T2 eDP panels"
     state: in-progress
     upstream: submitted
     version: v4
@@ -73,9 +58,8 @@ items:
     link: "https://lore.kernel.org/all/20261016140707.1900947-1-alexander.fischer@kait2en.org/"
     updated: "2026-10-16"
     notes: >-
-      Enables PSR on Apple T2 eDP panels using the sink-specific DPCD setup
-      and capture sequence, reducing idle display power and enabling deeper
-      package C-states up to PC10.
+      Enables PSR with the sink-specific DPCD setup. Lowers idle display
+      power and allows package C-states up to PC10.
 
   - id: keyboard-backlight-reenumeration
     title: "Keyboard backlight after re-enumeration"
@@ -87,8 +71,7 @@ items:
     link: "https://gitlab.freedesktop.org/upower/upower/-/merge_requests/335"
     updated: "2026-07-29"
     notes: >-
-      The backlight did not come back on after the keyboard re-enumerated.
-      Was merged and is expected to ship with kernel 7.4.
+      Restores the keyboard backlight after the keyboard re-enumerates.
 
   - id: thunderbolt-device-links
     title: "Thunderbolt device links"
@@ -103,12 +86,11 @@ items:
     link: "https://lore.kernel.org/all/20260817101329.1517-1-atharvatiwarilinuxdev@gmail.com/"
     updated: "2026-08-17"
     notes: >-
-      The three-patch series moves Apple device-link discovery into the 
-      Thunderbolt PCI code and adds Titan Ridge and Ice Lake support separately.
-      Was merged and is expected to ship with kernel 7.4.
+      Moves Apple device-link discovery into the Thunderbolt PCI code
+      and adds Titan Ridge and Ice Lake support. Expected in kernel 7.4.
 
   - id: apple-t2-early-cpu-offlining
-    title: "Fast CPU restore after suspend"
+    title: "CPU restore after suspend"
     state: available
     upstream: submitted
     version: v1
@@ -119,11 +101,11 @@ items:
     link: "https://lore.kernel.org/all/20260812120326.155226-1-dev@deq.rocks/"
     updated: "2026-08-12"
     notes: >-
-      Moves secondary CPU hotplug outside the generic CPU PM notifier window
-      on Apple T2 systems, avoiding multi-second delays per CPU during resume.
+      Moves secondary CPU hotplug outside the CPU PM notifier window.
+      Removes multi-second delays per CPU during resume.
 
   - id: touchbar-runtime-pm-deadlock
-    title: "Touch Bar suspend and resume without PM deadlock"
+    title: "Touch Bar runtime PM in suspend and resume"
     state: available
     upstream: merged
     version: v1
@@ -134,11 +116,11 @@ items:
     link: "https://lore.kernel.org/linux-input/20260810140352.35866-1-dev@deq.rocks/"
     updated: "2026-08-10"
     notes: >-
-      Avoids nested runtime PM references in the HID callbacks that could stall
-      Touch Bar suspend and resume.
+      Removes nested runtime PM references in the HID callbacks that
+      stalled Touch Bar suspend and resume.
 
   - id: display-brightness-after-reboot
-    title: "Display brightness restored after reboot"
+    title: "Display brightness across reboots"
     state: available
     upstream: merged
     project: systemd
@@ -148,30 +130,11 @@ items:
     link: "https://github.com/systemd/systemd/pull/43255"
     updated: "2026-08-02"
     notes: >-
-      The backlight had no stable path ID, so the brightness setting was lost on
-      every reboot.
-
-  - id: thunderbolt-controller-power-15-1
-    title: "Thunderbolt controller stays powered (15,1)"
-    state: available
-    upstream: revoked
-    version: v1
-    project: Linux kernel
-    subsystem: USB / xHCI
-    authors:
-      - deqrocks
-    link: "https://lore.kernel.org/linux-usb/20260730210655.15514-1-dev@deq.rocks/"
-    updated: "2026-08-15"
-    notes: >-
-      The original xHCI patch was withdrawn after native PCIe port services
-      restored USB 3 hotplug from runtime D3. Further testing found a separate
-      system-resume regression: allowing the Titan Ridge xHCI controllers and
-      their ports into D3 delays EC interrupt unblock by about 20 seconds.
-      Kait2en therefore retains the D3 restriction downstream while the proper
-      upstream fix is investigated.
+      Gives the backlight a stable path ID so the brightness setting
+      persists.
 
   - id: volume-slider-crackling
-    title: "Volume slider without DSP crackling"
+    title: "Volume slider on DSP sinks"
     state: available
     upstream: merged
     project: GNOME Shell
@@ -181,11 +144,11 @@ items:
     link: "https://gitlab.gnome.org/GNOME/gnome-shell/-/merge_requests/4302"
     updated: "2026-07-27"
     notes: >-
-      Dragging the Quick Settings volume slider caused audible crackles on
+      Fixes crackling while dragging the Quick Settings volume slider on
       PipeWire DSP sinks.
 
   - id: fn-double-press-layer-switch
-    title: "Fn double press switches F-keys and media controls"
+    title: "Fn double press switches the Touch Bar layer"
     state: available
     upstream: merged
     version: v5
@@ -198,7 +161,7 @@ items:
     updated: "2026-07-22"
 
   - id: ignore-trackpad
-    title: "Trackpad on T2 Macs is incorrectly bound by the hid-apple driver"
+    title: "hid-apple ignores the T2 trackpad"
     state: available
     upstream: merged
     version: v1
@@ -208,10 +171,12 @@ items:
       - AdityaGarg8
     link: "https://lore.kernel.org/linux-input/20260903064407.27755-1-aditya.garg@linux.dev/"
     updated: "2026-09-03"
-    notes: Trackpad and keyboard share the same VID/PID. Use the existing APPLE_IGNORE_MOUSE quirk.
+    notes: >-
+      Trackpad and keyboard share one VID/PID. Uses the existing
+      APPLE_IGNORE_MOUSE quirk.
 
   - id: dgpu-wakeup-15-1
-    title: "dGPU dies up on MacBookPro15,1"
+    title: "dGPU after resume on MacBookPro15,1"
     state: available
     upstream: merged
     version: v1
@@ -222,7 +187,8 @@ items:
       - deqrocks
     link: "https://lore.kernel.org/all/20260722125734.6541-1-dev@deq.rocks/"
     updated: "2026-07-22"
-    notes: The SMU was dead after resume, leaving the discrete GPU unusable.
+    notes: >-
+      Fixes the SMU being unresponsive after resume.
 
   - id: keyboard-backlight-brightness
     title: "Keyboard backlight brightness levels"
@@ -235,7 +201,8 @@ items:
       - deqrocks
     link: "https://lore.kernel.org/linux-input/20260718151241.7496-1-dev@deq.rocks/"
     updated: "2026-07-18"
-    notes: The backlight reports were parsed with the wrong endianness.
+    notes: >-
+      Parses the backlight reports with the correct endianness.
 
   - id: keyboard-backlight-after-resume
     title: "Keyboard backlight after resume"
@@ -249,8 +216,8 @@ items:
     link: "https://lore.kernel.org/linux-input/20260718121527.15924-1-dev@deq.rocks/"
     updated: "2026-07-18"
     notes: >-
-      The butterfly keyboard backlight came back on at 0% after resume, and now
-      uses the same LED naming as the magic keyboards.
+      Restores the butterfly keyboard backlight level after resume and
+      uses the Magic Keyboard LED naming.
 
   - id: butterfly-keyboard-debounce
     title: "Butterfly keyboard debounce"
@@ -263,8 +230,8 @@ items:
     link: post-install/butterfly-keyboard.md
     updated: "2026-10-28"
     notes: >-
-      Optional filter against keystrokes that butterfly keyboards register
-      twice. Enabled with the kernel argument t2hid.debounce_ms=40.
+      Optional filter for double-registered keystrokes, enabled with
+      t2hid.debounce_ms=40.
 
   - id: force-click
     title: "Force Click trackpad controls"
@@ -276,11 +243,11 @@ items:
       - deqrocks
     updated: "2026-09-21"
     notes: >-
-      Provides adjustable click and Force Click pressure, Taptic Engine
-      feedback, and configurable actions for the separate Force Click event.
+      Adjustable click and Force Click pressure, Taptic Engine feedback
+      and configurable Force Click actions.
 
   - id: hybrid-graphics
-    title: "Hybrid graphics and dGPU power management"
+    title: "Hybrid graphics on MacBookPro15,1"
     state: available
     upstream: submitted
     version: v1
@@ -292,11 +259,11 @@ items:
     link: "https://lore.kernel.org/all/20260812144750.36797-1-dev@deq.rocks/"
     updated: "2026-08-12"
     notes: >-
-      Runtime GPU switching is available downstream on MacBookPro15,1. The
-      apple-gmux, amdgpu and ALSA HDA changes were submitted upstream as v3.
+      Runtime GPU switching and dGPU power management. The apple-gmux,
+      amdgpu and ALSA HDA changes are submitted upstream.
 
   - id: hybrid-graphics-16-x
-    title: "Hybrid graphics and dGPU power management on MacBookPro16,1 and 16,4"
+    title: "Hybrid graphics on MacBookPro16,1 and 16,4"
     state: available
     upstream: downstream
     project: KAIT2EN Fedora
@@ -307,11 +274,11 @@ items:
     link: post-install/configuring-gpus.md
     updated: "2026-09-29"
     notes: >-
-      Runtime GPU switching, dGPU power management, and working suspend and
-      resume are available on MacBookPro16,1 and MacBookPro16,4.
+      Runtime GPU switching, dGPU power management and suspend and
+      resume.
 
   - id: navi14-mbp161-trained-uclk
-    title: "No more dGPU crashes on MacBookPro16,1"
+    title: "Navi14 memory clock levels on MacBookPro16,1"
     state: available
     upstream: submitted
     version: v1
@@ -322,11 +289,9 @@ items:
     link: "https://lore.kernel.org/all/20261024162109.307247-1-dev@deq.rocks/"
     updated: "2026-10-24"
     notes: >-
-      Apple's pptable lists other memory clock levels than the VBIOS trained
-      the memory controller at. Switching into such a level hung the SMU and
-      ended in a CATERR at boot or under dGPU load. amdgpu now takes the
-      trained levels from the VBIOS, so the 5300M and 5500M can switch their
-      memory clock freely again.
+      Apple's pptable lists memory clock levels the VBIOS did not train.
+      Switching to one hung the SMU and caused a CATERR at boot or under
+      load. amdgpu now uses the trained levels from the VBIOS.
 
   - id: t2-ave-hardware-encode
     title: "Hardware video encoding (T2 AVE)"
@@ -339,9 +304,9 @@ items:
     link: post-install/hardware-video-encoding.md
     updated: "2026-09-11"
     notes: >-
-      Exposes the T2 Apple Video Encoder for hardware HEVC encoding.
-      Usable today through the t2-ave HandBrake build https://github.com/deqrocks/HandBrake
-      or ffmpeg.
+      HEVC encoding on the T2 Apple Video Encoder, usable through ffmpeg
+      and the t2-ave HandBrake build
+      https://github.com/deqrocks/HandBrake.
 
   - id: t2-sidecar-encode
     title: "Low-latency video encoding (T2 Sidecar encoder)"
@@ -354,9 +319,9 @@ items:
     link: post-install/sidecar.md
     updated: "2026-10-23"
     notes: >-
-      Exposes the encoder the T2 offers macOS for Sidecar as a V4L2 H.264/HEVC
-      encoder. Usable today through ffmpeg and the t2-sidecar Sunshine build
-      https://github.com/deqrocks/Sunshine for streaming to Moonlight.
+      The T2 Sidecar encoder as a V4L2 H.264/HEVC encoder, usable
+      through ffmpeg and the t2-sidecar Sunshine build
+      https://github.com/deqrocks/Sunshine.
 
   - id: touch-id
     title: "Touch ID login"
@@ -369,12 +334,12 @@ items:
     link: post-install/touch-id.md
     updated: "2026-09-11"
     notes: >-
-      The finger enrolled under macOS unlocks login and sudo on Linux through
-      stock fprintd, with nothing patched. Aimed at a libfprint driver upstream.
-      Enrollment on Linux is prepared through T2sep, but not implemented.
+      Fingers enrolled under macOS unlock login and sudo through stock
+      fprintd. Enrollment on Linux is open. Target is an upstream
+      libfprint driver.
 
   - id: t2-touch-bar
-    title: "T2 Touch Bar"
+    title: "Touch Bar daemon"
     state: available
     upstream: downstream
     project: KAIT2EN Fedora
@@ -384,9 +349,9 @@ items:
     link: post-install/applications/t2-touch-bar.md
     updated: "2026-10-04"
     notes: >-
-      Optional Touch Bar daemon that stays dark until touched, with media and
-      F-key rows, multitouch gestures for volume and brightness, the Touch ID
-      prompt and track changes from media players.
+      Optional daemon with media and F-key rows, gestures for volume and
+      brightness, the Touch ID prompt and media track display. Stays
+      dark until touched.
 
   - id: automatic-brightness
     title: "Automatic brightness (ALS)"
@@ -399,10 +364,9 @@ items:
     link: post-install/automatic-brightness.md
     updated: "2026-10-27"
     notes: >-
-      Optional service that follows the ambient light like macOS on Intel
-      Macs, with its smooth curve, 20 % dead band, slow perceptual fades
-      and learning from manual changes. Replaces GNOME's own automatic 
-      brightness, which flashbangs you with coarse steps.
+      Optional service that follows the ambient light sensor with the
+      macOS curve, a 20 % dead band, slow fades and learning from manual
+      changes. Replaces GNOME automatic brightness.
 
   - id: imac-5k
     title: "5K display on iMac20,1 and iMac20,2"
@@ -416,13 +380,12 @@ items:
     link: "https://lore.kernel.org/all/20261104193649.8158-1-atharvatiwarilinuxdev@gmail.com/"
     updated: "2026-11-04"
     notes: >-
-      Drives the internal 5K panel at full resolution by genlocking the two
-      display streams that feed it, with resolution changes. Ships as an
-      amdgpu patch in the KAIT2EN kernel builds. Closes drm/amd#4455 and
-      #4895.
+      Drives the internal 5K panel at full resolution by genlocking its
+      two display streams, including resolution changes. Closes
+      drm/amd#4455 and #4895.
 
   - id: smc-power-limits
-    title: "No more prochot throttling under load"
+    title: "SMC power limit steps"
     state: available
     upstream: downstream
     project: KAIT2EN Fedora
@@ -432,16 +395,13 @@ items:
     link: post-install/applications/t2-zone-power.md
     updated: "2026-10-12"
     notes: >-
-      The SMC shares the heatpipe between CPU, iGPU and dGPU and asks the OS
-      for lower limits in steps, which Linux used to ignore until prochot
-      dropped the CPU to 800 MHz. t2smc now exposes these steps and T2 Zone
-      Power applies them like macOS does, so CPU and GPU settle on steady
-      clocks under load. An amdgpu patch lets the Navi GPUs of Apple Macs
-      lower their power limit to 40 % of TDP, so the SMC can balance the
-      dGPU as well.
+      The SMC requests lower CPU and GPU limits in steps. Linux ignored
+      them until PROCHOT dropped the CPU to 800 MHz. t2smc exposes the
+      steps and T2 Zone Power applies them as macOS does. An amdgpu
+      patch lets the Navi GPUs go down to 40 % of TDP.
 
   - id: brcmfmac-bcm4364-txbf
-    title: "Two stream Wi-Fi uplink on BCM4364"
+    title: "BCM4364 TX beamforming off"
     state: available
     upstream: submitted
     version: v1
@@ -452,13 +412,11 @@ items:
     link: "https://lore.kernel.org/all/20261104151623.70695-1-dev@deq.rocks/"
     updated: "2026-11-04"
     notes: >-
-      With TX beamforming on, the BCM4364 firmware sends a single beamformed
-      stream and the uplink tops out at about 350 Mbit/s next to the router.
-      brcmfmac now turns beamforming off on this chip, the firmware picks two
-      streams and the uplink reaches about 620 Mbit/s.
+      With TX beamforming the BCM4364 firmware sends one stream. Uplink
+      rises from about 350 to 620 Mbit/s with beamforming off.
 
   - id: btbcm-acl-priority
-    title: "Bluetooth audio without dropouts during Wi-Fi traffic"
+    title: "Bluetooth ACL priority on Broadcom controllers"
     state: available
     upstream: submitted
     version: v2
@@ -469,14 +427,13 @@ items:
     link: "https://lore.kernel.org/all/20261105085750.120392-1-dev@deq.rocks/"
     updated: "2026-11-05"
     notes: >-
-      On 2.4 GHz with Wi-Fi traffic the Broadcom controller held Bluetooth
-      packets for up to 200 ms and A2DP audio dropped out. hci_bcm and
-      hci_bcm4377 now give every Bluetooth link high priority in the
-      controller as it connects, as the Android Broadcom vendor library does.
-      This covers headphones, mice and keyboards.
+      With 2.4 GHz Wi-Fi traffic the controller held Bluetooth packets
+      for up to 200 ms and A2DP dropped out. hci_bcm and hci_bcm4377 set
+      high priority for every link on connect, as the Android Broadcom
+      vendor library does.
 
   - id: brcmfmac-ps-timeout
-    title: "Lower Wi-Fi idle power"
+    title: "Wi-Fi power save timeout"
     state: available
     upstream: submitted
     version: v1
@@ -487,13 +444,13 @@ items:
     link: "https://lore.kernel.org/all/20261104151626.70737-1-dev@deq.rocks/"
     updated: "2026-11-04"
     notes: >-
-      brcmfmac kept the Wi-Fi radio awake for 2 s after every frame when
-      NetworkManager asked for power save without a timeout. It now uses
-      200 ms, the value macOS sets on the BCM4377. Idle system power
-      on the MacBookPro15,1 dropped from 11.3 W to 9.2 W with Wi-Fi connected.
+      brcmfmac used a 2 s power save timeout when NetworkManager set
+      none. It now uses 200 ms, the macOS value on BCM4377. Idle power
+      on MacBookPro15,1 with Wi-Fi connected dropped from 11.3 W to 9.2
+      W.
 
   - id: brcmfmac-bcm4364-ap-fwauth
-    title: "Wi-Fi hotspot clients can connect on BCM4364"
+    title: "BCM4364 hotspot authentication"
     state: available
     upstream: submitted
     version: v1
@@ -504,13 +461,12 @@ items:
     link: "https://lore.kernel.org/all/20261104151629.70790-1-dev@deq.rocks/"
     updated: "2026-11-04"
     notes: >-
-      The BCM4364 firmware claims to run the WPA2 handshake for its access
-      point, but never completes it, so phones were dropped after about
-      8 seconds. brcmfmac now leaves the handshake to wpa_supplicant or
-      hostapd.
+      The BCM4364 firmware handshake for its access point stalls and
+      clients drop after about 8 s. brcmfmac leaves the handshake to
+      wpa_supplicant or hostapd.
 
   - id: t2-airshare
-    title: "AirDrop and Quick Share in one app: T2 AirShare"
+    title: "T2 AirShare (AirDrop and Quick Share)"
     state: available
     upstream: downstream
     project: KAIT2EN Fedora
@@ -520,15 +476,13 @@ items:
     link: post-install/applications/t2-airshare.md
     updated: "2026-11-01"
     notes: >-
-      AirDrop between your T2 Mac and other Apple devices, in both
-      directions, while the Mac stays on its Wi-Fi network. The same app
-      does Quick Share with Android phones, so Apple devices and Android
-      phones share one send window, one notification to accept and one list
-      of trusted devices. Android phones connect via Bluetooth first and
-      then transfer using a Wi-Fi hotspot of the Mac.
+      AirDrop with Apple devices in both directions while the Mac stays
+      on its Wi-Fi network, and Quick Share with Android phones over
+      Bluetooth and a Mac hotspot. One send window, one accept
+      notification and one trusted device list.
 
   - id: brcmfmac-awdl
-    title: "Wi-Fi: AWDL for AirDrop on the Apple firmware"
+    title: "AWDL on BCM4364 and BCM4377"
     state: available
     upstream: submitted
     version: v1
@@ -539,16 +493,13 @@ items:
     link: "https://lore.kernel.org/all/20261104151547.70333-1-dev@deq.rocks/"
     updated: "2026-11-05"
     notes: >-
-      The Apple firmware of the BCM4364 and BCM4377 runs AWDL itself once
-      the host sets it up. brcmfmac now creates the AWDL interface, passes
-      its firmware events to user space and carries AWDL data over awdl0.
-      The t2-drop system service drives it as macOS does: it follows the
-      AWDL master, announces the AirDrop service and removes the interface
-      before suspend. Patch 1 is dropped for the same fix in Michael Reeves'
-      BCM4388 series, v2 follows on top of that series.
+      brcmfmac creates the AWDL interface, passes its firmware events to
+      user space and carries data over awdl0. The t2-drop service drives
+      it as macOS does. Patch 1 is dropped for the same fix in Michael
+      Reeves' BCM4388 series, v2 follows on top of it.
 
   - id: hci-bcm-le-scan
-    title: "Bluetooth LE devices show up within a second"
+    title: "Bluetooth LE scanning on Broadcom controllers"
     state: available
     upstream: submitted
     version: v2
@@ -559,19 +510,15 @@ items:
     link: "https://lore.kernel.org/all/20261105085750.120392-1-dev@deq.rocks/"
     updated: "2026-11-05"
     notes: >-
-      The Broadcom Bluetooth chips of the T2 Macs set extra bits in the
-      type of LE advertising reports, and the kernel dropped most of
-      them as unknown. The drivers also left duplicate filtering in the
-      controller on, so a device that changed its advertisement was only
-      seen again after up to 11 seconds. Both drivers now let the kernel
-      turn the controller's duplicate filter off. Upstream, Ton Sharp's
-      commit 88397423671f in bluetooth-next masks the extra bits in the
-      Bluetooth core. Until a Fedora kernel ships it, KAIT2EN clears them
-      in btbcm. A Mac opening AirDrop is now seen within a second instead
-      of up to 30 seconds.
+      The controllers set extra bits in the LE advertising report type
+      and the kernel dropped those reports. Controller duplicate
+      filtering hid changed advertisements for up to 11 s. Both drivers
+      turn the filter off, and btbcm clears the extra bits until Fedora
+      ships commit 88397423671f from bluetooth-next. A Mac opening
+      AirDrop shows up within a second.
 
   - id: brcmfmac-bcm4364-ndoe
-    title: "Full speed IPv6 Wi-Fi downloads on BCM4364"
+    title: "BCM4364 ND offload off"
     state: available
     upstream: submitted
     version: v1
@@ -582,13 +529,12 @@ items:
     link: "https://lore.kernel.org/all/20261104151620.70671-1-dev@deq.rocks/"
     updated: "2026-11-04"
     notes: >-
-      With the firmware's ND offload on, IPv6 downloads on the BCM4364
-      collapsed to about 55 Mbit/s. brcmfmac now keeps ARP and ND offload
-      off on this chip while the Mac is awake. Closes t2linux/kernel#34 and
-      T2-Debian-and-Ubuntu-Kernel#227.
+      With ND offload on, IPv6 downloads dropped to about 55 Mbit/s.
+      brcmfmac keeps ARP and ND offload off on this chip while awake.
+      Closes t2linux/kernel#34 and T2-Debian-and-Ubuntu-Kernel#227.
 
   - id: brcmfmac-cold-resume
-    title: "Wi-Fi comes back after suspend without unloading the driver"
+    title: "Wi-Fi cold resume after S3"
     state: available
     upstream: submitted
     version: v1
@@ -599,19 +545,17 @@ items:
     link: "https://lore.kernel.org/all/20261107154810.89780-1-dev@deq.rocks/"
     updated: "2026-11-07"
     notes: >-
-      The Wi-Fi chip is powered off during S3 and comes back without its
-      firmware, but its registers can read back as if it were still running.
-      brcmfmac then took the hot resume path and every firmware command timed
-      out. It now loads the firmware again when the platform firmware handled
-      the resume and Wake-on-WLAN is off. The suspend service no longer
-      unloads the drivers, so sleep starts 10 to 15 seconds sooner on BCM4377
-      Macs. The BCM4377 acknowledges D3 again with patch 5 of Michael Reeves'
-      BCM4388 series, which moves the mailbox to the control ring and which
-      KAIT2EN carries until it is merged:
+      The chip loses its firmware in S3 but its registers can read as
+      running, so brcmfmac took the hot resume path and commands timed
+      out. It now reloads the firmware when platform firmware handled
+      the resume and Wake-on-WLAN is off. The suspend service keeps the
+      drivers loaded, so sleep starts 10 to 15 s sooner on BCM4377. The
+      BCM4377 D3 acknowledgement uses patch 5 of Michael Reeves' BCM4388
+      series, carried until merged:
       https://lore.kernel.org/all/20260925-brcm4388-submit-v1-5-b5cbc2cde2fb@gmail.com/
 
   - id: bluetooth-bcm4377-cold-resume
-    title: "Bluetooth comes back after suspend on BCM4377 Macs"
+    title: "BCM4377 Bluetooth cold resume after S3"
     state: available
     upstream: submitted
     version: v1
@@ -622,14 +566,12 @@ items:
     link: "https://lore.kernel.org/all/20261107154839.89941-1-dev@deq.rocks/"
     updated: "2026-11-07"
     notes: >-
-      The Bluetooth controller of the BCM4377 loses its firmware in S3, and
-      hci_bcm4377 woke a controller that no longer ran, so every command timed
-      out. It now probes the controller again after such a resume, and skips
-      the ring teardown messages that each waited a second for the lost
-      firmware.
+      The controller loses its firmware in S3. hci_bcm4377 now probes it
+      again after such a resume and skips the ring teardown messages
+      that each waited a second.
 
   - id: brcmfmac-flowring-delete
-    title: "Faster Wi-Fi disconnects on BCM4377"
+    title: "BCM4377 flowring delete"
     state: available
     upstream: submitted
     version: v1
@@ -640,8 +582,7 @@ items:
     link: "https://lore.kernel.org/all/20261107154810.89780-1-dev@deq.rocks/"
     updated: "2026-11-07"
     notes: >-
-      The BCM4377 firmware reports the packets still queued on a connection
-      only once the host deletes it. brcmfmac waited up to 100 ms per
-      connection for them first, on every disconnect and so on every suspend,
-      and then miscounted them. It now deletes right away.
-
+      The firmware reports queued packets only after the host deletes a
+      flowring. brcmfmac waited up to 100 ms per flowring first, on
+      every disconnect and suspend, and miscounted them. It now deletes
+      right away.
