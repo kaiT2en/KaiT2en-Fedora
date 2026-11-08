@@ -1,29 +1,22 @@
 ### This is not easy to explain
 
-This one is a bit of a read. But while writing, I discovered that non-nerds
-wouldn't even understand what I'm talking about without knowing the context.
-You can skip this if you want. But for many this may be valuable information.
+This one is a bit of a read, but without the context the rest is hard to
+follow. Skip it if you want.
 
 The Linux mainline kernel still lacks drivers for certain T2 hardware
-components. The thing with T2 drivers is that they require reverse engineering.
-Which is particularly difficult on Apple hardware because Apple stuff is
-"thought different". There are not many developers who still deal with T1/T2
+components. Writing them is hard because Apple hardware is "thought
+different". There are not many developers who still deal with T1/T2
 hardware on Linux. Many moved on to Apple Silicon for understandable reasons.
 
-The flow usually is that someone writes a driver by reverse engineering. In the
-best case a community would test it and then it would be submitted to upstream
-maintainers to check and merge. After that the driver would live in the Linux
+Usually someone writes a driver, a community tests it and it gets submitted
+to upstream maintainers. After that the driver would live in the Linux
 kernel. And that means you can just install vanilla Fedora, Ubuntu, Arch or
 whatever and the kernel will support your hardware natively.
 
 Some T2 drivers indeed went that way. Some are still missing. And these are the most
-complex drivers. Because of their complexity they are not easy to upstream.
-The devs who wrote them knew there were still issues with the code and its
-architecture. Upstreaming a driver like that would create plenty of friction and
-work. That's like squeezing it in. So they tried and failed or even never tried.
-
-Upstreaming Apple stuff is difficult. Because it's unconventional hardware.
-It needs a lot of explaining why the code is like it is.
+complex drivers. Their authors knew the code and its architecture still had
+issues, and unconventional hardware needs a lot of explaining upstream. So
+they tried and failed, or never tried.
 
 ### Going upstream = moving against the flow
 
@@ -47,13 +40,10 @@ This has some downsides.
 - You are not talking to the actual developer when you file an issue.
 - When T2Linux stops maintaining, T2 Macs will stop working on Linux.
 
-Since we are currently the provider of some of these missing drivers, we know
-that getting updates into external distros takes time and can be difficult. Many
-third-party maintainers also naturally lack deep T2-specific context, making
-regressions more likely. The informational flow or communication can be
-difficult when breaking changes are introduced. Maintainers have to deal with
-incredibly complex workflows. The more you go upstream, the more complex it
-gets.
+As the provider of some of these drivers, we know that getting updates into
+external distros takes time. Third-party maintainers lack T2-specific context,
+which makes regressions more likely, and breaking changes are hard to
+communicate down the chain.
 
 With KAIT2EN we jump over the middlemen. It is a unified platform. We take care
 that it works on your Mac. So we know your hardware, your command line, your
@@ -69,14 +59,10 @@ dedicated T2 utilities. For you this is like cherry-picking: standard upstream
 kernels directly from Fedora, combined with immediate hardware fixes straight
 from us. Yummy!
 
-Because we rely on out-of-tree modules, we can test and iterate without full
-kernel recompilations. This streamlined architecture lets us roll out fixes and
-handle feature requests in minutes. Literally. All while working toward our
-goal, which is upstreaming every driver into the official Linux kernel, while
-dropping them downstream. This means, when we are done, T2 people can install
-Linux from official sources just like everyone else. And specialized distros or
-repos that are scattered all around the interwebs are no longer needed to
-maintain the code.
+Out-of-tree modules let us test and iterate without kernel recompilations, so
+fixes roll out in minutes. Literally. The goal is still to upstream every
+driver and drop it here. When we are done, T2 people install Linux from
+official sources like everyone else, and no specialized distro is needed.
 
 ### Yes, we know there is Apple Silicon
 
@@ -84,11 +70,10 @@ But someone needs to close the gap! We truly believe T2 MacBooks can make
 perfect Linux laptops. Once everything is properly fixed, models like the
 MacBook Pro 15,1 or MacBook Air 9,1 run cool, offer great battery life, and cost
 very little. All while keeping Apple’s exceptional build quality, Retina
-displays, and Touch Bar. (Mentioning these two models specifically, because they
-are running perfectly on KAIT2EN. The MacBookPro16,1 and MacBookPro16,4 now join
-them with complete hybrid graphics and suspend support, and the 15,2 also runs
-well. The 15,3 and 15,1 vega models do not support hybrid graphics yet, due to
-lack of testers.
+displays, and Touch Bar. These two models run perfectly on KAIT2EN. The
+MacBookPro16,1 and MacBookPro16,4 join them with complete hybrid graphics and
+suspend support, and the 15,2 also runs well. The 15,3 and the 15,1 Vega
+models lack hybrid graphics for now, for want of testers.
 
 So this is x86 architecture and we won't get anywhere near to what Asahi with
 Apple Silicon can do. But the message is not to buy into T2 Macs. It's about
