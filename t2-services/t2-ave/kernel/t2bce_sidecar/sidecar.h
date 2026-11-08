@@ -13,8 +13,7 @@
  * The T2 creates the "SideCar AVE" USB device while a RemoteXPC client is
  * connected to com.apple.videoprocessingd.encode.remote (t2remote holds that
  * connection). Every packet starts with an 8-byte header and travels as one
- * bulk transfer, ended by a short USB packet. See the Sidecar notes in the
- * reverse-engineering tree for offsets and observed behaviour.
+ * bulk transfer, ended by a short USB packet.
  */
 
 #define T2SC_PKT_ACK		1
@@ -41,8 +40,7 @@
 #define T2SC_PIXFMT_NV12	T2SC_FOURCC('4', '2', '0', 'v')
 
 /*
- * CFString behind kVTEncodeFrameOptionKey_ForceKeyFrame, read from the macOS
- * 15.7.7 VideoToolbox in the dyld cache. "ForceKeyFrame" is ignored.
+ * Frame option that forces a keyframe. "ForceKeyFrame" is ignored.
  */
 #define T2SC_FORCE_KEYFRAME	"EncoderForceKeyframe"
 

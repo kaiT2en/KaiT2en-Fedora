@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Enroll a finger from Linux, the full flow reversed in ENROLLMENT-STATE.md.
+//! Enroll a finger from Linux.
 //!
 //! The entire sequence is implemented: arm `EnrollMode` (3, version 2) with the
 //! enroll payload, drive the capture loop with `EnrollContinue` (14) while the

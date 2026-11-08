@@ -228,7 +228,7 @@ impl Session {
     /// descriptor; `Complete` returns the finished **sealed blob**, which the
     /// SEP produces itself and which the caller writes to the `.cat` file. The
     /// seal is not reproduced on the host, only stored. NOTE: the 24-byte
-    /// descriptor layout is read from the SEP rather than reversed field by
+    /// descriptor layout is read from the SEP rather than decoded field by
     /// field, so this path stays unverified until a real token lets it run.
     pub fn save_catacomb_component(&mut self, component: &[u8]) -> Result<Vec<u8>> {
         let prepare = self.command(proto::PREPARE_SAVE_CATACOMB, 0, component, 4)?;

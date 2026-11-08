@@ -38,9 +38,8 @@ pub const NO_CREDENTIAL_SET: u32 = 0xffff_ffff;
 /* ------------------------------------------------------------------------
  * Commands beyond the verify path.
  *
- * Numbers come from the command table in the bridgeOS 22P4248 kernelcache,
- * cross-checked against the bridgeOS log, where every one of the ten commands
- * the verify path uses lines up exactly. The comment on each line is the
+ * Numbers are cross-checked against the bridgeOS log, where every one of
+ * the ten commands the verify path uses lines up exactly. The comment on each line is the
  * payload size measured on the wire during a real enrollment.
  *
  * Nothing here is used by the daemon yet. PRESENCE above is this table's
@@ -81,8 +80,8 @@ pub const GET_BIO_DEVICE_INFO: u16 = 84; // in 20, out 83
 /// was seen at exactly 68.
 pub const ENROLL_INIT_SIZE: usize = MATCH_INIT_SIZE;
 
-/* The match flags are named in the kernelcache but their bit values are NOT
- * known: kMatchingFlagMatchForUnlock, kMatchingFlagMatchForCredentialSet and
+/* The bit values of these match flags are NOT known:
+ * kMatchingFlagMatchForUnlock, kMatchingFlagMatchForCredentialSet and
  * kMatchingFlagMatchForExtendEnrollment. Flags 0 is the plain verify and sets
  * none of them, which is why verification needs no keybag. Do not guess the
  * bits: find them before using them. */

@@ -25,7 +25,7 @@ const MAX_ARCHIVE_SIZE: u64 = 2 * 1024 * 1024 * 1024;
 const SCAN_WORKERS: usize = 128;
 const HANDSHAKE_WORKERS: usize = 32;
 
-// macOS RSDRemoteMultiverseHostDevice::needsConnect uses 0xe8d2 for remoted.
+// macOS uses 0xe8d2 for remoted.
 // Service ports are still read from the peer's Services dictionary.
 pub const DISCOVERY_PORT: u16 = 59602;
 
