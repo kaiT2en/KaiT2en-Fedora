@@ -377,15 +377,31 @@ items:
     state: available
     upstream: downstream
     project: KAIT2EN Fedora
-    subsystem: t2-autobrightness / ambient light sensor
+    subsystem: t2-truetone / ambient light sensor
     authors:
       - deqrocks
-    link: post-install/automatic-brightness.md
-    updated: "2026-10-27"
+    link: post-install/applications/t2-truetone.md
+    updated: "2026-11-08"
     notes: >-
-      Optional service that follows the ambient light sensor with the
-      macOS curve, a 20 % dead band, slow fades and learning from manual
-      changes. Replaces GNOME automatic brightness.
+      Part of T2 TrueTone. Follows the ambient light sensor with the macOS
+      curve, a 20 % dead band, slow fades and learning from manual changes.
+      Replaces GNOME automatic brightness.
+
+  - id: true-tone
+    title: "True Tone and evening mode"
+    state: available
+    upstream: downstream
+    project: KAIT2EN Fedora
+    subsystem: t2-truetone / ambient light sensor
+    authors:
+      - deqrocks
+    link: post-install/applications/t2-truetone.md
+    updated: "2026-11-08"
+    notes: >-
+      T2 TrueTone adapts the display white to the color of the ambient
+      light through the panel's gamma LUT, with a strength slider, and warms
+      it on a daily schedule. Replaces GNOME Night Light. Off until turned
+      on in the app.
 
   - id: imac-5k
     title: "5K display on iMac20,1 and iMac20,2"

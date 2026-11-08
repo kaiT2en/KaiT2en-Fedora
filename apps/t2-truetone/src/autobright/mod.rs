@@ -12,41 +12,36 @@
 //! On GNOME the service writes through mutter with gnome-shell's own
 //! automatics off. Its shell extension moves the slider along, so the slider
 //! and the brightness keys always start from the real brightness.
+//!
+//! This was the standalone t2-autobrightness service. It runs as a thread of
+//! the t2-truetone daemon and gets its lux from the shared sensor poller.
 
-mod als;
-mod curve;
-mod gnome;
-mod mutter;
-mod shell;
+pub mod backlight;
+pub mod curve;
+pub mod gnome;
+pub mod shell;
 
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc;
+use std::sync::mpsc::{self, Receiver};
+use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
 use zbus::blocking::Connection;
 
-use als::Als;
+use backlight::Backlight;
 use curve::Curve;
-use mutter::Backlight;
 
-const POLL: Duration = Duration::from_millis(500);
 const COMMIT_DELAY: Duration = Duration::from_secs(1);
 const MIN_STEP: Duration = Duration::from_millis(10);
 const WAKE: Duration = Duration::from_millis(50);
 const DEAD_BAND: f32 = 0.2;
 const STEPS_PER_UNIT: f32 = 1024.0;
-const EXTENSION: &str = "kait2en-autobrightness@kait2en";
-
-static STOP: AtomicBool = AtomicBool::new(false);
-
-extern "C" fn on_signal(_: libc::c_int) {
-    STOP.store(true, Ordering::SeqCst);
-}
+pub const EXTENSION: &str = "kait2en-autobrightness@kait2en";
 
 /// The built-in panel: written through mutter, read back from the kernel.
 /// Brightness inside the service is linear, `raw / max`.
@@ -84,11 +79,11 @@ impl<'a> Panel<'a> {
     /// refused write is retried once with fresh data.
     fn show(&mut self, linear: f32) -> Result<()> {
         let value = self.raw(linear);
-        if mutter::set(self.connection, &self.backlight, value).is_ok() {
+        if backlight::set(self.connection, &self.backlight, value).is_ok() {
             return Ok(());
         }
-        self.backlight = mutter::read(self.connection)?.ok_or_else(|| anyhow!("the built-in backlight is gone"))?;
-        mutter::set(self.connection, &self.backlight, value)
+        self.backlight = backlight::read(self.connection)?.ok_or_else(|| anyhow!("the built-in backlight is gone"))?;
+        backlight::set(self.connection, &self.backlight, value)
     }
 }
 
@@ -138,27 +133,24 @@ impl Ramp {
     }
 }
 
-fn main() -> Result<()> {
-    let handler = on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t;
-    // SAFETY: the handler only stores to an atomic.
-    unsafe {
-        libc::signal(libc::SIGTERM, handler);
-        libc::signal(libc::SIGINT, handler);
-    }
+/// Live state for the status file.
+#[derive(Clone, Debug, Default)]
+pub struct Live {
+    pub linear: Option<f32>,
+    pub curve: Option<Curve>,
+}
+
+/// Run until `stop` is set. Lux arrives on `lux` from the shared sensor.
+pub fn run(lux: Receiver<f32>, stop: Arc<AtomicBool>, live: Arc<Mutex<Live>>) -> Result<()> {
     let state = state_dir()?;
     fs::create_dir_all(&state).with_context(|| format!("creating {}", state.display()))?;
+    migrate(&state);
     let curve_path = state.join("curve");
     let saved_settings = state.join("gnome-settings");
 
-    // Without the sensor or a controllable built-in panel there is nothing to
-    // do. Exiting cleanly keeps systemd from restarting the unit forever on
-    // desktop Macs and on displays whose sensor BridgeOS does not expose.
-    let als = match Als::find() {
-        Ok(als) => als,
-        Err(error) => return unsupported(&format!("{error:#}")),
-    };
+    // Without a controllable built-in panel there is nothing to do.
     let connection = Connection::session().context("connecting to the session bus")?;
-    let Some(backlight) = mutter::read(&connection)? else {
+    let Some(backlight) = backlight::read(&connection)? else {
         return unsupported("mutter reports no built-in backlight");
     };
     let mut panel = match Panel::find(&connection, backlight) {
@@ -169,11 +161,8 @@ fn main() -> Result<()> {
     let product = product.trim();
     let curve = Curve::load(&curve_path).unwrap_or_else(|| Curve::factory(product));
     log(&format!(
-        "{product}, sensor factor {}, {} range {}..{}, curve {curve:?}",
-        als.factor(),
-        panel.backlight.connector,
-        panel.backlight.min,
-        panel.backlight.max
+        "{product}, {} range {}..{}, curve {curve:?}",
+        panel.backlight.connector, panel.backlight.min, panel.backlight.max
     ));
 
     gnome::take_over(&saved_settings)?;
@@ -181,25 +170,32 @@ fn main() -> Result<()> {
         log(&format!("enabling the shell extension failed: {error:#}"));
     }
     shell::disable_auto_target(&connection)?;
-    let result = run(als, &mut panel, curve, &curve_path);
+    let result = run_loop(lux, &stop, &live, &mut panel, curve, &curve_path);
     if let Err(error) = gnome::restore(&saved_settings) {
         log(&format!("restoring GNOME settings failed: {error:#}"));
     }
+    *live.lock().unwrap() = Live::default();
     result
 }
 
-fn run(als: Als, panel: &mut Panel, mut curve: Curve, curve_path: &Path) -> Result<()> {
+fn run_loop(
+    readings: Receiver<f32>,
+    stop: &AtomicBool,
+    live: &Mutex<Live>,
+    panel: &mut Panel,
+    mut curve: Curve,
+    curve_path: &Path,
+) -> Result<()> {
     let (manual_sender, manual) = mpsc::channel();
     shell::watch(manual_sender);
-    let (lux_sender, readings) = mpsc::channel();
-    als.watch(POLL, lux_sender);
 
     let mut ramp: Option<Ramp> = None;
     let mut commit_at: Option<Instant> = None;
     let mut lux: Option<f32> = None;
     let mut force = true;
+    live.lock().unwrap().curve = Some(curve.clone());
 
-    while !STOP.load(Ordering::SeqCst) {
+    while !stop.load(Ordering::SeqCst) {
         let now = Instant::now();
 
         let changes = manual.try_iter().count();
@@ -225,6 +221,7 @@ fn run(als: Als, panel: &mut Panel, mut curve: Curve, curve_path: &Path) -> Resu
             if let Err(error) = curve.save(curve_path) {
                 log(&format!("{error:#}"));
             }
+            live.lock().unwrap().curve = Some(curve.clone());
         }
 
         if commit_at.is_none()
@@ -232,6 +229,7 @@ fn run(als: Als, panel: &mut Panel, mut curve: Curve, curve_path: &Path) -> Resu
         {
             let target = curve.linear_for_lux(at, panel.min_linear(), 1.0);
             let current = panel.linear()?;
+            live.lock().unwrap().linear = Some(current);
             // The T2 only reports real changes, so every macOS event retargets.
             // Polling sees every sample, so a running fade only restarts when
             // its own target is off by the dead band.
@@ -270,18 +268,48 @@ fn run(als: Als, panel: &mut Panel, mut curve: Curve, curve_path: &Path) -> Resu
 }
 
 fn unsupported(reason: &str) -> Result<()> {
-    log(&format!("nothing to control, exiting: {reason}"));
+    log(&format!("automatic brightness has nothing to control: {reason}"));
     Ok(())
 }
 
-fn state_dir() -> Result<PathBuf> {
-    let base = match env::var_os("XDG_STATE_HOME") {
+fn state_base() -> Result<PathBuf> {
+    Ok(match env::var_os("XDG_STATE_HOME") {
         Some(dir) if !dir.is_empty() => PathBuf::from(dir),
         _ => PathBuf::from(env::var_os("HOME").context("HOME is not set")?).join(".local/state"),
-    };
-    Ok(base.join("t2-autobrightness"))
+    })
+}
+
+fn state_dir() -> Result<PathBuf> {
+    Ok(state_base()?.join("t2-truetone").join("brightness"))
+}
+
+/// Take over the learned curve and the saved GNOME settings of the former
+/// t2-autobrightness service, once.
+fn migrate(state: &Path) {
+    let Ok(old) = state_base().map(|b| b.join("t2-autobrightness")) else { return };
+    for name in ["curve", "gnome-settings"] {
+        let (from, to) = (old.join(name), state.join(name));
+        if !from.exists() || to.exists() {
+            continue;
+        }
+        match fs::copy(&from, &to) {
+            Ok(_) => {
+                log(&format!("took over {}", from.display()));
+                if let Err(e) = fs::remove_file(&from) {
+                    log(&format!("could not remove {}: {e}", from.display()));
+                }
+            }
+            Err(e) => log(&format!("could not take over {}: {e}", from.display())),
+        }
+    }
+    // Only an empty directory goes, anything else in it is left in place.
+    if fs::read_dir(&old).is_ok_and(|mut d| d.next().is_none()) {
+        if let Err(e) = fs::remove_dir(&old) {
+            log(&format!("could not remove {}: {e}", old.display()));
+        }
+    }
 }
 
 pub(crate) fn log(message: &str) {
-    eprintln!("t2-autobrightness: {message}");
+    eprintln!("t2-truetone: brightness: {message}");
 }

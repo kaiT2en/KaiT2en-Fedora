@@ -20,4 +20,5 @@ them easy to find. The updater is called KaiT2en Update.
 - [T2 Hybrid GPU Control](applications/t2-hybrid-gpu-control.md)
 - [T2 GPU Control](applications/t2-gpu-control.md)
 - [T2 AirShare](applications/t2-airshare.md)
+- [T2 TrueTone](applications/t2-truetone.md)
 - [T2 Kernel Builder](applications/t2-kernel-builder.md)

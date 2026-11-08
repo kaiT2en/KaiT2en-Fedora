@@ -19,7 +19,6 @@ if [[ ${1:-} == --only ]]; then
 		[[ -x /usr/local/bin/kait2en-touchbar ]] && KAIT2EN_INSTALL_TOUCHBAR=1
 	fi
 	KAIT2EN_INSTALL_VORNEHM=0
-	KAIT2EN_INSTALL_AUTOBRIGHTNESS=0
 elif (( $# > 0 )); then
 	fail "usage: install.sh [--only step,step,...]"
 fi
@@ -33,7 +32,6 @@ selected() {
 	return 1
 }
 selected install-vornehm.sh && (( ${#ONLY_STEPS[@]} > 0 )) && KAIT2EN_INSTALL_VORNEHM=1
-selected install-autobrightness.sh && (( ${#ONLY_STEPS[@]} > 0 )) && KAIT2EN_INSTALL_AUTOBRIGHTNESS=1
 
 # Asked before anything runs so the rest of the installation is unattended.
 # KAIT2EN_INSTALL_TOUCHBAR=1|0 answers it ahead of time. Without a terminal
@@ -77,48 +75,6 @@ TEXT
 }
 ask_touchbar
 export KAIT2EN_INSTALL_TOUCHBAR
-
-# Automatic brightness replaces GNOME's own and needs some of its settings
-# off, so it is asked for. KAIT2EN_INSTALL_AUTOBRIGHTNESS=1|0 answers it
-# ahead of time. Without a terminal nothing is installed.
-ask_autobrightness() {
-	local answer
-	if ! has_ambient_light_sensor || ! command -v gnome-shell >/dev/null 2>&1; then
-		KAIT2EN_INSTALL_AUTOBRIGHTNESS=0
-		return
-	fi
-	case "${KAIT2EN_INSTALL_AUTOBRIGHTNESS:-}" in
-		1 | 0) return ;;
-	esac
-	if [[ ! -t 0 ]]; then
-		KAIT2EN_INSTALL_AUTOBRIGHTNESS=0
-		return
-	fi
-	cat <<'TEXT'
-
-Automatic brightness (optional)
-
-  Adjusts the display brightness to the ambient light the way macOS does.
-  Changes fade in slowly, small changes in light are ignored, and when you
-  set the brightness by hand it learns your preference for that light.
-  It saves power in dim rooms.
-
-  While it runs, GNOME's own automatic brightness and dimming of the screen
-  when idle are switched off, and GNOME gets them back when it is removed.
-  It comes with a small GNOME Shell extension that keeps the brightness
-  slider in sync. Remove it at any time with
-  install-autobrightness.sh --remove or in kait2en-update.
-
-  Without it, GNOME keeps its own brightness handling.
-
-TEXT
-	read -r -p "Install automatic brightness? [Y/n] " answer || answer=
-	case "${answer,,}" in
-		n | no) KAIT2EN_INSTALL_AUTOBRIGHTNESS=0 ;;
-		*) KAIT2EN_INSTALL_AUTOBRIGHTNESS=1 ;;
-	esac
-}
-ask_autobrightness
 
 # KaiT2en Vornehm changes the GNOME desktop of the user who runs sudo, so
 # it is only offered when GNOME is there. KAIT2EN_INSTALL_VORNEHM=1|0
@@ -304,15 +260,6 @@ for step in "${STEPS[@]}"; do
 		mark_applied "$step"
 	fi
 done
-
-if [[ $KAIT2EN_INSTALL_AUTOBRIGHTNESS == 1 ]]; then
-	run_step "automatic brightness" bash "$SCRIPT_DIR/install-autobrightness.sh"
-	if (( STEP_STATUS == 0 )); then
-		mark_applied install-autobrightness.sh
-	else
-		failed_steps+=(install-autobrightness.sh)
-	fi
-fi
 
 if [[ $KAIT2EN_INSTALL_VORNEHM == 1 ]]; then
 	run_step "KaiT2en Vornehm for $VORNEHM_USER" install_vornehm

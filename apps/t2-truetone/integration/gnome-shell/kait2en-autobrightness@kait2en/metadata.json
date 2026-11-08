@@ -1,7 +1,7 @@
 {
   "uuid": "kait2en-autobrightness@kait2en",
   "name": "KaiT2en Auto Brightness",
-  "description": "Keeps the brightness slider on the real brightness while t2-autobrightness adjusts the panel. No settings.",
+  "description": "Keeps the brightness slider on the real brightness while t2-truetone adjusts the panel. No settings.",
   "shell-version": ["50", "51"],
   "url": "https://github.com/kaiT2en/KaiT2en-Fedora"
 }

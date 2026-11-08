@@ -35,29 +35,10 @@ pub const VORNEHM: Part = Part {
     privileged: false,
 };
 
-pub const AUTOBRIGHTNESS: Part = Part {
-    name: "install-autobrightness.sh",
-    title: "Automatic brightness",
-    description: "Follows the ambient light the way macOS does and learns from your own \
-                  changes. GNOME's own automatic brightness and idle dimming stay off while \
-                  it is installed.",
-    marker: "/usr/local/bin/t2-autobrightness",
-    privileged: true,
-};
-
 fn has_touch_bar() -> bool {
     std::fs::read_to_string("/sys/class/dmi/id/product_name").is_ok_and(|model| {
         let model = model.trim();
         model.starts_with("MacBookPro15,") || model.starts_with("MacBookPro16,")
-    })
-}
-
-/// Same models as has_ambient_light_sensor in the installer.
-fn has_ambient_light_sensor() -> bool {
-    std::fs::read_to_string("/sys/class/dmi/id/product_name").is_ok_and(|model| {
-        ["MacBookPro15,", "MacBookPro16,", "MacBookAir8,", "MacBookAir9,"]
-            .iter()
-            .any(|prefix| model.trim().starts_with(prefix))
     })
 }
 
@@ -68,9 +49,6 @@ pub fn available() -> Vec<&'static Part> {
         parts.push(&TOUCH_BAR);
     }
     let gnome = glib::find_program_in_path("gnome-shell").is_some();
-    if has_ambient_light_sensor() && gnome {
-        parts.push(&AUTOBRIGHTNESS);
-    }
     if gnome {
         parts.push(&VORNEHM);
     }

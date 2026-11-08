@@ -33,6 +33,7 @@ app:t2-debug                  apps/t2-debug/
 app:t2-airshare               apps/t2-airshare/
 app:t2-drop                   apps/t2-drop/
 app:t2-kbd-backlight          apps/t2-kbd-backlight/
+app:t2-truetone               apps/t2-truetone/
 app:t2-touchbar               if=/usr/local/bin/kait2en-touchbar apps/t2-touchbar/
 app:t2-journal                t2-services/t2-journal/ packaging/lifecycle/
 app:gpu-control               apps/t2-dgpu-control/ apps/t2-hybrid-gpu-control/
@@ -45,5 +46,4 @@ install-t2-services-common.sh t2-services/shared/ packaging/lifecycle/
 install-t2-remote.sh          t2-services/t2-ave/Cargo.toml t2-services/t2-ave/Cargo.lock t2-services/t2-ave/Makefile t2-services/t2-ave/cli/ t2-services/t2-ave/daemon/ t2-services/t2-ave/integration/ t2-services/t2-ave/packaging/ t2-services/t2-ave/protocols/ packaging/lifecycle/
 install-touchid.sh            t2-services/t2-touchid/ packaging/lifecycle/
 rebuild-initramfs.sh
-install-autobrightness.sh     if=/usr/local/bin/t2-autobrightness t2-services/t2-autobrightness/
 install-vornehm.sh            if=~/.local/share/gnome-shell/extensions/kait2en-vornehm@kait2en assets/vornehm/

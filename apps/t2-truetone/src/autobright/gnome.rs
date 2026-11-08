@@ -3,7 +3,7 @@
 //! runs, and gives the user's settings back when it stops.
 //!
 //! The previous values are written to disk before anything is changed, and
-//! only if no saved copy exists yet, so a crash and restart never overwrites
+//! only if no saved copy exists yet, so a crash and restart doesn't overwrite
 //! the user's original settings with the service's own.
 
 use std::fs;

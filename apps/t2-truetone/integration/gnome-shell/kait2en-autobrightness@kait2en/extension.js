@@ -3,11 +3,6 @@
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension, InjectionManager} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-// gnome-shell takes a backlight change it did not make into the monitor's
-// scale only. The global scale behind the slider stays where it was, so the
-// slider shows a stale value and a touch jumps the panel back to it.
-// After every sync the global scale is set to the brightest monitor again,
-// the way the shell does it after a user change.
 function followBacklight(manager) {
     const global = manager.globalScale;
     const scales = [...manager.scales];
@@ -18,8 +13,6 @@ function followBacklight(manager) {
     if (Math.abs(global.value - max) < 0.001)
         return;
 
-    // Inhibited, the value handlers return early: no user-update, so no
-    // BrightnessChanged on D-Bus, and t2-autobrightness sees no manual change.
     manager._inhibitUpdates = true;
     try {
         if (max > 0.01)

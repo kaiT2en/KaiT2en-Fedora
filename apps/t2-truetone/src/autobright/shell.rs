@@ -31,7 +31,7 @@ pub fn disable_auto_target(connection: &Connection) -> Result<()> {
 pub fn watch(sender: Sender<()>) {
     thread::spawn(move || {
         if let Err(error) = run_watch(&sender) {
-            crate::log(&format!("gnome-shell watch stopped: {error:#}"));
+            super::log(&format!("gnome-shell watch stopped: {error:#}"));
         }
     });
 }

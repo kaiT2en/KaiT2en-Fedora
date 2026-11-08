@@ -1,0 +1,37 @@
+[package]
+name = "t2-truetone"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+description = "Ambient white point adaptation, evening mode and automatic brightness for T2 MacBooks under GNOME"
+
+[lib]
+name = "t2_truetone"
+path = "src/lib.rs"
+
+[[bin]]
+name = "t2-truetone"
+path = "src/bin/t2-truetone.rs"
+required-features = ["gui"]
+
+[[bin]]
+name = "t2truetone"
+path = "src/bin/t2truetone.rs"
+
+[features]
+default = ["gui"]
+gui = ["dep:gtk4", "dep:adw"]
+
+[dependencies]
+anyhow = "1.0"
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+zbus = "5"
+gtk4 = { version = "0.9", features = ["v4_12"], optional = true }
+adw = { package = "libadwaita", version = "0.7", features = ["v1_4"], optional = true }
+
+[profile.release]
+lto = true
+strip = true

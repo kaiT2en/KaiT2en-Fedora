@@ -1,0 +1,14 @@
+[Unit]
+Description=T2 TrueTone ambient white point, evening mode and automatic brightness
+Documentation=https://kait2en.org/documentation.html
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=exec
+ExecStart=/usr/local/bin/t2truetone daemon
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

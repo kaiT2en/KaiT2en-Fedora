@@ -15,7 +15,7 @@ die() {
 }
 
 usage() {
-	die 'usage: kait2en-update-helper apply --all | apply STEPS APPS | optional t2-touchbar|install-autobrightness.sh install|remove'
+	die 'usage: kait2en-update-helper apply --all | apply STEPS APPS | optional t2-touchbar install|remove'
 }
 
 [[ $EUID -eq 0 ]] || die 'must run as root'
@@ -61,9 +61,8 @@ refresh_repository() {
 
 # Optional parts stay as they are, nothing is asked in the background.
 keep_optional_parts() {
-	export KAIT2EN_INSTALL_TOUCHBAR=0 KAIT2EN_INSTALL_VORNEHM=0 KAIT2EN_INSTALL_AUTOBRIGHTNESS=0
+	export KAIT2EN_INSTALL_TOUCHBAR=0 KAIT2EN_INSTALL_VORNEHM=0
 	[[ -x /usr/local/bin/kait2en-touchbar ]] && KAIT2EN_INSTALL_TOUCHBAR=1
-	[[ -x /usr/local/bin/t2-autobrightness ]] && KAIT2EN_INSTALL_AUTOBRIGHTNESS=1
 	[[ -d $home/.local/share/gnome-shell/extensions/kait2en-vornehm@kait2en ]] &&
 		KAIT2EN_INSTALL_VORNEHM=1
 	return 0
@@ -118,15 +117,6 @@ case ${1:-} in
 			t2-touchbar:remove)
 				bash ./apps/t2-touchbar/uninstall.sh </dev/null
 				rm -f /var/lib/kait2en-installer/applied/app:t2-touchbar
-				;;
-			install-autobrightness.sh:install)
-				[[ -f scripts/fedora/install-autobrightness.sh ]] ||
-					die 'the installer in the checkout has no automatic brightness yet'
-				exec bash ./scripts/fedora/install.sh --only install-autobrightness.sh </dev/null
-				;;
-			install-autobrightness.sh:remove)
-				bash ./scripts/fedora/install-autobrightness.sh --remove </dev/null
-				rm -f /var/lib/kait2en-installer/applied/install-autobrightness.sh
 				;;
 			*)
 				usage

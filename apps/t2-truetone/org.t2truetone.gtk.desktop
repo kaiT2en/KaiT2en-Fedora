@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=T2 TrueTone
+Comment=Adapt the display white to the ambient light, evening mode and automatic brightness
+Exec=/usr/local/bin/t2-truetone
+TryExec=/usr/local/bin/t2-truetone
+Icon=org.t2truetone.gtk
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=True Tone;white point;night;brightness;display;
+StartupNotify=true

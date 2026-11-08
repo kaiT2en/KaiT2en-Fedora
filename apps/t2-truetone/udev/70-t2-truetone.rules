@@ -1,0 +1,2 @@
+# Ambient light sensor of T2 MacBooks, read by the t2-truetone session daemon
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="05ac", ATTRS{idProduct}=="8262", TAG+="uaccess"

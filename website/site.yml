@@ -128,9 +128,9 @@ documentation:
             - {file: post-install/applications/t2-hybrid-gpu-control.md}
             - {file: post-install/applications/t2-gpu-control.md}
             - {file: post-install/applications/t2-airshare.md}
+            - {file: post-install/applications/t2-truetone.md}
             - {file: post-install/applications/t2-kernel-builder.md}
         - {file: post-install/audio-dsp.md}
-        - {file: post-install/automatic-brightness.md}
         - {file: post-install/butterfly-keyboard.md}
         - {file: post-install/configuring-gpus.md}
         - {file: post-install/hardware-video-decoding.md}

@@ -159,13 +159,14 @@ has_keyboard_backlight() {
 	[[ "$model" == MacBookPro15,* || "$model" == MacBookPro16,* || "$model" == MacBookAir8,* || "$model" == MacBookAir9,* ]]
 }
 
-# T2 MacBooks with the ambient light sensor behind the T2. iMacs have one
-# too, but driving their panel is not verified yet.
+# T2 Macs with the ambient light sensor behind the T2: every T2 MacBook, the
+# iMac20,1 and the iMac Pro.
 has_ambient_light_sensor() {
 	local model
 	[[ -r /sys/class/dmi/id/product_name ]] || return 1
 	read -r model </sys/class/dmi/id/product_name
-	[[ "$model" == MacBookPro15,* || "$model" == MacBookPro16,* || "$model" == MacBookAir8,* || "$model" == MacBookAir9,* ]]
+	[[ "$model" == MacBookPro15,* || "$model" == MacBookPro16,* || "$model" == MacBookAir8,* || "$model" == MacBookAir9,* ||
+		"$model" == iMac20,1 || "$model" == iMacPro1,1 ]]
 }
 
 require_command() {

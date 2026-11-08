@@ -207,6 +207,22 @@ elif [[ -x /usr/local/bin/kait2en-touchbar ]]; then
 else
 	info "kait2en-touchbar not selected; the native Touch Bar row stays active"
 fi
+# T2 TrueTone needs the ambient light sensor and GNOME Shell. On any other
+# Mac an installation from an earlier run is removed.
+remove_truetone() {
+	info "removing t2-truetone, this Mac has no ambient light sensor or no GNOME Shell"
+	make -C "$REPO_ROOT/apps/t2-truetone" uninstall || warn "could not remove t2-truetone"
+	rm -f /var/lib/kait2en-installer/applied/app:t2-truetone
+}
+if ! wanted t2-truetone; then
+	:
+elif has_ambient_light_sensor && command -v gnome-shell >/dev/null; then
+	install_script_app t2-truetone || true
+elif [[ -e /usr/local/bin/t2truetone ]]; then
+	run_step "remove t2-truetone" remove_truetone
+else
+	info "no ambient light sensor or no GNOME Shell on this Mac; skipping t2-truetone"
+fi
 wanted t2-journal && run_step "t2-journal" install_rust_app "$REPO_ROOT/t2-services/t2-journal" "t2-journal"
 wanted gpu-control && run_step "GPU control" install_gpu_control
 run_step "remove t2-cpu-control" remove_t2_cpu_control
