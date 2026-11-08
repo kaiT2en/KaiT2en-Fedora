@@ -589,6 +589,24 @@ items:
       again after such a resume and skips the ring teardown messages
       that each waited a second.
 
+  - id: bluetooth-bcm4377-register-index
+    title: "BCM4377 Bluetooth probe with another controller present"
+    state: available
+    upstream: submitted
+    version: v1
+    project: Linux kernel
+    subsystem: Bluetooth / hci_bcm4377
+    authors:
+      - deqrocks
+    link: "https://lore.kernel.org/all/20261107154839.89941-2-dev@deq.rocks/"
+    updated: "2026-11-08"
+    notes: >-
+      With another controller on hci0, a USB dongle for example, probe
+      returned the new index and the PCI core took it as success without
+      the unregister action. The controller then stayed registered after
+      unbind. hci_bcm4377 now treats only negative returns as errors.
+      Reviewed by Sven Peter.
+
   - id: brcmfmac-flowring-delete
     title: "BCM4377 flowring delete"
     state: available
