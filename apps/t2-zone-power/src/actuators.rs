@@ -11,7 +11,7 @@ use crate::{
     sysfs::{glob_paths, read_string, read_value, write_value},
 };
 
-/// X86PlatformShim caps XCPM at the CPUPStates entry the CPU step indexes.
+/// macOS caps XCPM at the CPUPStates entry the CPU step indexes.
 /// CPUPStates is the XCPM ratio ladder from the highest turbo frequency down
 /// to the lowest one in 100 MHz steps (ioreg of a MacBookPro16,1 under
 /// macOS: 5000 down to 800 MHz, 43 entries). Step 0 leaves the CPU uncapped.
@@ -61,7 +61,7 @@ impl CpuCap {
     }
 }
 
-/// CPUFloor of the X86PlatformPlugin board plists (macOS 15.4.1). Macmini8,1
+/// CPUFloor of the macOS board plists (macOS 15.4.1). Macmini8,1
 /// has none, so macOS reports no CPU floor there.
 const CPU_FLOOR_MHZ: &[(&str, u32)] = &[
     ("MacBookAir8,", 800),
@@ -73,7 +73,7 @@ const CPU_FLOOR_MHZ: &[(&str, u32)] = &[
     ("iMac20,", 1300),
 ];
 
-/// MSTS and MSPC as X86PlatformPlugin::setCPUFloor computes them from the
+/// MSTS and MSPC as macOS computes them from the
 /// XCPM P-state table: the turbo P-state count and the non-turbo P-states
 /// above CPUFloor
 pub fn cpu_floor() -> Option<(u8, u8)> {
@@ -114,7 +114,7 @@ mod tests {
     }
 }
 
-/// X86PlatformShim turns the idle step into a run ratio of 100 - step
+/// macOS turns the idle step into a run ratio of 100 - step
 /// percent, at least 30 %. intel_powerclamp takes the idle share.
 pub struct ForcedIdle {
     cur_state: PathBuf,
@@ -154,8 +154,8 @@ impl ForcedIdle {
     }
 }
 
-/// AGPM passes the dGPU step as index into the PowerTune table of the AMD
-/// driver. Both drivers fill it linearly from the TDP (step 0) down to a
+/// The dGPU step is an index into the PowerTune table of the AMD driver.
+/// Both macOS and Linux fill it linearly from the TDP (step 0) down to a
 /// floor in 16 steps.
 pub struct DGpuCap {
     device: PathBuf,
@@ -167,7 +167,7 @@ pub struct DGpuCap {
     applied_w: Cell<Option<u32>>,
 }
 
-/// AGPM drives the dGPU through power states 0 to 15 on every Mac with one
+/// macOS drives the dGPU through power states 0 to 15 on every Mac with one
 pub const DGPU_STEPS: u32 = 16;
 
 impl DGpuCap {
@@ -228,21 +228,21 @@ impl DGpuCap {
     }
 }
 
-/// Floor of the PowerTune table in parts of the TDP, per macOS driver
+/// Floor of the PowerTune table in parts of the TDP, as on macOS
 fn floor_ratio(device: &Path) -> Option<f64> {
     let id = read_string(&device.join("device")).ok()?;
     let id = u16::from_str_radix(id.trim_start_matches("0x"), 16).ok()?;
     match id {
-        // Navi 1x, AMDRadeonX6000Framebuffer: ceil(TDP * 0.4)
+        // Navi 1x: ceil(TDP * 0.4)
         0x7310..=0x73ff => Some(0.4),
-        // Polaris, AMD9500Controller: CFG_PTPL2_MIN defaults to 0 W
+        // Polaris: down to 0 W
         0x67c0..=0x67ff | 0x6980..=0x699f => Some(0.0),
         _ => None,
     }
 }
 
-/// AGPM passes the iGPU step to the Intel framebuffer, whose P-state table
-/// runs from RP0 down to RPn one ratio per state (PMOBJECT::initPState2Freq).
+/// The iGPU step indexes the P-state table, which runs from RP0 down to RPn
+/// one ratio per state.
 /// A Gen9 ratio is 50 MHz.
 pub struct IGpuCap {
     max_freq: PathBuf,
@@ -265,7 +265,7 @@ impl IGpuCap {
         Ok(None)
     }
 
-    /// Number of P-states AGPM reports to the SMC
+    /// Number of P-states macOS reports to the SMC
     pub fn steps(&self) -> u32 {
         (self.rp0_mhz - self.rpn_mhz) / IGPU_RATIO_MHZ + 1
     }

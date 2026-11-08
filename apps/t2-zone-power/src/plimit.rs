@@ -1,4 +1,4 @@
-//! Power limit steps the SMC publishes, see AppleSMC::smcGetPLimits
+//! Power limit steps the SMC publishes
 
 use std::path::Path;
 

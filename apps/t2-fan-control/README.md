@@ -7,13 +7,9 @@
 <p align="center">
 <img src="assets/t2fancontrol_dark.png" alt="T2 Fan Control dark mode screenshot" style="height: 400px;">
 </p>
-Fan controller application written in Rust for T2 Macs running Linux.
-Supports applesmc, macsmc hwmon and t2smc hwmon paths.
-
-
-T2 Fan Control provides a compact desktop interface for monitoring temperatures and editing a smooth fan curve with a model-specific system-temperature target.
-
-Fan control is handled by a background daemon integrated with systemd. This keeps the state persistent across boot, suspend and resume, while the GUI talks to the daemon over a Unix socket.
+Fan control for T2 Macs on Linux, written in Rust. Works with applesmc, macsmc
+and t2smc. A systemd daemon drives the fans across boot, suspend and resume,
+the GTK app monitors temperatures and edits the curve over a Unix socket.
 
 ## Native SMC or custom curve
 
@@ -26,7 +22,7 @@ The T2 SMC keeps manual fan mode across reboots. In native mode the daemon there
 
 ## How fan control works
 
-The controller deliberately keeps normal component cooling and retained system heat separate. It samples the available temperatures every two seconds and derives three different values.
+Component cooling and retained system heat are kept separate. Temperatures are sampled every two seconds.
 
 ### Curve temperature
 
@@ -47,7 +43,7 @@ The optional sensor is drawn as its own line in the curve and temperature graphs
 
 ### System temperature and system target
 
-The system temperature is the arithmetic mean of the currently readable positive SMC temperatures, excluding CPU core, CPU die and CPU package sensors. Zero, negative and unreadable values are ignored. This broad average is intended to reflect heat retained by the logic board, cooling assembly and enclosure without overweighting CPU telemetry.
+The system temperature is the mean of all positive SMC temperatures except CPU core, die and package sensors. It reflects heat retained by the logic board, cooling assembly and enclosure.
 
 The red vertical wall in the curve editor is the configurable system-temperature target:
 
@@ -113,37 +109,16 @@ Curve entries use `temperature:speed-percent` pairs. The active configuration is
 /etc/t2-fancontrol/config.txt
 ```
 
-It can be inspected with:
-
-```bash
-sudo cat /etc/t2-fancontrol/config.txt
-```
-
-Configurations from the earlier preset-based controller do not describe the new control model safely. A file without `config_version=2` is therefore replaced with the defaults above when the daemon starts. Once migrated, version 2 user changes are preserved.
+A file without `config_version=2`, from the earlier preset-based controller, is replaced with the defaults when the daemon starts.
 
 ## Installation
-
-1. Download or clone the repository
-2. Unpack it
-3. Run:
 
 ```bash
 make
 sudo make install
 ```
-This step is mandatory. It puts the binary, desktop entry, icon and systemd service in the correct system locations, then enables and starts `t2-fancontrol.service`.
 
-If `t2fanrd.service` is present, `sudo make install` disables and stops it automatically to avoid conflicts.
-
-`sudo make install` does all of the following:
-
-- installs the binary to `/usr/local/bin/t2-fancontrol-gtk`
-- installs the desktop entry to `/usr/local/share/applications/org.t2fancontrol.gtk.desktop`
-- installs the icon to `/usr/local/share/icons/hicolor/scalable/apps/org.t2fancontrol.gtk.svg`
-- installs the systemd unit to `/usr/local/lib/systemd/system/t2-fancontrol.service`
-- reloads systemd
-- enables and starts `t2-fancontrol.service`
-- disables and stops `t2fanrd.service` if it exists
+This installs the binary, desktop entry, icon and systemd unit under `/usr/local`, enables `t2-fancontrol.service` and stops `t2fanrd.service` if present.
 
 ## Uninstall
 
@@ -151,17 +126,7 @@ If `t2fanrd.service` is present, `sudo make install` disables and stops it autom
 sudo make uninstall
 ```
 
-This removes the installed files, disables `t2-fancontrol.service`, and re-enables `t2fanrd.service` if it is present on the system.
-
-`sudo make uninstall` does all of the following:
-
-- disables and stops `t2-fancontrol.service`
-- removes the installed binary
-- removes the desktop entry
-- removes the installed icon
-- removes the installed systemd unit
-- reloads systemd
-- re-enables and starts `t2fanrd.service` if it exists
+This removes everything again and re-enables `t2fanrd.service` if present.
 
 ## Build Dependencies
 

@@ -20,7 +20,7 @@ use crate::{
 const TICK: Duration = Duration::from_millis(250);
 const REDISCOVER: Duration = Duration::from_secs(10);
 
-/// Applies the SMC power limit steps like X86PlatformShim and AGPM do on macOS.
+/// Applies the SMC power limit steps like macOS does.
 /// With debug every step change is logged.
 pub fn run(debug: bool) -> Result<()> {
     let stop = Arc::new(AtomicBool::new(false));
@@ -33,13 +33,13 @@ pub fn run(debug: bool) -> Result<()> {
 
     let t2smc = find_t2smc()?;
 
-    // X86PlatformPlugin::publishPlist reports the CPU floor on every PLimit version
+    // macOS reports the CPU floor on every PLimit version
     let floor_path = t2smc.join("smc_cpu_floor");
     if let (true, Some((turbo, floor))) = (floor_path.exists(), cpu_floor()) {
         report(write_value(&floor_path, format!("{turbo} {floor}")));
     }
 
-    // Only the data version 3 layout is known, see AppleSMC::smcGetPLimits
+    // Only the data version 3 layout is known
     let version: u8 = read_value(&t2smc.join("smc_plimit_version")).unwrap_or(0);
     if version != 3 {
         eprintln!("SMC power limit data version {version} is not supported, nothing is applied");
@@ -53,7 +53,7 @@ pub fn run(debug: bool) -> Result<()> {
     let idle = ForcedIdle::discover()?;
     let igpu = IGpuCap::discover()?;
     if let Some(igpu) = &igpu {
-        // AGPM tells the SMC the iGPU step count through setPLimitRange
+        // macOS tells the SMC the iGPU step count as well
         report(write_value(&t2smc.join("smc_igpu_steps"), igpu.steps()));
     }
     let mut dgpu = DGpuCap::discover()?;
@@ -138,7 +138,7 @@ fn restore(cpu: Option<&CpuCap>, idle: Option<&ForcedIdle>, igpu: Option<&IGpuCa
     }
 }
 
-/// AGPM tells the SMC the dGPU step count only when it drives a dGPU
+/// macOS tells the SMC the dGPU step count only when it drives a dGPU
 fn set_dgpu_steps(t2smc: &std::path::Path, dgpu: &Option<DGpuCap>) {
     if dgpu.is_some() {
         report(write_value(&t2smc.join("smc_dgpu_steps"), DGPU_STEPS));

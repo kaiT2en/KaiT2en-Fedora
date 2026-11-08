@@ -18,22 +18,22 @@ applies them every 250 ms.
 
 | Step | Linux | macOS counterpart |
 |---|---|---|
-| CPU | `scaling_max_freq` = highest turbo - 100 MHz per step, down to the lowest clock | X86PlatformShim to XCPM |
-| Forced idle | `intel_powerclamp`, idle share of `100 - step` percent, at most 70 % | X86PlatformShim to XCPM |
-| dGPU | `power1_cap` from the PowerTune table, TDP down to the driver floor in 16 steps | AGPM to the AMD driver |
-| iGPU | i915 `gt_max_freq_mhz` = RP0 - 50 MHz per step, down to RPn | AGPM to the Intel framebuffer |
+| CPU | `scaling_max_freq` = highest turbo - 100 MHz per step, down to the lowest clock | XCPM |
+| Forced idle | `intel_powerclamp`, idle share of `100 - step` percent, at most 70 % | XCPM |
+| dGPU | `power1_cap` from the PowerTune table, TDP down to the driver floor in 16 steps | AMD driver |
+| iGPU | i915 `gt_max_freq_mhz` = RP0 - 50 MHz per step, down to RPn | Intel graphics driver |
 
 The dGPU floor follows the macOS drivers. Navi 1x goes down to 40 % of its
 TDP, Polaris down to 0 W. A runtime suspended dGPU is left alone and gets its
 cap once it wakes. On exit the daemon restores all limits.
 
-Like AGPM on macOS, the daemon tells the SMC how many steps each GPU has
+Like macOS, the daemon tells the SMC how many steps each GPU has
 (`HE0N` for the dGPU, `HI0N` for the iGPU, through t2smc). The dGPU gets 16
 steps once a supported dGPU is found, the iGPU gets the RP0 to RPn range of
 i915. Without the dGPU count the SMC does not limit the dGPU and balances the
 heatpipe on the CPU alone.
 
-Like X86PlatformPlugin, the daemon also reports the CPU P-state range
+Like macOS, the daemon also reports the CPU P-state range
 (`MSTS` and `MSPC` through `smc_cpu_floor`): the turbo P-states and the
 non-turbo P-states above the CPUFloor of the board plist.
 
