@@ -5,6 +5,10 @@
       "message_id": "1543380105781575832",
       "hash": "bab812abffd791f243da816ce1846c50cd90095c5dd1f14178ac37b7683de267"
     },
+    "gmux-brightness-after-panel-power-on": {
+      "message_id": "1568931011411058778",
+      "hash": "dc9a844f44f7576721f5dc03c7711b8731c6ed6bdbb4db93024aeb3c0139da78"
+    },
     "keyboard-backlight-reenumeration": {
       "message_id": "1533951131821146283",
       "hash": "d79dd0a6c371c75e5b4119355298d9c17fe396d719fe4181f9d832dd88dc5327"
