@@ -106,7 +106,8 @@ preboot_entries() {
 		}'
 }
 
-# Puts the t2-gpu-preboot entry first in BootOrder, creating it if needed.
+# Creates the t2-gpu-preboot entry first in BootOrder. An existing entry keeps
+# its position, so another boot manager placed ahead of it stays the default.
 ensure_preboot_entry() {
 	local disk entry extra order part source
 	local -a entries
@@ -115,25 +116,26 @@ ensure_preboot_entry() {
 	command -v efibootmgr >/dev/null || fail "efibootmgr is not installed"
 
 	mapfile -t entries < <(preboot_entries)
-	if ((${#entries[@]} == 0)); then
-		source=$(findmnt -no SOURCE "$ESP_MOUNT") || fail "$ESP_MOUNT is not mounted"
-		disk=$(lsblk -no PKNAME "$source") || fail "no disk found for $source"
-		read -r part <"/sys/class/block/${source##*/}/partition" ||
-			fail "no partition number found for $source"
-		efibootmgr --quiet --create --disk "/dev/$disk" --part "$part" \
-			--label "$PREBOOT_LABEL" --loader "$PREBOOT_LOADER" ||
-			fail "creating the t2-gpu-preboot boot entry failed"
-		mapfile -t entries < <(preboot_entries)
-		((${#entries[@]} > 0)) || fail "the t2-gpu-preboot boot entry was not created"
-	fi
 
 	# Earlier versions could create the entry more than once.
-	entry=${entries[0]}
 	for extra in "${entries[@]:1}"; do
 		efibootmgr --quiet --bootnum "$extra" --delete-bootnum ||
 			fail "removing the duplicate boot entry $extra failed"
 	done
+	((${#entries[@]} == 0)) || return 0
 
+	source=$(findmnt -no SOURCE "$ESP_MOUNT") || fail "$ESP_MOUNT is not mounted"
+	disk=$(lsblk -no PKNAME "$source") || fail "no disk found for $source"
+	read -r part <"/sys/class/block/${source##*/}/partition" ||
+		fail "no partition number found for $source"
+	efibootmgr --quiet --create --disk "/dev/$disk" --part "$part" \
+		--label "$PREBOOT_LABEL" --loader "$PREBOOT_LOADER" ||
+		fail "creating the t2-gpu-preboot boot entry failed"
+	mapfile -t entries < <(preboot_entries)
+	((${#entries[@]} > 0)) || fail "the t2-gpu-preboot boot entry was not created"
+
+	# efibootmgr --create already puts the new entry first, this makes sure.
+	entry=${entries[0]}
 	order=$(efibootmgr | sed -n 's/^BootOrder: //p')
 	[[ "${order%%,*}" == "$entry" ]] && return 0
 	order=$(tr ',' '\n' <<<"$order" | grep -vix "$entry" | paste -sd,)

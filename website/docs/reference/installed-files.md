@@ -391,8 +391,9 @@ boot and resume. `t2-drop.service` is not enabled. D-Bus starts it when
 T2 AirShare receives or sends over AirDrop, it runs as root because AWDL needs
 CAP_NET_ADMIN, stays while T2 AirShare is visible and exits a minute after
 the last caller. T2 Hybrid GPU Control does not install system services.
-Enabling hybrid graphics puts its `KaiT2en GPU` boot entry first in
-`BootOrder`, ahead of Fedora's shim entry. Uninstalling the app removes the
+Enabling hybrid graphics creates its `KaiT2en GPU` boot entry first in
+`BootOrder`, ahead of Fedora's shim entry. An existing entry keeps its
+position. Uninstalling the app removes the
 entry, the EFI image and the variable.
 T2 GPU Control enables its units only when the corresponding options are
 applied in the app. Both privileged helpers validate the GPU layout and accept

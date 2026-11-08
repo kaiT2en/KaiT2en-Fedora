@@ -15,3 +15,8 @@ restores the integrated GPU, shows a short notice and restarts once. Otherwise
 it starts Linux without delay. If the restart does not take effect, it shows a
 warning and Linux starts on the discrete GPU until hybrid graphics is applied
 again in the app.
+
+The app creates the `KaiT2en GPU` boot entry first in `BootOrder` once and
+does not move it later. With another boot manager such as rEFInd set as the
+default, that boot manager has to start `\EFI\kait2en\t2-gpu-preboot.efi`
+instead of shim or GRUB, or Linux comes up on the discrete GPU after macOS.

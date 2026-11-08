@@ -10,8 +10,9 @@ detects their runtime-PM support through vgaswitcheroo and does not fall back to
 the older manual dGPU power-off and suspend workaround.
 
 macOS resets the boot GPU to the discrete GPU on every boot. Enabling hybrid
-graphics therefore also installs t2-gpu-preboot as the first UEFI boot entry.
-It runs before shim, and when the boot GPU no longer matches the configured
+graphics therefore also installs t2-gpu-preboot as a UEFI boot entry. It is put
+first in `BootOrder` only when the entry is created, so a boot manager such as
+rEFInd placed ahead of it later stays the default. It runs before shim, and when the boot GPU no longer matches the configured
 hybrid mode it rewrites gpu-power-prefs, shows a short notice and restarts once.
 Otherwise it starts shim without delay. If the restart does not take effect, it
 shows a warning and boots with the discrete GPU until hybrid graphics is
@@ -34,7 +35,7 @@ suspend, and AMDGPU power-profile services.
 | `/usr/share/polkit-1/actions/org.t2hybridgpucontrol.gtk.status.policy` | polkit action for the status helper |
 | `/etc/environment.d/90-kait2en-gsk-renderer.conf` | GTK renderer setting |
 | `/boot/efi/EFI/kait2en/t2-gpu-preboot.efi` | t2-gpu-preboot UEFI image |
-| UEFI boot entry `KaiT2en GPU` | starts t2-gpu-preboot first in `BootOrder`, created when hybrid graphics is enabled |
+| UEFI boot entry `KaiT2en GPU` | starts t2-gpu-preboot, created first in `BootOrder` when hybrid graphics is enabled |
 | EFI variable `boot-gpu-cf9aa22b-9505-4c88-aed0-5673e31b00c2` | wanted mode and restart counter for t2-gpu-preboot |
 
 `make uninstall` removes the boot entry, the UEFI image and the EFI variable
