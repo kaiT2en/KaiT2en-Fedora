@@ -35,57 +35,62 @@ Once a repository publishes the package, use `dnf install t2-dsp` or
 `apt install t2-dsp`. These recipes do not publish a repository.
 
 Runtime dependencies are PipeWire with filter-chain/LV2 support, WirePlumber
-0.5.8 or newer, Bankstown and LSP LV2 plugins. Fedora calls Bankstown
-`lv2-bankstown`, Debian/Ubuntu packaging uses `bankstown-lv2`.
-The old installer also requested Triforce and SWH, but none of the current
-graphs references either. Do not silently drop a required plugin if it is
-unavailable in a target distribution. Supply it through the target repository.
+0.5.8 or newer, the Bankstown and LSP LV2 plugins and udev:
 
-The driver and the AppleT2x2/x4/x6 UCM profiles must be supplied separately.
-There is deliberately no guessed dependency on a future BCE stack package
-name. Add that distribution-specific dependency when the stack is packaged.
-WirePlumber must provide `node.software-dsp` and UCM split-PCM support.
+| Fedora | Debian/Ubuntu |
+|---|---|
+| `pipewire` | `pipewire` |
+| `pipewire-pulseaudio` | `pipewire-pulse` |
+| `wireplumber >= 0.5.8` | `wireplumber (>= 0.5.8)` |
+| `pipewire-module-filter-chain-lv2` | `libspa-0.2-modules` |
+| `lv2-bankstown` | `bankstown-lv2` |
+| `lsp-plugins-lv2` | `lsp-plugins-lv2` |
+| `systemd-udev` | `udev` |
+
+The driver and the AppleT2x2/x4/x6 UCM profiles come from separate packages.
+The UCM source is `modules/t2bce_audio-alsa-ucm-conf/ucm2/` in the
+alsa-ucm-conf layout. Add the distribution-specific dependencies once those
+are packaged. WirePlumber must support UCM split PCMs.
 
 ## Validation
 
 `make -C dsp test` runs hardware-free build, routing and migration tests.
-With PipeWire and the runtime plugins installed, run
-`python3 dsp/tests/smoke-pipewire.py` to load all 24 graphs and verify their
-48 nodes in a private PipeWire daemon. It creates no hardware monitor and
-does not connect to the user's PipeWire session or produce audio.
+With PipeWire and the runtime plugins installed,
+`python3 dsp/tests/smoke-pipewire.py` loads all 24 graphs (13 speaker,
+11 microphone) in a private PipeWire daemon and checks their 48 nodes. It
+opens no hardware and stays outside the user's PipeWire session.
 
 RPM builds, Debian 13 builds and an APT install with dependencies are tested.
-Actual T2 playback, recording and headphone switching still need a hardware
-test after reboot. A successful package build alone cannot establish that.
+T2 playback, recording and headphone switching need a hardware test after
+reboot.
 
 ## Activation, migration and removal
 
-No post-install script restarts user audio, triggers live card renaming, or
-touches GNOME, dconf or PAM. Reboot after installation or removal. This also
-ensures udev model IDs exist before ALSA/PipeWire opens the card.
+Post-install scripts leave user audio, live card names, GNOME, dconf and PAM
+as they are. Reboot after installation or removal, so udev sets the model ID
+before ALSA/PipeWire opens the card.
 
-Package-owned configuration lives under `/usr`, with administrator overrides
-under `/etc`. The former generated `/etc` DSP and quantum fragments are
-backed up to `/var/lib/kait2en/migration/t2-dsp/` before retirement. Ownership
-receipts live in `/var/lib/kait2en/ownership/t2-dsp.json`. Matching former
-profile data under `/usr/share/kait2en/audio-dsp/` is retired too. Removal
-deletes verified, unchanged backups and the completed migration receipt.
-Backups from the earlier migration helper are also adopted when their
-generated-file marker is present. Modified or unrecognized files are preserved
-and reported, not silently deleted. Logs remain available for diagnosis.
+`package-actions configure` writes
+`/etc/pipewire/pipewire.conf.d/51-t2-dsp.conf`, a copy of
+`/usr/share/t2-dsp/pipewire/<profile>.conf` selected from the DMI product
+name of the installing machine. The package file list leaves it out. Image
+builds on other hardware therefore get the build host's graph, or an error
+for unlisted models. Removal deletes the file when it is unchanged.
 
-Lifecycle failures are collected, printed in a final summary and logged to
-`/var/log/t2-dsp-install.log`. The source installer also receives these errors
-in its shared ledger. An activation failure does not interrupt independent
-installation steps or the package transaction. Build and staging failures,
-in contrast, fail the package build so incomplete packages are not produced.
+Former generated `/etc` DSP and quantum fragments and matching profile data
+under `/usr/share/kait2en/audio-dsp/` are backed up to
+`/var/lib/kait2en/migration/t2-dsp/` and retired. Ownership receipts live in
+`/var/lib/kait2en/ownership/t2-dsp.json`. Removal deletes verified, unchanged
+backups and the receipt. Modified or unrecognized files are preserved and
+reported.
 
-The independently shipped lifecycle engine requires Python 3. Its source
-lives under `packaging/lifecycle/`, separately from `auto-installer/`.
+Lifecycle failures are printed in a final summary and logged to
+`/var/log/t2-dsp-install.log`. They leave the package transaction intact.
+Build and staging failures fail the package build. The lifecycle engine
+needs Python 3, its source is `packaging/lifecycle/`.
 
 ## Licenses
 
 The package includes the full GPL-3.0-or-later text, `LICENSE`, `LICENSING.md`
 and each profile's attribution notice. The section 7(b) attribution term
 continues to apply. External plugins retain their own package licenses.
-The runtime-selection design originates in sharpenedblade's merged PR #63.

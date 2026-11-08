@@ -188,7 +188,8 @@ KAIT2EN does not install a custom kernel or a separate GRUB configuration file.
 
 ## Audio configuration
 
-The ALSA UCM profiles define the T2 speaker, microphone and headset paths:
+`install-alsa-ucm.sh` installs the ALSA UCM profiles for the T2 speaker,
+microphone and headset paths from `modules/t2bce_audio-alsa-ucm-conf/ucm2/`:
 
 ```text
 /usr/share/alsa/ucm2/AppleT2/HiFi-x2.conf
@@ -199,26 +200,39 @@ The ALSA UCM profiles define the T2 speaker, microphone and headset paths:
 /usr/share/alsa/ucm2/conf.d/AppleT2x6/AppleT2x6.conf
 ```
 
-The installer and the independent `t2-dsp` package deploy all model-specific
-graphs and FIR data. udev and WirePlumber select the matching profile at runtime.
+It also backs up and resets the stored WirePlumber profile, node and route
+defaults of the T2 card in `~/.local/state/wireplumber/`, with backups named
+`*.kait2en.bak`.
+
+The `t2-dsp` package and `install-dsp.sh` install all DSP profiles and the
+runtime integration:
 
 ```text
 /usr/share/t2-dsp/profiles/<profile>/
+/usr/share/t2-dsp/pipewire/<profile>.conf
+/usr/share/t2-dsp/models.json
 /usr/share/wireplumber/wireplumber.conf.d/51-t2-dsp.conf
 /usr/share/wireplumber/scripts/t2-default-output.lua
-/usr/share/pipewire/pipewire.conf.d/50-kait2en-quantum.conf
 /usr/lib/udev/rules.d/89-t2-dsp.rules
 /usr/libexec/t2-dsp/package-actions
+/usr/libexec/t2-dsp/lifecycle.py
 /usr/share/licenses/t2-dsp/
 ```
 
-Unlisted models receive no DSP graph at runtime. Former generated `/etc`
-fragments are backed up under `/var/lib/kait2en/migration/t2-dsp/` with ownership
-receipts under `/var/lib/kait2en/ownership/`. Removal cleans verified backups.
-Migration errors
-are collected in `/var/log/t2-dsp-install.log` and the installer summary.
-See [Audio DSP](../post-install/audio-dsp.md) for the supported-model table,
-audio behavior and diagnostics.
+The package scripts and `install-dsp.sh` generate these files during
+installation:
+
+```text
+/etc/pipewire/pipewire.conf.d/51-t2-dsp.conf
+/var/lib/kait2en/ownership/t2-dsp.json
+/var/lib/kait2en/migration/t2-dsp/
+/var/log/t2-dsp-install.log
+```
+
+`51-t2-dsp.conf` is a copy of `/usr/share/t2-dsp/pipewire/<profile>.conf`,
+selected from the DMI product name. `migration/t2-dsp/` holds backups of
+retired files from earlier installs. See [Audio DSP](../post-install/audio-dsp.md)
+for the supported-model table, audio behavior and diagnostics.
 
 ## System configuration and services
 

@@ -2,8 +2,8 @@
 
 Speaker DSP for the internal speakers of the iMacPro1,1: `graph.json` is the
 PipeWire filter-chain graph. There are no crosstalk cancellation FIRs
-because the macOS speaker graph of this model has no XTC box. Installed by
-`scripts/fedora/install-dsp.sh`.
+because the macOS speaker graph of this model has no XTC box. Installed by the
+`t2-dsp` package and `scripts/fedora/install-dsp.sh`.
 
 Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 

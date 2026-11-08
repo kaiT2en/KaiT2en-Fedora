@@ -2,8 +2,8 @@
 
 Speaker DSP for the internal speakers of the MacBookPro15,3: `graph.json` is the
 PipeWire filter-chain graph, the `xtc-side-*.wav` files are the crosstalk
-cancellation FIRs, `mic.json` is the microphone graph. Installed by
-`scripts/fedora/install-dsp.sh`.
+cancellation FIRs, `mic.json` is the microphone graph. Installed by the
+`t2-dsp` package and `scripts/fedora/install-dsp.sh`.
 
 Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 

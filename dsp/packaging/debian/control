@@ -9,7 +9,7 @@ Homepage: https://github.com/kaiT2en/KaiT2en-Fedora
 
 Package: t2-dsp
 Architecture: all
-Depends: ${misc:Depends}, pipewire, pipewire-pulse, wireplumber (>= 0.5.8), libspa-0.2-modules, bankstown-lv2, lsp-plugins-lv2, triforce-lv2, swh-lv2, libspa-0.2-jack, pipewire-audio-client-libraries, pipewire-tests, swh-plugins, udev, bash, coreutils, grep, python3
+Depends: ${misc:Depends}, pipewire, pipewire-pulse, wireplumber (>= 0.5.8), libspa-0.2-modules, bankstown-lv2, lsp-plugins-lv2, udev, bash, coreutils, grep, python3
 Recommends: libpipewire-0.3-modules-extra, libspa-0.2-modules-extra
 Description: Model-specific host-side audio DSP for Apple T2 Macs
  Speaker and microphone graphs with automatic runtime profile selection.
