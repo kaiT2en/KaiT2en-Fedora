@@ -15,6 +15,7 @@ install-dkms-modules.sh       modules/ t2-services/t2-ave/kernel/ third-party/li
 install-kernel-source.sh
 install-macos-mount.sh
 install-gpu-runtime-pm.sh     patches/runtime/gpu-runtime-pm/
+install-i915.sh               patches/runtime/i915/
 install-wireless.sh           patches/runtime/wireless/
 install-alsa-ucm.sh           modules/t2bce_audio-alsa-ucm-conf/
 install-dsp.sh                dsp/

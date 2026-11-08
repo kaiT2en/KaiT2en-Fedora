@@ -1,0 +1,3 @@
+0001-drm-dp-allow-psr-on-apple-panels.patch
+0002-drm-i915-psr-apple-tcon-handshake.patch
+0003-drm-i915-backlight-restore-the-gmux-brightness-on-T2-MacBook-Pros.patch

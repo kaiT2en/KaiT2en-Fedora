@@ -15,6 +15,7 @@ use crate::{
 const REBOOT_STEPS: &[&str] = &[
     "install-dkms-modules.sh",
     "install-gpu-runtime-pm.sh",
+    "install-i915.sh",
     "install-wireless.sh",
     "install-acpi-fixes.sh",
     "install-plymouth-theme.sh",

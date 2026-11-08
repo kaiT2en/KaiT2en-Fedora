@@ -1,0 +1,136 @@
+From: Andre Eikmeyer <dev@deq.rocks>
+Subject: [PATCH] drm/i915/backlight: restore the gmux brightness on dual GPU T2 MacBook Pros
+
+When i915 drives the panel of a dual GPU T2 MacBook Pro, the panel comes
+back at 80% brightness after every screen lock, login and resume, while
+the gmux backlight device still reports the level userspace set.
+
+gmux resets its brightness register to 0xcccc of 0xffff when i915 powers
+the panel off and applies that value when the panel comes back on.
+
+This cannot be handled in apple-gmux. gmux raises no interrupt when the
+panel is powered off or on. Only the GPU driver knows when the panel is
+back.
+
+amdgpu needs no such restore. When it drives the panel, the gmux
+brightness register and the panel's DPCD brightness stay unchanged across
+a screen lock.
+
+Add a DMI quirk for these models and write the cached level back through
+the gmux backlight device after enabling the backlight. The device is
+looked up by name so i915 does not depend on apple-gmux.
+
+Tested on the MacBookPro15,1 and MacBookPro16,1.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+--- a/drivers/gpu/drm/i915/display/intel_backlight.c
++++ b/drivers/gpu/drm/i915/display/intel_backlight.c
+@@ -793,6 +793,35 @@
+ 		panel->backlight.device->props.power = BACKLIGHT_POWER_ON;
+ }
+ 
++#if IS_ENABLED(CONFIG_BACKLIGHT_CLASS_DEVICE)
++/*
++ * The gmux of dual GPU T2 MacBook Pros falls back to its default brightness
++ * whenever the panel is powered off and raises no interrupt for it. Its
++ * backlight device still holds the level userspace set, so apply that level
++ * again once the panel is back on.
++ */
++static void intel_backlight_restore_gmux(struct intel_display *display)
++{
++	struct backlight_device *bd;
++
++	if (!intel_has_quirk(display, QUIRK_GMUX_RESETS_BRIGHTNESS))
++		return;
++
++	bd = backlight_device_get_by_name("gmux_backlight");
++	if (!bd)
++		return;
++
++	drm_dbg_kms(display->drm, "restoring gmux brightness %d\n",
++		    bd->props.brightness);
++	backlight_update_status(bd);
++	put_device(&bd->dev);
++}
++#else
++static void intel_backlight_restore_gmux(struct intel_display *display)
++{
++}
++#endif
++
+ void intel_backlight_enable(const struct intel_crtc_state *crtc_state,
+ 			    const struct drm_connector_state *conn_state)
+ {
+@@ -811,6 +840,8 @@
+ 	__intel_backlight_enable(crtc_state, conn_state);
+ 
+ 	mutex_unlock(&display->backlight.lock);
++
++	intel_backlight_restore_gmux(display);
+ }
+ 
+ #if IS_ENABLED(CONFIG_BACKLIGHT_CLASS_DEVICE)
+--- a/drivers/gpu/drm/i915/display/intel_quirks.c
++++ b/drivers/gpu/drm/i915/display/intel_quirks.c
+@@ -100,6 +100,13 @@
+ 	drm_info(display->drm, "PSR2 support not currently available for this setup, applying disable PSR2 quirk\n");
+ }
+ 
++/* The gmux of dual GPU T2 MacBook Pros resets the brightness on panel power off */
++static void quirk_gmux_resets_brightness(struct intel_display *display)
++{
++	intel_set_quirk(display, QUIRK_GMUX_RESETS_BRIGHTNESS);
++	drm_info(display->drm, "Applying gmux brightness restore quirk\n");
++}
++
+ struct intel_quirk {
+ 	int device;
+ 	int subsystem_vendor;
+@@ -188,6 +195,36 @@
+ 		},
+ 		.hook = quirk_no_pps_backlight_power_hook,
+ 	},
++	{
++		.dmi_id_list = &(const struct dmi_system_id[]) {
++			{
++				.ident = "MacBookPro15,1",
++				.matches = {DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Apple Inc."),
++					    DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "MacBookPro15,1"),
++				},
++			},
++			{
++				.ident = "MacBookPro15,3",
++				.matches = {DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Apple Inc."),
++					    DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "MacBookPro15,3"),
++				},
++			},
++			{
++				.ident = "MacBookPro16,1",
++				.matches = {DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Apple Inc."),
++					    DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "MacBookPro16,1"),
++				},
++			},
++			{
++				.ident = "MacBookPro16,4",
++				.matches = {DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Apple Inc."),
++					    DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "MacBookPro16,4"),
++				},
++			},
++			{ }
++		},
++		.hook = quirk_gmux_resets_brightness,
++	},
+ };
+ 
+ static struct intel_quirk intel_quirks[] = {
+--- a/drivers/gpu/drm/i915/display/intel_quirks.h
++++ b/drivers/gpu/drm/i915/display/intel_quirks.h
+@@ -23,6 +23,7 @@
+ 	QUIRK_EDP_LIMIT_RATE_HBR2,
+ 	QUIRK_DISABLE_EDP_PANEL_REPLAY,
+ 	QUIRK_DISABLE_PSR2,
++	QUIRK_GMUX_RESETS_BRIGHTNESS,
+ };
+ 
+ void intel_init_quirks(struct intel_display *display);

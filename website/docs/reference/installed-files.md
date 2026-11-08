@@ -110,7 +110,25 @@ sudo /usr/local/libexec/kait2en/gpu-runtime-pm/install-gpu-runtime-pm.sh install
 
 Running the installer again refreshes the copy with the current patches.
 
-The patched AMDGPU and wireless modules are built from the Fedora kernel
+On every MacBook and iMac with an Intel GPU, the installer also builds patched
+i915 and DRM display helper modules. They enable PSR on Apple panels and, on
+dual GPU T2 MacBook Pros, restore the panel brightness after the panel powers on:
+
+```text
+/usr/lib/modules/<kernel>/updates/kait2en-i915/i915.ko.xz
+/usr/lib/modules/<kernel>/updates/kait2en-i915/drm_display_helper.ko.xz
+```
+
+They are built the same way as the AMDGPU module. The build script and patches
+live in `/usr/local/libexec/kait2en/i915/`, the hook is
+`/etc/kernel/install.d/47-kait2en-i915.install` and logs to
+`/var/log/kait2en-i915.log`. To rebuild for a specific kernel by hand:
+
+```bash
+sudo /usr/local/libexec/kait2en/i915/install-i915.sh install <kernel>
+```
+
+The patched AMDGPU, i915 and wireless modules are built from the Fedora kernel
 source, which is downloaded once per kernel and kept unpacked at:
 
 ```text
