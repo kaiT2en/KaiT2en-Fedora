@@ -1,8 +1,7 @@
 Subject: [PATCH 2/2] drm/i915/psr: add Apple TCON PSR handshake
 
 Apple eDP panels carry a Banksia TCON that ignores DP_PSR_EN_CFG on its own.
-Derived from a DTrace capture of AppleIntelPort::writeAUX under macOS 15.7.7
-on a MacBookPro16,2: the sink needs three vendor registers plus a capture
+An AUX trace under macOS 15.7.7 on a MacBookPro16,2 shows that the sink needs three vendor registers plus a capture
 trigger at 0x4d4, and DP_PSR_CRC_VERIFICATION must stay clear. Apple's VBT
 also leaves the PSR enable bit unset, so psr_global_enabled() has to override.
 ---

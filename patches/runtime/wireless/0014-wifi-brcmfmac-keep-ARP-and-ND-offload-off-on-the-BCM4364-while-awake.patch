@@ -8,8 +8,8 @@ IPv6 downloads topped out at 55 Mbit/s. Same behaviour on the
 MacBookPro16,1 with the later chip revision. Also tested on BCM4377 and
 turned out this chip is not affected. 
 
-macOS runs these offloads only in sleep. AppleBCMWLANCoreMac enables
-them in configurePktFilters and disables them on wake. Keep them off
+macOS runs these offloads only in sleep. It enables them on suspend
+and disables them on wake. Keep them off
 on the BCM4364.
 
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
