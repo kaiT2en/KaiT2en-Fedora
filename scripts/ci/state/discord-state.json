@@ -101,6 +101,10 @@
       "message_id": "1568654941910736956",
       "hash": "bbe00309b76e38aa871a5925c2de36a0817b5260115b99caf56a42fd3901dee1"
     },
+    "bluetooth-bcm4377-register-index": {
+      "message_id": "1568983322196185169",
+      "hash": "fb3e3f70e5bd2f7b54d26e076e2f103ef4692274a56ca4da9a4b058e4928d40d"
+    },
     "brcmfmac-flowring-delete": {
       "message_id": "1568654946235191326",
       "hash": "2d5bc929a5735e739e5369aa9e4d8aa67e46c5e2eb7feb31d253fb1da59bc2dd"
