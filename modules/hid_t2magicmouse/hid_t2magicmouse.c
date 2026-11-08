@@ -6,7 +6,7 @@
  *   Copyright (c) 2010 Chase Douglas <chase.douglas@canonical.com>
  *
  * T2 internal-trackpad path: legacy implementation with model geometry,
- * nearest-position slots, and raw firmware buttons; no Tahoe-derived
+ * nearest-position slots, and raw firmware buttons; no filtered
  * position or Force Touch pipeline. New T2 work belongs in
  * t2_precision_trackpad.
  */
@@ -837,7 +837,7 @@ static void report_finger_data(struct input_dev *input, int slot,
 			       const struct input_mt_pos *pos,
 			       const struct tp_finger *f)
 {
-	/* Tahoe maps this T2 field to MTContact.proximity. */
+	/* This T2 field is the contact proximity. */
 	input_mt_slot(input, slot);
 	input_mt_report_slot_state(input, MT_TOOL_FINGER, true);
 
@@ -873,8 +873,7 @@ static int magicmouse_raw_event_mtp(struct hid_device *hdev,
 	// print_hex_dump_debug("appleft ev: ", DUMP_PREFIX_OFFSET, 16, 1, data,
 	// 		     size, false);
 
-	/* AppleMultitouchHIDEventDriverV2::handleInterruptReport receives a
-	 * 46-byte prefix followed by 30-byte contacts. */
+	/* A report is a 46-byte prefix followed by 30-byte contacts. */
 	if (size < hdr_sz || ((size - hdr_sz) % touch_sz) != 0)
 		return 0;
 

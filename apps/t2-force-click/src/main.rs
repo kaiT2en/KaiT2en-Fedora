@@ -280,7 +280,7 @@ fn wait_for_input(device: &evdev::Device) -> io::Result<bool> {
 }
 
 fn apply_thresholds(config: &AppConfig) {
-    /* MTForceThresholding::getClickThresholdMultiplier maps click strength.
+    /* click_strength scales the base click thresholds.
      * force_click_threshold_percent controls the downstream second threshold.
      * force_click_enabled gates that second press independently, so the
      * plain click (click_strength) keeps working when it is turned off. */

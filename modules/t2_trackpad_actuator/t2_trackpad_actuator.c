@@ -3,8 +3,8 @@
  * Apple T2 trackpad Taptic Engine actuator driver.
  *
  * The T2 internal trackpad exposes its haptic actuator as a separate HID
- * interface from t2_precision_trackpad. AppleActuatorHIDEventDriver matches
- * vendor usage page 0xff00 and usage 0x0d. This driver exposes report 0x53.
+ * interface from t2_precision_trackpad, with vendor usage page 0xff00 and
+ * usage 0x0d. This driver exposes report 0x53.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -27,7 +27,7 @@
 #define T2_ACTUATOR_MAX_TONES		2
 
 /*
- * AppleActuatorHIDEventDriver::setWaveform uses report 0x53.
+ * Waveforms use report 0x53.
  * byte 0 is the base waveform. bytes 1 and 2 are base parameters.
  * Each tone occupies five bytes from byte 3. Captured reports contain
  * either no tones or two tones for total payload lengths of 3 or 13 bytes.
@@ -45,8 +45,8 @@ enum t2_actuator_tone_type {
 };
 
 /*
- * MultitouchSupport actuations on macOS 15 (MacBookAir9,1, traced with
- * DTrace) send plain Gaussian reports such as 01 12 a8 with amplitudes from
+ * Actuations on macOS 15 (MacBookAir9,1, traced with DTrace) send plain
+ * Gaussian reports such as 01 12 a8 with amplitudes from
  * 0x09 to 0x26. The actuator advertises ActuatorLimits AmplitudeMax=70.
  * Probe amplitudes are capped there, so diagnostics stay in the range macOS
  * uses.
@@ -259,7 +259,7 @@ MODULE_PARM_DESC(test_fire,
 
 static bool t2_trackpad_actuator_matches(struct hid_device *hdev)
 {
-	/* AppleActuatorHIDEventDriver matches the application collection. */
+	/* Match the application collection. */
 	unsigned int i;
 
 	for (i = 0; i < hdev->maxcollection; i++) {
