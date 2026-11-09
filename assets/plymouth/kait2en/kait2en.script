@@ -14,6 +14,9 @@ design_h = 900;
 boot.source_image = Image("boot.png");
 boot.design_size = 116;
 
+# The installer resolves the configured XKB layout and variant to its display name.
+keyboard_layout_label = "English (US)";
+
 progress_box.source_image = Image("progress_box.png");
 progress_bar.source_image = Image("progress_bar.png");
 progress_box.design_w = 200;
@@ -78,16 +81,32 @@ fun scale_images()
   progress_bar.full_image = scaled(progress_bar.source_image, progress_box.design_w, progress_box.design_h);
   update_progress_bar();
 
-  if (dialog.box_sprite)
+  if (dialog.entry_sprite)
   {
-    dialog.box_image = scaled(dialog.box_source_image, 145, 39);
-    dialog.lock_image = scaled(dialog.lock_source_image, 20.5, 22);
-    dialog.entry_image = scaled(dialog.entry_source_image, 100, 15);
-    dialog.bullet_image = scaled(dialog.bullet_source_image, 3.5, 3.5);
+    dialog.entry_image = scaled(dialog.entry_source_image, 305, 34);
+    dialog.bullet_image = scaled(dialog.bullet_source_image, 7.5, 7.5);
+    dialog.bullet_gap = 5 * ratio;
+    dialog.bullet_left_padding = 46 * ratio;
+    dialog.bullet_right_padding = 20 * ratio;
+    dialog.bullet_capacity = Math.Int(
+      (dialog.entry_image.GetWidth() - dialog.bullet_left_padding - dialog.bullet_right_padding + dialog.bullet_gap) /
+      (dialog.bullet_image.GetWidth() + dialog.bullet_gap)
+    );
+    if (dialog.bullet_capacity < 1)
+      dialog.bullet_capacity = 1;
+    dialog.visible_bullet_count = dialog.bullet_count;
+    if (dialog.visible_bullet_count > dialog.bullet_capacity)
+      dialog.visible_bullet_count = dialog.bullet_capacity;
+    dialog.lock_image = scaled(dialog.lock_source_image, 18, 18);
+    dialog.keyboard_image = scaled(dialog.keyboard_source_image, 20, 20);
+    dialog.prompt_image = Image.Text(dialog.prompt_text, 0.96, 0.96, 0.96, 1, "Cantarell " + Math.Int(12 * ratio + 0.5));
+    dialog.layout_image = Image.Text(keyboard_layout_label, 0.96, 0.96, 0.96, 1, "Cantarell " + Math.Int(12 * ratio + 0.5));
 
-    dialog.box_sprite.SetImage(dialog.box_image);
-    dialog.lock_sprite.SetImage(dialog.lock_image);
     dialog.entry_sprite.SetImage(dialog.entry_image);
+    dialog.lock_sprite.SetImage(dialog.lock_image);
+    dialog.prompt_sprite.SetImage(dialog.prompt_image);
+    dialog.keyboard_sprite.SetImage(dialog.keyboard_image);
+    dialog.layout_sprite.SetImage(dialog.layout_image);
     for (index = 0; dialog.bullets[index]; index++)
       dialog.bullets[index].SetImage(dialog.bullet_image);
   }
@@ -126,23 +145,27 @@ fun update_layout()
 
   progress_bar.sprite.SetPosition(progress_box.x, progress_box.y, 11);
 
-  if (dialog.box_sprite)
+  if (dialog.entry_sprite)
   {
-    dialog.box_x = win_x + win_w / 2 - dialog.box_image.GetWidth() / 2;
-    dialog.box_y = win_y + win_h / 2 - dialog.box_image.GetHeight() / 2;
-    dialog.box_sprite.SetPosition(dialog.box_x, dialog.box_y, 100);
+    dialog.entry_x = win_x + win_w / 2 - dialog.entry_image.GetWidth() / 2;
+    dialog.entry_y = boot.y + boot.image.GetHeight() / 2 + 116 * ratio;
+    dialog.entry_sprite.SetPosition(dialog.entry_x, dialog.entry_y, 100);
+    dialog.lock_sprite.SetPosition(dialog.entry_x + 10 * ratio, dialog.entry_y + dialog.entry_image.GetHeight() / 2 - dialog.lock_image.GetHeight() / 2, 101);
 
-    dialog.lock_x = dialog.box_x + 11 * ratio;
-    dialog.lock_y = dialog.box_y + dialog.box_image.GetHeight() / 2 - dialog.lock_image.GetHeight() / 2;
-    dialog.lock_sprite.SetPosition(dialog.lock_x, dialog.lock_y, 101);
+    dialog.prompt_x = win_x + win_w / 2 - dialog.prompt_image.GetWidth() / 2;
+    dialog.prompt_y = dialog.entry_y + dialog.entry_image.GetHeight() + 8 * ratio;
+    dialog.prompt_sprite.SetPosition(dialog.prompt_x, dialog.prompt_y, 100);
 
-    dialog.entry_x = dialog.lock_x + dialog.lock_image.GetWidth() + 6 * ratio;
-    dialog.entry_y = dialog.box_y + dialog.box_image.GetHeight() / 2 - dialog.entry_image.GetHeight() / 2;
-    dialog.entry_sprite.SetPosition(dialog.entry_x, dialog.entry_y, 101);
+    layout_gap = 8 * ratio;
+    dialog.layout_width = dialog.keyboard_image.GetWidth() + layout_gap + dialog.layout_image.GetWidth();
+    dialog.layout_x = win_x + win_w / 2 - dialog.layout_width / 2;
+    dialog.layout_y = dialog.prompt_y + dialog.prompt_image.GetHeight() + 9 * ratio;
+    dialog.keyboard_sprite.SetPosition(dialog.layout_x, dialog.layout_y + dialog.layout_image.GetHeight() / 2 - dialog.keyboard_image.GetHeight() / 2, 100);
+    dialog.layout_sprite.SetPosition(dialog.layout_x + dialog.keyboard_image.GetWidth() + layout_gap, dialog.layout_y, 100);
 
     for (index = 0; dialog.bullets[index]; index++)
     {
-      bullet_x = dialog.entry_x + 4 * ratio + index * dialog.bullet_image.GetWidth();
+      bullet_x = dialog.entry_x + dialog.entry_image.GetWidth() - dialog.bullet_right_padding - dialog.bullet_image.GetWidth() - (dialog.visible_bullet_count - 1) * (dialog.bullet_image.GetWidth() + dialog.bullet_gap) + index * (dialog.bullet_image.GetWidth() + dialog.bullet_gap);
       bullet_y = dialog.entry_y + dialog.entry_image.GetHeight() / 2 - dialog.bullet_image.GetHeight() / 2;
       dialog.bullets[index].SetPosition(bullet_x, bullet_y, 102);
     }
@@ -175,14 +198,18 @@ Plymouth.SetBootProgressFunction(progress_callback);
 
 fun dialog_setup()
 {
-  dialog.box_source_image = Image("box.png");
   dialog.lock_source_image = Image("lock.png");
   dialog.entry_source_image = Image("entry.png");
   dialog.bullet_source_image = Image("bullet.png");
+  dialog.keyboard_source_image = Image("keyboard.png");
 
-  dialog.box_sprite = Sprite();
-  dialog.lock_sprite = Sprite();
   dialog.entry_sprite = Sprite();
+  dialog.lock_sprite = Sprite();
+  dialog.prompt_sprite = Sprite();
+  dialog.keyboard_sprite = Sprite();
+  dialog.layout_sprite = Sprite();
+  dialog.bullet_count = 0;
+  dialog.visible_bullet_count = 0;
 
   last_win_w = 0;
   update_layout();
@@ -190,12 +217,14 @@ fun dialog_setup()
 
 fun dialog_set_opacity(opacity)
 {
-  if (!dialog.box_sprite)
+  if (!dialog.entry_sprite)
     return;
 
-  dialog.box_sprite.SetOpacity(opacity);
-  dialog.lock_sprite.SetOpacity(opacity);
   dialog.entry_sprite.SetOpacity(opacity);
+  dialog.lock_sprite.SetOpacity(opacity);
+  dialog.prompt_sprite.SetOpacity(opacity);
+  dialog.keyboard_sprite.SetOpacity(opacity);
+  dialog.layout_sprite.SetOpacity(opacity);
   for (index = 0; dialog.bullets[index]; index++)
     dialog.bullets[index].SetOpacity(opacity);
 }
@@ -214,21 +243,28 @@ fun display_normal_callback()
 
 fun display_password_callback(prompt, bullets)
 {
-  if (!dialog.box_sprite)
+  dialog.prompt_text = prompt;
+  if (!dialog.entry_sprite)
     dialog_setup();
 
   dialog_set_opacity(1);
   dialog.status = "visible";
-  boot.sprite.SetOpacity(0);
+  # Keep the entered password unrestricted, but never draw bullets beyond the
+  # width of the entry field.
+  dialog.bullet_count = bullets;
+  dialog.visible_bullet_count = dialog.bullet_count;
+  if (dialog.visible_bullet_count > dialog.bullet_capacity)
+    dialog.visible_bullet_count = dialog.bullet_capacity;
+  boot.sprite.SetOpacity(1);
   progress_box.sprite.SetOpacity(0);
   progress_bar.sprite.SetOpacity(0);
 
-  for (index = 0; dialog.bullets[index] || index < bullets; index++)
+  for (index = 0; dialog.bullets[index] || index < dialog.visible_bullet_count; index++)
   {
     if (!dialog.bullets[index])
       dialog.bullets[index] = Sprite(dialog.bullet_image);
 
-    if (index < bullets)
+    if (index < dialog.visible_bullet_count)
       dialog.bullets[index].SetOpacity(1);
     else
       dialog.bullets[index].SetOpacity(0);
