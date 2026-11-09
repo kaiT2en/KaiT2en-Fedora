@@ -94,7 +94,6 @@ struct apple_gmux_data {
 	struct dentry *debug_dentry;
 
 	struct pci_dev *discrete_pdev;
-	bool use_pwg_power_sequence;
 	bool use_pwrd_power_sequence;
 	u32 gpu_bar0;
 	u32 hda_bar0;
@@ -104,7 +103,7 @@ struct apple_gmux_data {
 static struct apple_gmux_data *apple_gmux_data;
 
 /*
- * MacBookPro16,1 and 16,4 use the PWRD path, not PWG1/PWG3: PWRD(0) on
+ * MacBookPro15,1, 16,1 and 16,4 use the PWRD path: PWRD(0) on
  * power-up and PWRD(1) on power-down. The GPU, its HDA function and the
  * bridges above them lose config space when the rails drop, so their state
  * is saved before and restored after.
@@ -491,34 +490,6 @@ static int gmux_restore_dgpu_state(struct apple_gmux_data *gmux_data)
 	if (hda) {
 		gmux_restore_function(hda, gmux_data->hda_bar0);
 		pci_dev_put(hda);
-	}
-
-	return 0;
-}
-
-static int gmux_call_pwg(struct apple_gmux_data *gmux_data,
-			 const char *method)
-{
-	acpi_handle handle = ACPI_HANDLE(&gmux_data->discrete_pdev->dev);
-	unsigned long long result;
-	acpi_status status;
-
-	if (!handle)
-		return -ENODEV;
-
-	status = acpi_evaluate_integer(handle, (acpi_string)method, NULL,
-				       &result);
-	if (ACPI_FAILURE(status)) {
-		dev_err(&gmux_data->discrete_pdev->dev,
-			"failed to evaluate %s: %s\n", method,
-			acpi_format_exception(status));
-		return -EIO;
-	}
-
-	if (result) {
-		dev_err(&gmux_data->discrete_pdev->dev,
-			"%s failed: %llu\n", method, result);
-		return -EIO;
 	}
 
 	return 0;
@@ -1058,42 +1029,6 @@ static int __gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 			gmux_unlock_dgpu_cfg(&cfg_locks);
 			if (ret)
 				goto out_unlock;
-		} else if (gmux_data->use_pwg_power_sequence &&
-			   gmux_data->discrete_pdev) {
-			u16 vendor;
-			int i;
-
-			pr_debug("power up: port 2\n");
-			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 2);
-			msleep(100);
-			pr_debug("power up: port 3\n");
-			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 3);
-
-			pr_debug("power up: PWG1\n");
-			ret = gmux_call_pwg(gmux_data, "PWG1");
-			if (ret)
-				goto out_unlock;
-
-			for (i = 0; i < 1000; i++) {
-				pci_read_config_word(gmux_data->discrete_pdev,
-						     PCI_VENDOR_ID, &vendor);
-				if (vendor != 0xffff)
-					break;
-				usleep_range(1000, 2000);
-			}
-			if (vendor == 0xffff) {
-				dev_err(&gmux_data->discrete_pdev->dev,
-					"timed out waiting for PCI config space\n");
-				ret = -ETIMEDOUT;
-				goto out_unlock;
-			}
-
-			pr_debug("power up: config space after %d polls\n", i);
-			pr_debug("power up: PWG3\n");
-			ret = gmux_call_pwg(gmux_data, "PWG3");
-			if (ret)
-				goto out_unlock;
-
 		} else {
 			pr_debug("power up: port 1\n");
 			gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
@@ -1121,8 +1056,7 @@ static int __gmux_set_discrete_state(struct apple_gmux_data *gmux_data,
 
 		pr_debug("power down: port 1\n");
 		gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 1);
-		if (gmux_data->use_pwg_power_sequence ||
-		    gmux_data->use_pwrd_power_sequence)
+		if (gmux_data->use_pwrd_power_sequence)
 			usleep_range(10000, 11000);
 		pr_debug("power down: port 0\n");
 		gmux_write8(gmux_data, GMUX_PORT_DISCRETE_POWER, 0);
@@ -1186,8 +1120,7 @@ static enum vga_switcheroo_client_id gmux_get_client_id(struct pci_dev *pdev)
 		 pdev->device == 0x0863)
 		return VGA_SWITCHEROO_IGD;
 
-	if ((apple_gmux_data->use_pwg_power_sequence ||
-	     apple_gmux_data->use_pwrd_power_sequence) &&
+	if (apple_gmux_data->use_pwrd_power_sequence &&
 	    apple_gmux_data->discrete_pdev != pdev) {
 		pci_dev_put(apple_gmux_data->discrete_pdev);
 		apple_gmux_data->discrete_pdev = pci_dev_get(pdev);
@@ -1543,10 +1476,9 @@ static int gmux_probe(struct pnp_dev *pnp, const struct pnp_device_id *id)
 	if (!gmux_data)
 		return -ENOMEM;
 	pnp_set_drvdata(pnp, gmux_data);
-	gmux_data->use_pwg_power_sequence = type == APPLE_GMUX_TYPE_MMIO &&
-		dmi_match(DMI_PRODUCT_NAME, "MacBookPro15,1");
 	gmux_data->use_pwrd_power_sequence = type == APPLE_GMUX_TYPE_MMIO &&
-		(dmi_match(DMI_PRODUCT_NAME, "MacBookPro16,1") ||
+		(dmi_match(DMI_PRODUCT_NAME, "MacBookPro15,1") ||
+		 dmi_match(DMI_PRODUCT_NAME, "MacBookPro16,1") ||
 		 dmi_match(DMI_PRODUCT_NAME, "MacBookPro16,4"));
 
 	switch (type) {
@@ -1789,7 +1721,7 @@ module_pnp_driver(gmux_pnp_driver);
 MODULE_AUTHOR("Seth Forshee <seth.forshee@canonical.com>");
 MODULE_AUTHOR("kait2en");
 MODULE_DESCRIPTION("Kait2en T2 GMUX driver");
-MODULE_VERSION("0.8");
+MODULE_VERSION("0.9");
 MODULE_LICENSE("GPL");
 MODULE_IMPORT_NS("EFIVAR");
 MODULE_DEVICE_TABLE(pnp, gmux_device_ids);
