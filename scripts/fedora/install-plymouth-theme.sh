@@ -33,8 +33,8 @@ for command_name in grep install plymouth-set-default-theme rm sed; do
 	command -v "$command_name" >/dev/null 2>&1 ||
 		missing_requirements+=("command $command_name")
 done
-for asset in kait2en.plymouth kait2en.script \
-		boot.png box.png bullet.png entry.png lock.png progress_bar.png progress_box.png; do
+for asset in kait2en.plymouth animation-0001.png watermark.png \
+		bullet.png entry.png keyboard.png lock.png capslock.png keymap-render.png; do
 	[[ -r "$THEME_SRC/$asset" ]] || missing_requirements+=("asset $asset")
 done
 
@@ -50,7 +50,6 @@ install -d -o root -g root -m 0755 "$THEME_DST"
 install -o root -g root -m 0644 \
 	"$THEME_SRC"/*.png \
 	"$THEME_SRC/kait2en.plymouth" \
-	"$THEME_SRC/kait2en.script" \
 	"$THEME_DST/"
 
 install -d -o root -g root -m 0755 "$(dirname "$PLYMOUTHD_CONF")"
