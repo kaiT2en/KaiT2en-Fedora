@@ -75,7 +75,6 @@ kernel updates. `modinfo -n <module>` prints the installed kernel object path.
 | `t2_trackpad_actuator` | `t2_trackpad_actuator` | T2 Force Touch actuator transport |
 | `t2mfi_fastcharge` | `t2mfi_fastcharge` | Fast-charge control for Apple MFi devices |
 | `t2gmux` | `t2gmux` | GMUX handling on dual-GPU Macs |
-| `t2thunderbolt` | `t2thunderbolt` | Thunderbolt power-management ordering and T2 PCI quirks |
 | `t2smp` | `t2smp` | Defers secondary CPU hotplug to avoid firmware-sensitive resume delays |
 | `t2sbs` | `t2sbs` | Smart Battery driver that refreshes the full charge capacity and reports the charge relative to it, replaces `sbs` |
 | `linux-apfs-rw` | `apfs` | Read-only access to the macOS APFS container, vendored from upstream |
@@ -128,7 +127,24 @@ live in `/usr/local/libexec/kait2en/i915/`, the hook is
 sudo /usr/local/libexec/kait2en/i915/install-i915.sh install <kernel>
 ```
 
-The patched AMDGPU, i915 and wireless modules are built from the Fedora kernel
+On T2 Macs with a Titan Ridge or Ice Lake Thunderbolt controller, the
+installer builds a patched thunderbolt module. On Titan Ridge it turns the
+idle controller off and back on through the same ACPI sequence as macOS,
+which lets the package reach the deep idle states.
+
+```text
+/usr/lib/modules/<kernel>/updates/kait2en-thunderbolt/thunderbolt.ko.xz
+```
+
+The build script and patches live in `/usr/local/libexec/kait2en/thunderbolt/`,
+the hook is `/etc/kernel/install.d/47-kait2en-thunderbolt.install` and logs to
+`/var/log/kait2en-thunderbolt.log`. To rebuild for a specific kernel by hand:
+
+```bash
+sudo /usr/local/libexec/kait2en/thunderbolt/install-thunderbolt.sh install <kernel>
+```
+
+The patched AMDGPU, i915, thunderbolt and wireless modules are built from the Fedora kernel
 source, which is downloaded once per kernel and kept unpacked at:
 
 ```text
@@ -192,6 +208,11 @@ module_blacklist=acpi_tad,applesmc,macsmc,hid_apple,hid_appletb_bl,hid_appletb_k
 
 On iMacs and the iMac Pro, `pcie_aspm=force` is left out, because their
 Ethernet controllers do not work with forced ASPM.
+
+On Macs with a Titan Ridge Thunderbolt controller, `pcie_ports=compat` is left
+out and removed from existing installs. The PCIe port services stay on, so
+hotplug and PCIe tunnels over Thunderbolt work, and the patched thunderbolt
+module keeps the controller's ports out of D3.
 
 On every T2 Mac, the installer enables HuC firmware loading for the Intel GPU:
 

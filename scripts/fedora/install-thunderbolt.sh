@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib.sh"
+
+require_root
+require_fedora
+require_command depmod dnf dracut find modinfo rm rpm
+
+usage() {
+	printf 'Usage: %s [install|remove] [KERNEL_RELEASE] [--defer-initramfs] [--no-deps]\n' "$0" >&2
+	exit 2
+}
+
+ACTION=${1:-install}
+shift $(( $# > 0 ? 1 : 0 ))
+KVER=$(kernel_release)
+KVER_SET=0
+DEFER_INITRAMFS=0
+SKIP_DEPS=0
+for argument in "$@"; do
+	case "$argument" in
+		--defer-initramfs) DEFER_INITRAMFS=1 ;;
+		--no-deps) SKIP_DEPS=1 ;;
+		--*) usage ;;
+		*)
+			((KVER_SET == 0)) || usage
+			KVER=$argument
+			KVER_SET=1
+			;;
+	esac
+done
+MODULE_DIR="/usr/lib/modules/$KVER/updates/kait2en-thunderbolt"
+HOOK_HOME="/usr/local/libexec/kait2en/thunderbolt"
+KERNEL_INSTALL_HOOK="/etc/kernel/install.d/47-kait2en-thunderbolt.install"
+if [[ -f "$SCRIPT_DIR/patches/series" ]]; then
+	# The copy the kernel-install hook runs carries its own patches.
+	PATCH_DIR="$SCRIPT_DIR/patches"
+	FROM_REPO=0
+else
+	require_repo_root
+	PATCH_DIR="$REPO_ROOT/patches/runtime/thunderbolt"
+	FROM_REPO=1
+fi
+PATCH_SERIES="$PATCH_DIR/series"
+PATCH_FILES=()
+
+is_supported_model() {
+	local dev vendor device t2=0 nhi=0
+
+	for dev in /sys/bus/pci/devices/*; do
+		read -r vendor <"$dev/vendor" || continue
+		read -r device <"$dev/device" || continue
+		[[ $vendor == 0x106b && $device == 0x1801 ]] && t2=1
+		[[ $vendor == 0x8086 ]] || continue
+		case "$device" in
+			0x15e8|0x15eb|0x8a0d|0x8a17) nhi=1 ;;
+		esac
+	done
+	((t2 && nhi))
+}
+
+remove_modules() {
+	if [[ -d "$MODULE_DIR" ]]; then
+		info "removing patched thunderbolt module for $KVER"
+		rm -rf "$MODULE_DIR"
+	fi
+	depmod -a "$KVER"
+	if [[ -d "/usr/lib/modules/$KVER" ]]; then
+		dracut --force "/boot/initramfs-$KVER.img" "$KVER"
+	fi
+}
+
+remove_kernel_hook() {
+	rm -f "$KERNEL_INSTALL_HOOK"
+	rm -rf "$HOOK_HOME"
+}
+
+# Rebuild thunderbolt for every kernel dnf installs later, before 50-depmod
+# and 50-dracut pick the module up.
+install_kernel_hook() {
+	local entry
+
+	rm -rf "$HOOK_HOME"
+	install -d -m 0755 "$HOOK_HOME/patches"
+	install -m 0755 "$SCRIPT_DIR/install-thunderbolt.sh" "$HOOK_HOME/"
+	install -m 0644 "$SCRIPT_DIR/lib.sh" "$HOOK_HOME/"
+	install -m 0644 "$PATCH_SERIES" "$HOOK_HOME/patches/series"
+	for entry in "${PATCH_FILES[@]}"; do
+		install -m 0644 "$entry" "$HOOK_HOME/patches/"
+	done
+
+	install -d -m 0755 "${KERNEL_INSTALL_HOOK%/*}"
+	cat >"$KERNEL_INSTALL_HOOK" <<HOOK
+#!/usr/bin/bash
+
+command=\${1:-}
+kernelver=\${2:-}
+log=/var/log/kait2en-thunderbolt.log
+
+[[ -n "\$kernelver" ]] || exit 0
+case "\$command" in
+	add)
+		printf '[kait2en] building patched thunderbolt for %s\\n' "\$kernelver"
+		if ! "$HOOK_HOME/install-thunderbolt.sh" install "\$kernelver" \\
+				--defer-initramfs --no-deps >>"\$log" 2>&1; then
+			printf '[kait2en] thunderbolt build for %s failed, see %s\\n' \\
+				"\$kernelver" "\$log"
+			printf '[kait2en] retry with: sudo %s install %s\\n' \\
+				"$HOOK_HOME/install-thunderbolt.sh" "\$kernelver"
+		fi
+		;;
+	remove)
+		rm -rf "/usr/lib/modules/\$kernelver/updates/kait2en-thunderbolt"
+		;;
+esac
+exit 0
+HOOK
+	chmod 0755 "$KERNEL_INSTALL_HOOK"
+}
+
+case "$ACTION" in
+	remove)
+		remove_modules
+		remove_kernel_hook
+		exit 0
+		;;
+	install) ;;
+	*) usage ;;
+esac
+
+if ! is_supported_model; then
+	info "the patched thunderbolt driver is not needed on this model, skipping"
+	exit 0
+fi
+
+load_patch_series
+
+info "installing build dependencies for $KVER"
+build_tree=$(readlink -f "/lib/modules/$KVER/build" || true)
+if [[ -n "$build_tree" && -f "$build_tree/Makefile" &&
+	-f "$build_tree/drivers/thunderbolt/nhi.c" ]]; then
+	local_kernel_tree=1
+	info "using local kernel build tree $build_tree"
+	development_package=()
+else
+	local_kernel_tree=0
+	development_package=("kernel-devel-$KVER")
+fi
+
+((SKIP_DEPS)) || dnf install -y \
+	"${development_package[@]}" \
+	cpio \
+	curl \
+	elfutils-libelf-devel \
+	gcc \
+	git-core \
+	make \
+	patch \
+	tar \
+	xz
+require_command cpio curl git install make nproc patch rpm2cpio sed strip tar xz
+
+if ((local_kernel_tree == 0)); then
+	build_tree="/usr/src/kernels/$KVER"
+	[[ -d "$build_tree" ]] || fail "kernel-devel is unavailable for $KVER"
+fi
+
+info "using /var/tmp for kernel sources and module build"
+workdir=$(mktemp -d /var/tmp/kait2en-thunderbolt.XXXXXXXXXX)
+trap 'rm -rf "$workdir"' EXIT
+if ((local_kernel_tree)); then
+	kernel_tree=$build_tree
+else
+	pool_tree=$(kernel_source_tree "$KVER") ||
+		fail "kernel source for $KVER is unavailable"
+	# Only drivers/thunderbolt is built, so copy just that directory.
+	install -d "$workdir/kernel/drivers"
+	cp -a --reflink=auto "$pool_tree/drivers/thunderbolt" \
+		"$workdir/kernel/drivers/" ||
+		fail "unable to copy the thunderbolt source for $KVER"
+	kernel_tree="$workdir/kernel"
+	[[ -f "$kernel_tree/drivers/thunderbolt/nhi.c" ]] ||
+		fail "thunderbolt source tree was not found"
+fi
+
+for patch_file in "${PATCH_FILES[@]}"; do
+	apply_patch_if_needed "$kernel_tree" "$patch_file"
+done
+
+tb_dir="$kernel_tree/drivers/thunderbolt"
+info "building thunderbolt for $KVER"
+make -j "$(nproc)" -C "$build_tree" M="$tb_dir" modules
+
+staging="$workdir/modules"
+module="$tb_dir/thunderbolt.ko"
+[[ -f "$module" ]] || fail "thunderbolt.ko was not built"
+install -Dpm 0644 "$module" "$staging/thunderbolt.ko"
+strip --strip-debug "$staging/thunderbolt.ko" ||
+	warn "could not strip debug info, installing a larger, unstripped thunderbolt.ko"
+xz --check=crc32 --lzma2=dict=1MiB -f "$staging/thunderbolt.ko"
+
+info "installing patched thunderbolt module for $KVER"
+install -d -m 0755 "$MODULE_DIR"
+install -m 0644 "$staging/thunderbolt.ko.xz" "$MODULE_DIR/"
+depmod -a "$KVER"
+if ((DEFER_INITRAMFS == 0)); then
+	dracut --force "/boot/initramfs-$KVER.img" "$KVER"
+fi
+
+((FROM_REPO == 0)) || install_kernel_hook
+
+info "patched thunderbolt module installed for $KVER"
+info "reboot into $KVER, then verify with: modinfo -n thunderbolt"

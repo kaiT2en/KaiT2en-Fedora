@@ -1,0 +1,901 @@
+From: Andre Eikmeyer <andre.eikmeyer@kait2en.org>
+Subject: [PATCH] thunderbolt: add Titan Ridge RTD3 on Apple T2 Macs
+
+Titan Ridge on T2 Macs has no RTD3 under Linux, the idle controller stays
+powered. Its PCIe root ports keep their PHY on, which holds the package
+at PC7. The firmware only powers the controller down through the Darwin
+_PS3 and _PS0 methods of its ports after RTPC, and it turns the rails
+back on from a child's _PS0, an order the PCI core cannot follow.
+
+Take the Titan Ridge root ports over from pcieport and run the macOS RTD3
+sequence on them. Keep the bridges below in D0, let the host router
+runtime suspend while the controller is unused and leave the link
+controller alone on runtime suspend as macOS does.
+
+This is an interim downstream solution so the change ships as an out of
+tree module. Upstream it belongs into a PCI quirk for these root ports
+that keeps them with pcieport.
+
+Signed-off-by: Andre Eikmeyer <andre.eikmeyer@kait2en.org>
+---
+ drivers/thunderbolt/Makefile |   2 +-
+ drivers/thunderbolt/apple.c  | 645 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ drivers/thunderbolt/pci.c    |  11 +-
+ drivers/thunderbolt/switch.c |   7 +
+ drivers/thunderbolt/tb.c     |  73 +++++++-
+ drivers/thunderbolt/tb.h     |  10 +
+ 6 files changed, 741 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/thunderbolt/Makefile b/drivers/thunderbolt/Makefile
+index beb054c..a3f0efc 100644
+--- a/drivers/thunderbolt/Makefile
++++ b/drivers/thunderbolt/Makefile
+@@ -5,7 +5,7 @@ thunderbolt-objs := nhi.o ctl.o tb.o switch.o cap.o pci.o path.o tunnel.o eeprom
+ thunderbolt-objs += domain.o dma_port.o icm.o property.o xdomain.o lc.o tmu.o usb4.o
+ thunderbolt-objs += usb4_port.o nvm.o retimer.o quirks.o clx.o
+ 
+-thunderbolt-${CONFIG_ACPI} += acpi.o
++thunderbolt-${CONFIG_ACPI} += acpi.o apple.o
+ thunderbolt-$(CONFIG_DEBUG_FS) += debugfs.o
+ thunderbolt-$(CONFIG_USB4_CONFIGFS) += configfs.o
+ thunderbolt-${CONFIG_USB4_KUNIT_TEST} += test.o
+diff --git a/drivers/thunderbolt/apple.c b/drivers/thunderbolt/apple.c
+new file mode 100644
+index 0000000..9152c44
+--- /dev/null
++++ b/drivers/thunderbolt/apple.c
+@@ -0,0 +1,645 @@
++// SPDX-License-Identifier: GPL-2.0
++
++#include <linux/acpi.h>
++#include <linux/delay.h>
++#include <linux/module.h>
++#include <linux/pci.h>
++#include <linux/platform_data/x86/apple.h>
++#include <linux/pm_runtime.h>
++#include <linux/usb.h>
++
++#include "nhi.h"
++#include "tb.h"
++
++#define TB_APPLE_DSB_NHI	PCI_DEVFN(0, 0)
++#define TB_APPLE_DSB_XHCI	PCI_DEVFN(2, 0)
++#define TB_APPLE_MAX_BUSES	16
++#define TB_APPLE_AUTOSUSPEND_MS	1000
++
++struct tb_apple_port {
++	struct pci_dev *port;
++	struct pci_dev *upsb;
++	struct pci_dev *dsb_nhi;
++	struct pci_dev *dsb_xhci;
++	struct pci_dev *nhi;
++	struct pci_dev *xhci;
++	struct device_link *links[3];
++	bool off;
++};
++
++/* Config accesses below an unpowered port raise a CATERR, drop them. */
++struct tb_apple_bus {
++	struct pci_bus *bus;
++	struct pci_ops *ops;
++	struct tb_apple_port *tap;
++};
++
++static struct tb_apple_bus tb_apple_buses[TB_APPLE_MAX_BUSES];
++static DEFINE_MUTEX(tb_apple_buses_lock);
++
++static struct tb_apple_bus *tb_apple_find_bus(struct pci_bus *bus)
++{
++	int i;
++
++	for (i = 0; i < TB_APPLE_MAX_BUSES; i++)
++		if (tb_apple_buses[i].bus == bus)
++			return &tb_apple_buses[i];
++
++	return NULL;
++}
++
++static int tb_apple_read(struct pci_bus *bus, unsigned int devfn, int where,
++			 int size, u32 *val)
++{
++	struct tb_apple_bus *tab = tb_apple_find_bus(bus);
++
++	if (READ_ONCE(tab->tap->off)) {
++		PCI_SET_ERROR_RESPONSE(val);
++		return PCIBIOS_SUCCESSFUL;
++	}
++
++	return tab->ops->read(bus, devfn, where, size, val);
++}
++
++static int tb_apple_write(struct pci_bus *bus, unsigned int devfn, int where,
++			  int size, u32 val)
++{
++	struct tb_apple_bus *tab = tb_apple_find_bus(bus);
++
++	if (READ_ONCE(tab->tap->off))
++		return PCIBIOS_SUCCESSFUL;
++
++	return tab->ops->write(bus, devfn, where, size, val);
++}
++
++static struct pci_ops tb_apple_ops = {
++	.read = tb_apple_read,
++	.write = tb_apple_write,
++};
++
++static int tb_apple_wrap_bus(struct tb_apple_port *tap, struct pci_bus *bus)
++{
++	struct pci_bus *child;
++	int i, ret;
++
++	for (i = 0; i < TB_APPLE_MAX_BUSES; i++)
++		if (!tb_apple_buses[i].bus)
++			break;
++	if (i == TB_APPLE_MAX_BUSES)
++		return -ENOSPC;
++
++	tb_apple_buses[i].ops = bus->ops;
++	tb_apple_buses[i].tap = tap;
++	tb_apple_buses[i].bus = bus;
++	bus->ops = &tb_apple_ops;
++
++	list_for_each_entry(child, &bus->children, node) {
++		ret = tb_apple_wrap_bus(tap, child);
++		if (ret)
++			return ret;
++	}
++
++	return 0;
++}
++
++static void tb_apple_unwrap_buses(struct tb_apple_port *tap)
++{
++	int i;
++
++	mutex_lock(&tb_apple_buses_lock);
++	for (i = 0; i < TB_APPLE_MAX_BUSES; i++) {
++		if (tb_apple_buses[i].tap != tap)
++			continue;
++		tb_apple_buses[i].bus->ops = tb_apple_buses[i].ops;
++		memset(&tb_apple_buses[i], 0, sizeof(tb_apple_buses[i]));
++	}
++	mutex_unlock(&tb_apple_buses_lock);
++}
++
++static int tb_apple_set_power(struct pci_dev *pdev, int state)
++{
++	int ret;
++
++	ret = acpi_device_set_power(ACPI_COMPANION(&pdev->dev), state);
++	if (ret)
++		pci_warn(pdev, "cannot set ACPI power state D%d: %d\n",
++			 state, ret);
++	return ret;
++}
++
++static void tb_apple_rtpc(struct pci_dev *pdev, bool on)
++{
++	acpi_status status;
++
++	status = acpi_execute_simple_method(ACPI_HANDLE(&pdev->dev), "RTPC", on);
++	if (ACPI_FAILURE(status))
++		pci_warn(pdev, "cannot evaluate RTPC(%d): %s\n", on,
++			 acpi_format_exception(status));
++}
++
++#define tb_apple_for_each_dev(tap, pdev)				\
++	list_for_each_entry(pdev, &(tap)->upsb->subordinate->devices,	\
++			    bus_list)
++
++static void tb_apple_set_tree_state(struct tb_apple_port *tap,
++				    pci_power_t state)
++{
++	struct pci_dev *dsb;
++
++	tap->upsb->current_state = state;
++	tb_apple_for_each_dev(tap, dsb)
++		dsb->current_state = state;
++}
++
++static int tb_apple_usb_dev(struct usb_device *udev, void *data)
++{
++	return udev->parent && udev->bus->controller == data;
++}
++
++/* Autosuspended USB devices and hotplug port devices need the rails. */
++static bool tb_apple_busy(struct tb_apple_port *tap)
++{
++	struct pci_dev *dsb;
++
++	if (usb_for_each_dev(&tap->xhci->dev, tb_apple_usb_dev))
++		return true;
++
++	tb_apple_for_each_dev(tap, dsb)
++		if (dsb->subordinate && dsb != tap->dsb_nhi &&
++		    dsb != tap->dsb_xhci &&
++		    !list_empty(&dsb->subordinate->devices))
++			return true;
++
++	return false;
++}
++
++static void tb_apple_pme_poll(struct tb_apple_port *tap, bool on)
++{
++	pci_power_t state = on ? PCI_D3hot : PCI_D3cold;
++
++	tap->nhi->pme_poll = on;
++	tap->xhci->pme_poll = on;
++	tap->nhi->current_state = state;
++	tap->xhci->current_state = state;
++}
++
++/*
++ * As IOPCIFamily: _PS3 then PMCSR D3 on the way down, bus numbers, _PS0,
++ * PMCSR D0 and the saved config space on the way up.
++ */
++static void tb_apple_pmcsr(struct pci_dev *pdev, u16 state)
++{
++	u16 ctrl;
++
++	if (!pdev->pm_cap)
++		return;
++
++	pci_read_config_word(pdev, pdev->pm_cap + PCI_PM_CTRL, &ctrl);
++	if (state == PCI_D0)
++		ctrl = PCI_PM_CTRL_PME_STATUS | PCI_D0;
++	else
++		ctrl = (ctrl & ~(PCI_PM_CTRL_STATE_MASK |
++				 PCI_PM_CTRL_PME_STATUS)) | state;
++	pci_write_config_word(pdev, pdev->pm_cap + PCI_PM_CTRL, ctrl);
++	msleep(10);
++}
++
++static bool tb_apple_has_ps(struct pci_dev *pdev)
++{
++	struct acpi_device *adev = ACPI_COMPANION(&pdev->dev);
++
++	return adev && acpi_device_power_manageable(adev);
++}
++
++static void tb_apple_bridge_off(struct pci_dev *pdev)
++{
++	if (tb_apple_has_ps(pdev))
++		tb_apple_set_power(pdev, ACPI_STATE_D3_HOT);
++	tb_apple_pmcsr(pdev, PCI_D3hot);
++	pdev->current_state = PCI_D3hot;
++}
++
++static void tb_apple_bridge_on(struct pci_dev *pdev)
++{
++	u32 saved = pdev->saved_config_space[PCI_PRIMARY_BUS / 4];
++	u32 bus;
++
++	pci_read_config_dword(pdev, PCI_PRIMARY_BUS, &bus);
++	if (!(bus & 0xffffff))
++		pci_write_config_dword(pdev, PCI_PRIMARY_BUS, saved);
++
++	if (tb_apple_has_ps(pdev))
++		tb_apple_set_power(pdev, ACPI_STATE_D0);
++	tb_apple_pmcsr(pdev, PCI_D0);
++	pci_restore_state(pdev);
++	pdev->current_state = PCI_D0;
++}
++
++/*
++ * RTPC releases both functions, the root port _PS3 then takes the link to
++ * L2/L3, powers the PEG PHY down and cuts the rails.
++ */
++static int tb_apple_power_off(struct tb_apple_port *tap)
++{
++	struct pci_dev *dsb;
++	int ret;
++
++	if (tb_apple_busy(tap)) {
++		pm_runtime_mark_last_busy(&tap->port->dev);
++		return -EBUSY;
++	}
++
++	/* PME polling would touch the functions while their links go down. */
++	tb_apple_pme_poll(tap, false);
++
++	pci_save_state(tap->upsb);
++	tb_apple_for_each_dev(tap, dsb)
++		pci_save_state(dsb);
++
++	ret = pci_save_state(tap->port);
++	if (ret) {
++		tb_apple_pme_poll(tap, true);
++		return ret;
++	}
++
++	tb_apple_rtpc(tap->nhi, false);
++	tb_apple_rtpc(tap->xhci, false);
++
++	/* xHCI rail first, a bounce of the other rail raises a hotplug GPE. */
++	tb_apple_bridge_off(tap->dsb_xhci);
++	tb_apple_for_each_dev(tap, dsb)
++		if (dsb != tap->dsb_xhci)
++			tb_apple_bridge_off(dsb);
++	tb_apple_bridge_off(tap->upsb);
++
++	ret = tb_apple_set_power(tap->port, ACPI_STATE_D3_HOT);
++	if (ret) {
++		tb_apple_bridge_on(tap->upsb);
++		tb_apple_for_each_dev(tap, dsb)
++			tb_apple_bridge_on(dsb);
++		tb_apple_rtpc(tap->nhi, true);
++		tb_apple_rtpc(tap->xhci, true);
++		tb_apple_pme_poll(tap, true);
++		return ret;
++	}
++
++	WRITE_ONCE(tap->off, true);
++	tb_apple_set_tree_state(tap, PCI_D3cold);
++
++	tap->port->current_state = PCI_D3hot;
++	pci_info(tap->port, "Thunderbolt controller powered off\n");
++
++	return 0;
++}
++
++/* The root port _PS0 already ran, the upstream port _PS0 turns the rails on. */
++static void tb_apple_power_on(struct tb_apple_port *tap)
++{
++	struct pci_dev *dsb;
++
++	tb_apple_rtpc(tap->nhi, true);
++	tb_apple_rtpc(tap->xhci, true);
++
++	WRITE_ONCE(tap->off, false);
++	tb_apple_bridge_on(tap->upsb);
++	tb_apple_for_each_dev(tap, dsb)
++		tb_apple_bridge_on(dsb);
++
++	tap->nhi->pme_poll = true;
++	tap->xhci->pme_poll = true;
++
++	pci_info(tap->port, "Thunderbolt controller powered on\n");
++}
++
++static int tb_apple_runtime_suspend(struct device *dev)
++{
++	return tb_apple_power_off(dev_get_drvdata(dev));
++}
++
++static int tb_apple_runtime_resume(struct device *dev)
++{
++	struct tb_apple_port *tap = dev_get_drvdata(dev);
++
++	if (tap->off)
++		tb_apple_power_on(tap);
++	return 0;
++}
++
++/* System sleep runs with the controller on, as without this driver. */
++static int tb_apple_prepare(struct device *dev)
++{
++	struct tb_apple_port *tap = dev_get_drvdata(dev);
++
++	pm_runtime_resume(&tap->nhi->dev);
++	pm_runtime_resume(&tap->xhci->dev);
++	return 0;
++}
++
++/* Keep the root port out of D3 across system sleep. */
++static int tb_apple_suspend_noirq(struct device *dev)
++{
++	return pci_save_state(to_pci_dev(dev));
++}
++
++static const struct dev_pm_ops tb_apple_pm_ops = {
++	.prepare = tb_apple_prepare,
++	.suspend_noirq = tb_apple_suspend_noirq,
++	.freeze_noirq = tb_apple_suspend_noirq,
++	.poweroff_noirq = tb_apple_suspend_noirq,
++	.runtime_suspend = tb_apple_runtime_suspend,
++	.runtime_resume = tb_apple_runtime_resume,
++};
++
++/* A plug while the controller is off raises a Bus Check on the NHI. */
++static void tb_apple_notify(acpi_handle handle, u32 event, void *data)
++{
++	struct tb_apple_port *tap = data;
++
++	if (event != ACPI_NOTIFY_BUS_CHECK)
++		return;
++
++	pm_request_resume(&tap->nhi->dev);
++	pm_request_resume(&tap->xhci->dev);
++}
++
++static int tb_apple_link(struct tb_apple_port *tap, struct pci_dev *consumer,
++			 struct pci_dev *supplier, int i)
++{
++	pm_runtime_get_sync(&consumer->dev);
++	tap->links[i] = device_link_add(&consumer->dev, &supplier->dev,
++					DL_FLAG_STATELESS | DL_FLAG_PM_RUNTIME |
++					DL_FLAG_RPM_ACTIVE);
++	pm_runtime_put(&consumer->dev);
++
++	return tap->links[i] ? 0 : -EINVAL;
++}
++
++static void tb_apple_unlink(struct tb_apple_port *tap)
++{
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(tap->links); i++) {
++		if (tap->links[i])
++			device_link_del(tap->links[i]);
++		tap->links[i] = NULL;
++	}
++}
++
++static struct pci_dev *tb_apple_child(struct pci_dev *bridge,
++				      unsigned int devfn)
++{
++	struct pci_dev *pdev;
++
++	if (!bridge || !bridge->subordinate)
++		return NULL;
++
++	list_for_each_entry(pdev, &bridge->subordinate->devices, bus_list)
++		if (pdev->devfn == devfn)
++			return pdev;
++
++	return NULL;
++}
++
++static bool tb_apple_has_method(struct pci_dev *pdev, char *method)
++{
++	acpi_handle handle = pdev ? ACPI_HANDLE(&pdev->dev) : NULL;
++
++	return handle && acpi_has_method(handle, method);
++}
++
++static bool tb_apple_find(struct pci_dev *port, struct tb_apple_port *tap)
++{
++	if (!x86_apple_machine || port->vendor != PCI_VENDOR_ID_INTEL ||
++	    pci_pcie_type(port) != PCI_EXP_TYPE_ROOT_PORT)
++		return false;
++
++	tap->port = port;
++	tap->upsb = tb_apple_child(port, PCI_DEVFN(0, 0));
++	tap->dsb_nhi = tb_apple_child(tap->upsb, TB_APPLE_DSB_NHI);
++	tap->dsb_xhci = tb_apple_child(tap->upsb, TB_APPLE_DSB_XHCI);
++	tap->nhi = tb_apple_child(tap->dsb_nhi, PCI_DEVFN(0, 0));
++	tap->xhci = tb_apple_child(tap->dsb_xhci, PCI_DEVFN(0, 0));
++
++	if (!tap->nhi || !tap->xhci ||
++	    (tap->nhi->device != PCI_DEVICE_ID_INTEL_TITAN_RIDGE_2C_NHI &&
++	     tap->nhi->device != PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_NHI))
++		return false;
++
++	return tb_apple_has_method(port, "_PS3") &&
++	       tb_apple_has_method(tap->upsb, "_PS0") &&
++	       tb_apple_has_method(tap->dsb_nhi, "_PS3") &&
++	       tb_apple_has_method(tap->dsb_xhci, "_PS3") &&
++	       tb_apple_has_method(tap->nhi, "RTPC") &&
++	       tb_apple_has_method(tap->xhci, "RTPC");
++}
++
++/*
++ * pcieport would run the Darwin _PS3 and _PS0 of the bridges in the wrong
++ * order, keep them in D0 and runtime active.
++ */
++static void tb_apple_hold(struct pci_dev *pdev, bool hold)
++{
++	if (hold) {
++		pdev->dev_flags |= PCI_DEV_FLAGS_NO_D3;
++		pm_runtime_forbid(&pdev->dev);
++	} else {
++		pdev->dev_flags &= ~PCI_DEV_FLAGS_NO_D3;
++		if (pdev->dev.driver)
++			pm_runtime_allow(&pdev->dev);
++	}
++}
++
++static void tb_apple_hold_bridges(struct tb_apple_port *tap, bool hold)
++{
++	struct pci_dev *dsb;
++
++	tb_apple_for_each_dev(tap, dsb)
++		tb_apple_hold(dsb, hold);
++	tb_apple_hold(tap->upsb, hold);
++}
++
++static int tb_apple_probe(struct pci_dev *port, const struct pci_device_id *id)
++{
++	struct tb_apple_port *tap;
++	acpi_status status;
++	int ret;
++
++	tap = devm_kzalloc(&port->dev, sizeof(*tap), GFP_KERNEL);
++	if (!tap)
++		return -ENOMEM;
++
++	if (!tb_apple_find(port, tap))
++		return -ENODEV;
++
++	pci_set_drvdata(port, tap);
++	tb_apple_hold_bridges(tap, true);
++
++	mutex_lock(&tb_apple_buses_lock);
++	ret = tb_apple_wrap_bus(tap, port->subordinate);
++	mutex_unlock(&tb_apple_buses_lock);
++	if (ret) {
++		tb_apple_unwrap_buses(tap);
++		tb_apple_hold_bridges(tap, false);
++		return ret;
++	}
++
++	status = acpi_install_notify_handler(ACPI_HANDLE(&tap->nhi->dev),
++					     ACPI_SYSTEM_NOTIFY,
++					     tb_apple_notify, tap);
++	if (ACPI_FAILURE(status)) {
++		tb_apple_unwrap_buses(tap);
++		tb_apple_hold_bridges(tap, false);
++		return -EIO;
++	}
++
++	/* PME polling needs active bridges, the port follows NHI and xHCI. */
++	pm_suspend_ignore_children(&port->dev, true);
++	ret = tb_apple_link(tap, tap->xhci, tap->nhi, 0);
++	if (!ret)
++		ret = tb_apple_link(tap, tap->nhi, port, 1);
++	if (!ret)
++		ret = tb_apple_link(tap, tap->xhci, port, 2);
++	if (ret) {
++		tb_apple_unlink(tap);
++		acpi_remove_notify_handler(ACPI_HANDLE(&tap->nhi->dev),
++					   ACPI_SYSTEM_NOTIFY, tb_apple_notify);
++		tb_apple_unwrap_buses(tap);
++		tb_apple_hold_bridges(tap, false);
++		return ret;
++	}
++
++	pm_runtime_set_autosuspend_delay(&port->dev, TB_APPLE_AUTOSUSPEND_MS);
++	pm_runtime_use_autosuspend(&port->dev);
++	pm_runtime_mark_last_busy(&port->dev);
++	pm_runtime_put_autosuspend(&port->dev);
++	pm_runtime_allow(&port->dev);
++
++	pci_info(port, "Thunderbolt runtime power control enabled\n");
++	return 0;
++}
++
++static void tb_apple_remove(struct pci_dev *port)
++{
++	struct tb_apple_port *tap = pci_get_drvdata(port);
++
++	pm_runtime_forbid(&port->dev);
++	pm_runtime_get_noresume(&port->dev);
++	pm_runtime_dont_use_autosuspend(&port->dev);
++
++	tb_apple_unlink(tap);
++	pm_suspend_ignore_children(&port->dev, false);
++
++	acpi_remove_notify_handler(ACPI_HANDLE(&tap->nhi->dev),
++				   ACPI_SYSTEM_NOTIFY, tb_apple_notify);
++	tb_apple_unwrap_buses(tap);
++	tb_apple_hold_bridges(tap, false);
++}
++
++static const struct pci_device_id tb_apple_ids[] = {
++	{
++		.vendor = PCI_VENDOR_ID_INTEL, .device = PCI_ANY_ID,
++		.subvendor = PCI_ANY_ID, .subdevice = PCI_ANY_ID,
++		.class = PCI_CLASS_BRIDGE_PCI_NORMAL, .class_mask = ~0,
++	},
++	{ }
++};
++
++static struct pci_driver tb_apple_driver = {
++	.name = "thunderbolt-apple-power",
++	.id_table = tb_apple_ids,
++	.probe = tb_apple_probe,
++	.remove = tb_apple_remove,
++	.driver.pm = &tb_apple_pm_ops,
++};
++
++/* Router runtime suspend stops the xHCI behind the same link controller. */
++bool tb_apple_usb_busy(struct tb_nhi *nhi)
++{
++	struct pci_dev *dsb = pci_upstream_bridge(to_pci_dev(nhi->dev));
++	struct pci_dev *upsb = dsb ? pci_upstream_bridge(dsb) : NULL;
++	struct pci_dev *xhci;
++
++	xhci = tb_apple_child(tb_apple_child(upsb, TB_APPLE_DSB_XHCI),
++			      PCI_DEVFN(0, 0));
++	if (!xhci)
++		return false;
++
++	return !pm_runtime_suspended(&xhci->dev) ||
++	       usb_for_each_dev(&xhci->dev, tb_apple_usb_dev);
++}
++
++bool tb_apple_host_rpm(struct tb_nhi *nhi)
++{
++	struct pci_dev *pdev = to_pci_dev(nhi->dev);
++
++	if (!x86_apple_machine)
++		return false;
++
++	if (pdev->device != PCI_DEVICE_ID_INTEL_TITAN_RIDGE_2C_NHI &&
++	    pdev->device != PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_NHI)
++		return false;
++
++	return acpi_has_method(ACPI_HANDLE(nhi->dev), "RTPC");
++}
++
++#define TB_APPLE_MAX_PORTS	4
++
++static struct pci_dev *tb_apple_ports[TB_APPLE_MAX_PORTS];
++
++/* pcieport has no service on these root ports, take them over. */
++static void tb_apple_take_ports(void)
++{
++	struct tb_apple_port tap;
++	struct pci_dev *pdev = NULL;
++	int n = 0;
++
++	while (n < TB_APPLE_MAX_PORTS &&
++	       (pdev = pci_get_class(PCI_CLASS_BRIDGE_PCI_NORMAL, pdev))) {
++		if (!tb_apple_find(pdev, &tap))
++			continue;
++		if (pdev->dev.driver &&
++		    strcmp(pdev->dev.driver->name, "pcieport"))
++			continue;
++
++		device_set_driver_override(&pdev->dev, tb_apple_driver.name);
++		device_release_driver(&pdev->dev);
++		tb_apple_ports[n++] = pci_dev_get(pdev);
++	}
++	pci_dev_put(pdev);
++}
++
++static void tb_apple_return_ports(void)
++{
++	int i;
++
++	for (i = 0; i < TB_APPLE_MAX_PORTS && tb_apple_ports[i]; i++) {
++		device_set_driver_override(&tb_apple_ports[i]->dev, NULL);
++		if (device_attach(&tb_apple_ports[i]->dev) < 0)
++			pci_warn(tb_apple_ports[i], "cannot rebind pcieport\n");
++		pci_dev_put(tb_apple_ports[i]);
++		tb_apple_ports[i] = NULL;
++	}
++}
++
++int tb_apple_power_init(void)
++{
++	int ret;
++
++	if (!x86_apple_machine)
++		return 0;
++
++	tb_apple_take_ports();
++	ret = pci_register_driver(&tb_apple_driver);
++	if (ret)
++		tb_apple_return_ports();
++	return ret;
++}
++
++void tb_apple_power_exit(void)
++{
++	if (!x86_apple_machine)
++		return;
++
++	pci_unregister_driver(&tb_apple_driver);
++	tb_apple_return_ports();
++}
+diff --git a/drivers/thunderbolt/pci.c b/drivers/thunderbolt/pci.c
+index bbd186c..4e3b62c 100644
+--- a/drivers/thunderbolt/pci.c
++++ b/drivers/thunderbolt/pci.c
+@@ -606,14 +606,23 @@ static int __init nhi_init(void)
+ 		return ret;
+ 
+ 	ret = pci_register_driver(&nhi_driver);
+-	if (ret)
++	if (ret) {
++		tb_domain_exit();
++		return ret;
++	}
++
++	ret = tb_apple_power_init();
++	if (ret) {
++		pci_unregister_driver(&nhi_driver);
+ 		tb_domain_exit();
++	}
+ 
+ 	return ret;
+ }
+ 
+ static void __exit nhi_unload(void)
+ {
++	tb_apple_power_exit();
+ 	pci_unregister_driver(&nhi_driver);
+ 	tb_domain_exit();
+ }
+diff --git a/drivers/thunderbolt/switch.c b/drivers/thunderbolt/switch.c
+index 217e18f..ae3163a 100644
+--- a/drivers/thunderbolt/switch.c
++++ b/drivers/thunderbolt/switch.c
+@@ -3659,6 +3659,13 @@ void tb_switch_suspend(struct tb_switch *sw, bool runtime)
+ 	 */
+ 	tb_switch_clx_disable(sw);
+ 
++	/*
++	 * Like macOS, leave the router alone when an Apple T2 Mac cuts it,
++	 * sleep and wake setup stops its xHCI and breaks the next power-up.
++	 */
++	if (runtime && !tb_route(sw) && tb_apple_host_rpm(sw->tb->nhi))
++		return;
++
+ 	err = tb_plug_events_active(sw, false);
+ 	if (err)
+ 		return;
+diff --git a/drivers/thunderbolt/tb.c b/drivers/thunderbolt/tb.c
+index 7e1f8c1..e6bdd97 100644
+--- a/drivers/thunderbolt/tb.c
++++ b/drivers/thunderbolt/tb.c
+@@ -10,6 +10,7 @@
+ #include <linux/errno.h>
+ #include <linux/delay.h>
+ #include <linux/pm_runtime.h>
++#include <linux/acpi.h>
+ #include <linux/platform_data/x86/apple.h>
+ 
+ #include "tb.h"
+@@ -3023,8 +3024,9 @@ static int tb_start(struct tb *tb, bool reset)
+ 	 * implement the necessary router operations.
+ 	 */
+ 	tb->root_switch->no_nvm_upgrade = !tb_switch_is_usb4(tb->root_switch);
+-	/* All USB4 routers support runtime PM */
+-	tb->root_switch->rpm = tb_switch_is_usb4(tb->root_switch);
++	/* USB4 routers and Apple T2 Titan Ridge hosts support runtime PM */
++	tb->root_switch->rpm = tb_switch_is_usb4(tb->root_switch) ||
++			       tb_apple_host_rpm(tb->nhi);
+ 
+ 	ret = tb_switch_configure(tb->root_switch);
+ 	if (ret) {
+@@ -3240,10 +3242,24 @@ static void tb_complete(struct tb *tb)
+ 	}
+ }
+ 
++static int tb_has_remote(struct device *dev, void *data)
++{
++	return tb_is_switch(dev) || dev->type == &tb_xdomain_type;
++}
++
+ static int tb_runtime_suspend(struct tb *tb)
+ {
+ 	struct tb_cm *tcm = tb_priv(tb);
+ 
++	/* TB3 device routers do not hold the host up, Apple hosts lose power */
++	if ((!tb_switch_is_usb4(tb->root_switch) &&
++	     device_for_each_child(&tb->root_switch->dev, NULL, tb_has_remote)) ||
++	    (tb_apple_host_rpm(tb->nhi) && tb_apple_usb_busy(tb->nhi))) {
++		/* A busy return alone cancels the autosuspend */
++		pm_runtime_mark_last_busy(tb->nhi->dev);
++		return -EBUSY;
++	}
++
+ 	mutex_lock(&tb->lock);
+ 	/*
+ 	 * The below call only releases DP resources to allow exiting and
+@@ -3320,9 +3336,49 @@ static const struct tb_cm_ops tb_cm_ops = {
+  * downstream ports and the NHI so that the device core will make sure
+  * NHI is resumed first before the rest.
+  */
++static bool tb_apple_is_trp(struct pci_dev *pdev)
++{
++	struct acpi_device *adev = ACPI_COMPANION(&pdev->dev);
++	const char *bid = adev ? acpi_device_bid(adev) : NULL;
++
++	return bid && !strncmp(bid, "TRP", 3);
++}
++
++/* Apple names the Ice Lake Thunderbolt root ports TRP0-3 and has no _DSD */
++static bool tb_apple_add_icl_links(struct tb_nhi *nhi)
++{
++	struct pci_dev *nhi_pdev = to_pci_dev(nhi->dev);
++	struct pci_dev *pdev;
++	bool ret = false;
++
++	list_for_each_entry(pdev, &nhi_pdev->bus->devices, bus_list) {
++		const struct device_link *link;
++
++		if (!pci_is_pcie(pdev) ||
++		    pci_pcie_type(pdev) != PCI_EXP_TYPE_ROOT_PORT ||
++		    !tb_apple_is_trp(pdev))
++			continue;
++
++		link = device_link_add(&pdev->dev, nhi->dev,
++				       DL_FLAG_AUTOREMOVE_SUPPLIER |
++				       DL_FLAG_PM_RUNTIME);
++		if (link) {
++			dev_dbg(nhi->dev, "created link from %s\n",
++				dev_name(&pdev->dev));
++			ret = true;
++		} else {
++			dev_warn(nhi->dev, "device link creation from %s failed\n",
++				 dev_name(&pdev->dev));
++		}
++	}
++
++	return ret;
++}
++
+ static bool tb_apple_add_links(struct tb_nhi *nhi)
+ {
+ 	struct pci_dev *nhi_pdev = to_pci_dev(nhi->dev);
++	u32 flags = DL_FLAG_AUTOREMOVE_SUPPLIER | DL_FLAG_PM_RUNTIME;
+ 	struct pci_dev *upstream, *pdev;
+ 	bool ret;
+ 
+@@ -3334,7 +3390,12 @@ static bool tb_apple_add_links(struct tb_nhi *nhi)
+ 	case PCI_DEVICE_ID_INTEL_CACTUS_RIDGE_4C:
+ 	case PCI_DEVICE_ID_INTEL_FALCON_RIDGE_2C_NHI:
+ 	case PCI_DEVICE_ID_INTEL_FALCON_RIDGE_4C_NHI:
++	case PCI_DEVICE_ID_INTEL_TITAN_RIDGE_2C_NHI:
++	case PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_NHI:
+ 		break;
++	case PCI_DEVICE_ID_INTEL_ICL_NHI0:
++	case PCI_DEVICE_ID_INTEL_ICL_NHI1:
++		return tb_apple_add_icl_links(nhi);
+ 	default:
+ 		return false;
+ 	}
+@@ -3351,6 +3412,10 @@ static bool tb_apple_add_links(struct tb_nhi *nhi)
+ 	if (!upstream)
+ 		return false;
+ 
++	/* Titan Ridge hotplug ports never suspend, links only order resume */
++	if (tb_apple_host_rpm(nhi))
++		flags &= ~DL_FLAG_PM_RUNTIME;
++
+ 	/*
+ 	 * For each hotplug downstream port, create add device link
+ 	 * back to NHI so that PCIe tunnels can be re-established after
+@@ -3366,9 +3431,7 @@ static bool tb_apple_add_links(struct tb_nhi *nhi)
+ 		    !pdev->is_pciehp)
+ 			continue;
+ 
+-		link = device_link_add(&pdev->dev, nhi->dev,
+-				       DL_FLAG_AUTOREMOVE_SUPPLIER |
+-				       DL_FLAG_PM_RUNTIME);
++		link = device_link_add(&pdev->dev, nhi->dev, flags);
+ 		if (link) {
+ 			dev_dbg(nhi->dev, "created link from %s\n",
+ 				dev_name(&pdev->dev));
+diff --git a/drivers/thunderbolt/tb.h b/drivers/thunderbolt/tb.h
+index ec9192b..49defcd 100644
+--- a/drivers/thunderbolt/tb.h
++++ b/drivers/thunderbolt/tb.h
+@@ -1520,6 +1520,11 @@ int tb_acpi_init(void);
+ void tb_acpi_exit(void);
+ int tb_acpi_power_on_retimers(struct tb_port *port);
+ int tb_acpi_power_off_retimers(struct tb_port *port);
++
++bool tb_apple_host_rpm(struct tb_nhi *nhi);
++bool tb_apple_usb_busy(struct tb_nhi *nhi);
++int tb_apple_power_init(void);
++void tb_apple_power_exit(void);
+ #else
+ static inline bool tb_acpi_add_links(struct tb_nhi *nhi) { return false; }
+ 
+@@ -1533,6 +1538,11 @@ static inline int tb_acpi_init(void) { return 0; }
+ static inline void tb_acpi_exit(void) { }
+ static inline int tb_acpi_power_on_retimers(struct tb_port *port) { return 0; }
+ static inline int tb_acpi_power_off_retimers(struct tb_port *port) { return 0; }
++
++static inline bool tb_apple_host_rpm(struct tb_nhi *nhi) { return false; }
++static inline bool tb_apple_usb_busy(struct tb_nhi *nhi) { return false; }
++static inline int tb_apple_power_init(void) { return 0; }
++static inline void tb_apple_power_exit(void) { }
+ #endif
+ 
+ #ifdef CONFIG_DEBUG_FS

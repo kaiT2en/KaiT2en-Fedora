@@ -32,7 +32,7 @@ case ${0##*/} in
 		refresh_repository
 		# install.sh appends the initramfs rebuild and records what was installed.
 		sudo bash "$repository/scripts/fedora/install.sh" --only \
-			install-dkms-modules.sh,install-kernel-source.sh,install-gpu-runtime-pm.sh,install-i915.sh,install-wireless.sh
+			install-dkms-modules.sh,install-kernel-source.sh,install-gpu-runtime-pm.sh,install-i915.sh,install-thunderbolt.sh,install-wireless.sh
 		printf 'Reboot to load the updated modules.\n'
 		;;
 	update-apps)

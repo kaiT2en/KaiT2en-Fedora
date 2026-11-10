@@ -18,7 +18,6 @@ MODULES=(
 	t2_trackpad_actuator
 	t2mfi_fastcharge
 	t2gmux
-	t2thunderbolt
 	t2smp
 	t2sbs
 	linux-apfs-rw
@@ -36,6 +35,13 @@ LEGACY_MODULES=(
 	t2vhci
 	t2bce-core
 	t2bce-dma
+)
+
+# Modules the repository no longer ships. They are removed for every kernel,
+# or DKMS would rebuild them for the next one. The patched thunderbolt driver
+# from install-thunderbolt.sh replaces t2thunderbolt.
+RETIRED_MODULES=(
+	t2thunderbolt
 )
 
 RETIRED_BCE_DKMS_PACKAGES=(
@@ -86,7 +92,6 @@ modules=(
 	t2_trackpad_actuator
 	t2mfi_fastcharge
 	t2gmux
-	t2thunderbolt
 	t2smp
 	t2sbs
 )
@@ -154,6 +159,21 @@ remove_legacy_dkms_modules() {
 				printf 'AUTOINSTALL="no"\n' >>"$conf"
 			fi
 		done
+	done
+}
+
+remove_retired_dkms_modules() {
+	local name version
+
+	for name in "${RETIRED_MODULES[@]}"; do
+		while IFS= read -r version; do
+			[[ -n "$version" ]] || continue
+			info "removing retired DKMS module $name/$version"
+			dkms remove --no-depmod -m "$name" -v "$version" --all ||
+				record_error "could not remove DKMS module $name/$version"
+		done < <(dkms status -m "$name" 2>/dev/null |
+			sed -n "s|^$name/\\([^,:]*\\)[,:].*|\\1|p" | sort -u)
+		rm -rf /usr/src/"$name"-*
 	done
 }
 
@@ -283,6 +303,7 @@ installer_exit_trap() {
 
 trap installer_exit_trap EXIT
 run_step "migrate keyboard backlight state" migrate_keyboard_backlight_state
+run_step "retire DKMS modules the repository no longer ships" remove_retired_dkms_modules
 # Do not remove working modules before their replacements have built.
 
 for module in "${MODULES[@]}"; do

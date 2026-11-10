@@ -76,6 +76,27 @@ if [[ "$model" == iMac* ]]; then
 	info "not forcing PCIe ASPM on $model"
 fi
 
+has_titan_ridge() {
+	local dev vendor device
+
+	for dev in /sys/bus/pci/devices/*; do
+		read -r vendor <"$dev/vendor" || continue
+		read -r device <"$dev/device" || continue
+		[[ $vendor == 0x8086 && ( $device == 0x15e8 || $device == 0x15eb ) ]] &&
+			return 0
+	done
+	return 1
+}
+if has_titan_ridge; then
+	kept_args=()
+	for arg in "${ADD_ARGS[@]}"; do
+		[[ "$arg" == pcie_ports=compat ]] || kept_args+=("$arg")
+	done
+	ADD_ARGS=("${kept_args[@]}")
+	REMOVE_ARGS+=("pcie_ports=compat")
+	info "leaving the PCIe port services on for the Titan Ridge controller"
+fi
+
 INITCALL_BLACKLIST="initcall_blacklist=cmos_init,magicmouse_driver_init"
 BLACKLIST_MODULES=(
 	acpi_tad
