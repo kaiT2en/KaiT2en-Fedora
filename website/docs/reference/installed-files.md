@@ -199,7 +199,6 @@ intel_iommu=on
 iommu=pt
 pcie_aspm=force
 pcie_aspm.policy=powersave
-pcie_ports=compat
 pci=noaer
 mem_sleep_default=deep
 initcall_blacklist=cmos_init,magicmouse_driver_init
@@ -209,10 +208,9 @@ module_blacklist=acpi_tad,applesmc,macsmc,hid_apple,hid_appletb_bl,hid_appletb_k
 On iMacs and the iMac Pro, `pcie_aspm=force` is left out, because their
 Ethernet controllers do not work with forced ASPM.
 
-On Macs with a Titan Ridge Thunderbolt controller, `pcie_ports=compat` is left
-out and removed from existing installs. The PCIe port services stay on, so
-hotplug and PCIe tunnels over Thunderbolt work, and the patched thunderbolt
-module keeps the controller's ports out of D3.
+`pcie_ports=compat` is no longer set and is removed from existing installs.
+The PCIe port services stay on, so hotplug and PCIe tunnels over Thunderbolt
+work and the Thunderbolt root ports can enter D3 at runtime.
 
 On every T2 Mac, the installer enables HuC firmware loading for the Intel GPU:
 

@@ -1,5 +1,5 @@
 From: Andre Eikmeyer <andre.eikmeyer@kait2en.org>
-Subject: [PATCH] thunderbolt: add Titan Ridge RTD3 on Apple T2 Macs
+Subject: [PATCH] thunderbolt: add Titan Ridge and Ice Lake RTD3 on Apple T2 Macs
 
 Titan Ridge on T2 Macs has no RTD3 under Linux, the idle controller stays
 powered. Its PCIe root ports keep their PHY on, which holds the package
@@ -12,6 +12,12 @@ sequence on them. Keep the bridges below in D0, let the host router
 runtime suspend while the controller is unused and leave the link
 controller alone on runtime suspend as macOS does.
 
+Ice Lake integrated routers are not USB4, and on Apple systems the
+firmware connection manager is not used, so the software connection
+manager never enables runtime PM for them and the NHI stays in D0. The
+firmware connection manager reports RTD3 for these routers, enable
+runtime PM for them in the software connection manager as well.
+
 This is an interim downstream solution so the change ships as an out of
 tree module. Upstream it belongs into a PCI quirk for these root ports
 that keeps them with pcieport.
@@ -22,9 +28,9 @@ Signed-off-by: Andre Eikmeyer <andre.eikmeyer@kait2en.org>
  drivers/thunderbolt/apple.c  | 645 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  drivers/thunderbolt/pci.c    |  11 +-
  drivers/thunderbolt/switch.c |   7 +
- drivers/thunderbolt/tb.c     |  73 +++++++-
- drivers/thunderbolt/tb.h     |  10 +
- 6 files changed, 741 insertions(+), 7 deletions(-)
+ drivers/thunderbolt/tb.c     |  78 +++++++++++++++-
+ drivers/thunderbolt/tb.h     |  27 +++++
+ 6 files changed, 763 insertions(+), 7 deletions(-)
 
 diff --git a/drivers/thunderbolt/Makefile b/drivers/thunderbolt/Makefile
 index beb054c..a3f0efc 100644
@@ -691,10 +697,10 @@ index 0000000..9152c44
 +	tb_apple_return_ports();
 +}
 diff --git a/drivers/thunderbolt/pci.c b/drivers/thunderbolt/pci.c
-index bbd186c..4e3b62c 100644
+index 8462ccb..abe17bb 100644
 --- a/drivers/thunderbolt/pci.c
 +++ b/drivers/thunderbolt/pci.c
-@@ -606,14 +606,23 @@ static int __init nhi_init(void)
+@@ -623,14 +623,23 @@ static int __init nhi_init(void)
  		return ret;
  
  	ret = pci_register_driver(&nhi_driver);
@@ -720,10 +726,10 @@ index bbd186c..4e3b62c 100644
  	tb_domain_exit();
  }
 diff --git a/drivers/thunderbolt/switch.c b/drivers/thunderbolt/switch.c
-index 217e18f..ae3163a 100644
+index cf571a7..32d3168 100644
 --- a/drivers/thunderbolt/switch.c
 +++ b/drivers/thunderbolt/switch.c
-@@ -3659,6 +3659,13 @@ void tb_switch_suspend(struct tb_switch *sw, bool runtime)
+@@ -3668,6 +3668,13 @@ void tb_switch_suspend(struct tb_switch *sw, bool runtime)
  	 */
  	tb_switch_clx_disable(sw);
  
@@ -738,7 +744,7 @@ index 217e18f..ae3163a 100644
  	if (err)
  		return;
 diff --git a/drivers/thunderbolt/tb.c b/drivers/thunderbolt/tb.c
-index 7e1f8c1..e6bdd97 100644
+index 4e5d057..d039d97 100644
 --- a/drivers/thunderbolt/tb.c
 +++ b/drivers/thunderbolt/tb.c
 @@ -10,6 +10,7 @@
@@ -749,19 +755,24 @@ index 7e1f8c1..e6bdd97 100644
  #include <linux/platform_data/x86/apple.h>
  
  #include "tb.h"
-@@ -3023,8 +3024,9 @@ static int tb_start(struct tb *tb, bool reset)
+@@ -3044,8 +3045,14 @@ static int tb_start(struct tb *tb, bool reset)
  	 * implement the necessary router operations.
  	 */
  	tb->root_switch->no_nvm_upgrade = !tb_switch_is_usb4(tb->root_switch);
 -	/* All USB4 routers support runtime PM */
 -	tb->root_switch->rpm = tb_switch_is_usb4(tb->root_switch);
-+	/* USB4 routers and Apple T2 Titan Ridge hosts support runtime PM */
++	/*
++	 * USB4 routers, Ice Lake integrated routers (the firmware connection
++	 * manager reports RTD3 for them too) and Apple T2 Titan Ridge hosts
++	 * support runtime PM.
++	 */
 +	tb->root_switch->rpm = tb_switch_is_usb4(tb->root_switch) ||
++			       tb_switch_is_ice_lake(tb->root_switch) ||
 +			       tb_apple_host_rpm(tb->nhi);
  
  	ret = tb_switch_configure(tb->root_switch);
  	if (ret) {
-@@ -3240,10 +3242,24 @@ static void tb_complete(struct tb *tb)
+@@ -3261,10 +3268,24 @@ static void tb_complete(struct tb *tb)
  	}
  }
  
@@ -786,7 +797,7 @@ index 7e1f8c1..e6bdd97 100644
  	mutex_lock(&tb->lock);
  	/*
  	 * The below call only releases DP resources to allow exiting and
-@@ -3320,9 +3336,49 @@ static const struct tb_cm_ops tb_cm_ops = {
+@@ -3341,9 +3362,49 @@ static const struct tb_cm_ops tb_cm_ops = {
   * downstream ports and the NHI so that the device core will make sure
   * NHI is resumed first before the rest.
   */
@@ -836,7 +847,7 @@ index 7e1f8c1..e6bdd97 100644
  	struct pci_dev *upstream, *pdev;
  	bool ret;
  
-@@ -3334,7 +3390,12 @@ static bool tb_apple_add_links(struct tb_nhi *nhi)
+@@ -3355,7 +3416,12 @@ static bool tb_apple_add_links(struct tb_nhi *nhi)
  	case PCI_DEVICE_ID_INTEL_CACTUS_RIDGE_4C:
  	case PCI_DEVICE_ID_INTEL_FALCON_RIDGE_2C_NHI:
  	case PCI_DEVICE_ID_INTEL_FALCON_RIDGE_4C_NHI:
@@ -849,7 +860,7 @@ index 7e1f8c1..e6bdd97 100644
  	default:
  		return false;
  	}
-@@ -3351,6 +3412,10 @@ static bool tb_apple_add_links(struct tb_nhi *nhi)
+@@ -3372,6 +3438,10 @@ static bool tb_apple_add_links(struct tb_nhi *nhi)
  	if (!upstream)
  		return false;
  
@@ -860,7 +871,7 @@ index 7e1f8c1..e6bdd97 100644
  	/*
  	 * For each hotplug downstream port, create add device link
  	 * back to NHI so that PCIe tunnels can be re-established after
-@@ -3366,9 +3431,7 @@ static bool tb_apple_add_links(struct tb_nhi *nhi)
+@@ -3387,9 +3457,7 @@ static bool tb_apple_add_links(struct tb_nhi *nhi)
  		    !pdev->is_pciehp)
  			continue;
  
@@ -872,10 +883,34 @@ index 7e1f8c1..e6bdd97 100644
  			dev_dbg(nhi->dev, "created link from %s\n",
  				dev_name(&pdev->dev));
 diff --git a/drivers/thunderbolt/tb.h b/drivers/thunderbolt/tb.h
-index ec9192b..49defcd 100644
+index 4373336..fff58e4 100644
 --- a/drivers/thunderbolt/tb.h
 +++ b/drivers/thunderbolt/tb.h
-@@ -1520,6 +1520,11 @@ int tb_acpi_init(void);
+@@ -1314,6 +1314,23 @@ static inline unsigned int usb4_switch_version(const struct tb_switch *sw)
+ 	return FIELD_GET(USB4_VERSION_MAJOR_MASK, sw->config.thunderbolt_version);
+ }
+ 
++/**
++ * tb_switch_is_ice_lake() - Is the switch the Ice Lake integrated router
++ * @sw: Router to check
++ */
++static inline bool tb_switch_is_ice_lake(const struct tb_switch *sw)
++{
++	if (sw->config.vendor_id != PCI_VENDOR_ID_INTEL)
++		return false;
++
++	switch (sw->config.device_id) {
++	case PCI_DEVICE_ID_INTEL_ICL_NHI0:
++	case PCI_DEVICE_ID_INTEL_ICL_NHI1:
++		return true;
++	}
++	return false;
++}
++
+ /**
+  * tb_switch_is_usb4() - Is the switch USB4 compliant
+  * @sw: Switch to check
+@@ -1521,6 +1538,11 @@ int tb_acpi_init(void);
  void tb_acpi_exit(void);
  int tb_acpi_power_on_retimers(struct tb_port *port);
  int tb_acpi_power_off_retimers(struct tb_port *port);
@@ -887,7 +922,7 @@ index ec9192b..49defcd 100644
  #else
  static inline bool tb_acpi_add_links(struct tb_nhi *nhi) { return false; }
  
-@@ -1533,6 +1538,11 @@ static inline int tb_acpi_init(void) { return 0; }
+@@ -1534,6 +1556,11 @@ static inline int tb_acpi_init(void) { return 0; }
  static inline void tb_acpi_exit(void) { }
  static inline int tb_acpi_power_on_retimers(struct tb_port *port) { return 0; }
  static inline int tb_acpi_power_off_retimers(struct tb_port *port) { return 0; }

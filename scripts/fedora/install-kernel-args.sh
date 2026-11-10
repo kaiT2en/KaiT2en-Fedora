@@ -44,10 +44,12 @@ repair_empty_grub_cmdline() {
 
 # Arguments older installs set that current ones leave out. With the runtime
 # wireless patches the BCM4377 and BCM4364 pass S3 with asynchronous suspend
-# and resume.
+# and resume. The Thunderbolt runtime PM needs the PCIe port services, so
+# pcie_ports=compat goes as well.
 REMOVE_ARGS=(
 	"pm_async=off"
 	"brcmfmac.p2pon=0"
+	"pcie_ports=compat"
 )
 
 ADD_ARGS=(
@@ -57,7 +59,6 @@ ADD_ARGS=(
 	"iommu=pt"
 	"pcie_aspm=force"
 	"pcie_aspm.policy=powersave"
-	"pcie_ports=compat"
 	"pci=noaer"
 	"mem_sleep_default=deep"
 )
@@ -74,27 +75,6 @@ if [[ "$model" == iMac* ]]; then
 	done
 	ADD_ARGS=("${kept_args[@]}")
 	info "not forcing PCIe ASPM on $model"
-fi
-
-has_titan_ridge() {
-	local dev vendor device
-
-	for dev in /sys/bus/pci/devices/*; do
-		read -r vendor <"$dev/vendor" || continue
-		read -r device <"$dev/device" || continue
-		[[ $vendor == 0x8086 && ( $device == 0x15e8 || $device == 0x15eb ) ]] &&
-			return 0
-	done
-	return 1
-}
-if has_titan_ridge; then
-	kept_args=()
-	for arg in "${ADD_ARGS[@]}"; do
-		[[ "$arg" == pcie_ports=compat ]] || kept_args+=("$arg")
-	done
-	ADD_ARGS=("${kept_args[@]}")
-	REMOVE_ARGS+=("pcie_ports=compat")
-	info "leaving the PCIe port services on for the Titan Ridge controller"
 fi
 
 INITCALL_BLACKLIST="initcall_blacklist=cmos_init,magicmouse_driver_init"
