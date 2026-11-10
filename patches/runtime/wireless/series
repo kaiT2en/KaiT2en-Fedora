@@ -22,3 +22,4 @@
 0022-wifi-brcmfmac-msgbuf-send-the-flowring-delete-without-waiting-for-tx-status.patch
 0023-wifi-brcmfmac-pcie-skip-the-host-ready-doorbell-at-init-once-it-is-a-capability.patch
 0024-Bluetooth-hci-bcm4377-treat-only-negative-hci-register-dev-returns-as-errors.patch
+0025-wifi-brcmfmac-pcie-make-the-antenna-SKU-check-optional-on-BCM4364-3.patch
