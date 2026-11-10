@@ -21,9 +21,11 @@ UCLK switches during scanout reach a level the SMU cannot switch into.
 
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -70,6 +70,7 @@
+@@ -77,6 +77,7 @@
  #include "ivsrcid/ivsrcid_vislands30.h"
  
  #include <linux/backlight.h>
@@ -31,7 +33,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  #include <linux/module.h>
  #include <linux/moduleparam.h>
  #include <linux/types.h>
-@@ -2221,7 +2222,16 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
+@@ -641,7 +642,16 @@ static int amdgpu_dm_init(struct amdgpu_
  		goto error;
  	}
  

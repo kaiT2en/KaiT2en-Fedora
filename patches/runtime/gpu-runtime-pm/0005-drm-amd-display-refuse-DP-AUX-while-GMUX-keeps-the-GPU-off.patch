@@ -5,6 +5,7 @@ fwupd reads /dev/drm_dp_aux* while the GPU is runtime suspended. The AUX
 device holds no runtime PM reference, so the transfer touched registers of
 the powered off GPU and hung the PEG link on MacBookPro16,1.
 
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.c
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.c
 @@ -24,6 +24,7 @@
@@ -15,7 +16,7 @@ the powered off GPU and hung the PEG link on MacBookPro16,1.
  #include <linux/vmalloc.h>
  #include <drm/display/drm_dp_helper.h>
  #include <drm/display/drm_dp_mst_helper.h>
-@@ -68,6 +69,20 @@
+@@ -111,6 +112,20 @@ STATIC_IFN_KUNIT ssize_t dm_dp_aux_trans
  	if (WARN_ON(msg->size > 16))
  		return -E2BIG;
  
@@ -36,7 +37,7 @@ the powered off GPU and hung the PEG link on MacBookPro16,1.
  	payload.address = msg->address;
  	payload.data = msg->buffer;
  	payload.length = msg->size;
-@@ -87,13 +102,13 @@
+@@ -126,13 +141,13 @@ STATIC_IFN_KUNIT ssize_t dm_dp_aux_trans
  	result = dc_link_aux_transfer_raw(TO_DM_AUX(aux)->ddc_service, &payload,
  				      &operation_result);
  

@@ -16,10 +16,9 @@ Signed-off-by: Atharva Tiwari <atharvatiwarilinuxdev@gmail.com>
  1 file changed, 3 insertions(+)
 
 diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
-index f8ca5eb9a..78b4240b8 100644
 --- a/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
 +++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
-@@ -2576,6 +2576,9 @@ static bool navi10_need_umc_cdr_workaround(struct smu_context *smu)
+@@ -2640,6 +2640,9 @@ static bool navi10_need_umc_cdr_workarou
  	if (!smu_cmn_feature_is_enabled(smu, SMU_FEATURE_DPM_UCLK_BIT))
  		return false;
  
@@ -29,6 +28,3 @@ index f8ca5eb9a..78b4240b8 100644
  	if (amdgpu_ip_version(adev, MP1_HWIP, 0) == IP_VERSION(11, 0, 0) ||
  	    amdgpu_ip_version(adev, MP1_HWIP, 0) == IP_VERSION(11, 0, 5))
  		return true;
--- 
-2.55.0
-

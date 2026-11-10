@@ -8,9 +8,10 @@ a hotplug event and the following connector probe runtime resumes the
 GPU that GMUX had powered off. Only create the attribute when the link
 has a panel.
 
---- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-+++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -8177,6 +8177,14 @@
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_backlight.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_backlight.c
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_backlight.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_backlight.c
+@@ -761,6 +761,14 @@ amdgpu_dm_should_create_sysfs(struct amd
  	if (amdgpu_dm_connector->base.connector_type != DRM_MODE_CONNECTOR_eDP)
  		return false;
  
@@ -19,9 +20,9 @@ has a panel.
 +	 * GPU, has no power to save. Writing the attribute would still send a
 +	 * hotplug event that runtime resumes the GPU.
 +	 */
-+	if (!amdgpu_dm_connector->dc_link->edp_sink_present)
++	if (!link->edp_sink_present)
 +		return false;
 +
- 	/* check for OLED panels */
- 	if (amdgpu_dm_connector->bl_idx >= 0) {
- 		struct drm_device *drm = amdgpu_dm_connector->base.dev;
+ 	if (link->panel_type != PANEL_TYPE_LCD && !link->panel_config.cacp.cacp_supported)
+ 		return false;
+ 

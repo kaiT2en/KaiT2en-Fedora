@@ -18,9 +18,11 @@ Tested on three MacBookPro16,1, two with the 5500M and one with the 5300M.
 Cc: stable@vger.kernel.org
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
+
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
 --- a/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
 +++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
-@@ -468,6 +468,60 @@ static int navi10_store_powerplay_table(struct smu_context *smu)
+@@ -470,6 +470,60 @@ static int navi10_store_powerplay_table(
  	return 0;
  }
  
@@ -81,7 +83,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  static int navi10_setup_pptable(struct smu_context *smu)
  {
  	int ret = 0;
-@@ -480,6 +534,8 @@ static int navi10_setup_pptable(struct smu_context *smu)
+@@ -482,6 +536,8 @@ static int navi10_setup_pptable(struct s
  	if (ret)
  		return ret;
  

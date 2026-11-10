@@ -37,10 +37,9 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  5 files changed, 91 insertions(+), 20 deletions(-)
 
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-index 7b09410..cc2e2e2 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-@@ -1402,6 +1402,8 @@ int amdgpu_device_mode1_reset(struct amdgpu_device *adev);
+@@ -1194,6 +1194,8 @@ int amdgpu_device_mode1_reset(struct amd
  int amdgpu_device_link_reset(struct amdgpu_device *adev);
  bool amdgpu_device_supports_atpx(struct amdgpu_device *adev);
  bool amdgpu_device_supports_px(struct amdgpu_device *adev);
@@ -50,7 +49,6 @@ index 7b09410..cc2e2e2 100644
  bool amdgpu_device_supports_smart_shift(struct amdgpu_device *adev);
  int amdgpu_device_supports_baco(struct amdgpu_device *adev);
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
-index e5f26e5..2175743 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
 @@ -34,6 +34,7 @@
@@ -61,10 +59,10 @@ index e5f26e5..2175743 100644
  #include <linux/pci-p2pdma.h>
  #include <linux/apple-gmux.h>
  #include <linux/nospec.h>
-@@ -568,6 +569,45 @@ bool amdgpu_device_supports_px(struct amdgpu_device *adev)
+@@ -570,6 +571,45 @@ bool amdgpu_device_supports_px(struct am
  	return false;
  }
-
+ 
 +static const struct dmi_system_id amdgpu_gmux_runpm_dmi_table[] = {
 +	{
 +		.matches = {
@@ -107,7 +105,7 @@ index e5f26e5..2175743 100644
  /**
   * amdgpu_device_supports_boco - Is the device a dGPU with ACPI power resources
   *
-@@ -631,6 +661,9 @@ void amdgpu_device_detect_runtime_pm_mode(struct amdgpu_device *adev)
+@@ -640,6 +680,9 @@ void amdgpu_device_detect_runtime_pm_mod
  			/* enable PX as runtime mode */
  			adev->pm.rpm_mode = AMDGPU_RUNPM_PX;
  			dev_info(adev->dev, "Using ATPX for runtime pm\n");
@@ -117,7 +115,7 @@ index e5f26e5..2175743 100644
  		} else if (amdgpu_device_supports_boco(adev)) {
  			/* enable boco as runtime mode */
  			adev->pm.rpm_mode = AMDGPU_RUNPM_BOCO;
-@@ -3711,7 +3744,7 @@ int amdgpu_device_init(struct amdgpu_device *adev,
+@@ -3767,7 +3810,7 @@ int amdgpu_device_init(struct amdgpu_dev
  {
  	struct pci_dev *pdev = adev->pdev;
  	int r, i;
@@ -126,7 +124,7 @@ index e5f26e5..2175743 100644
  	u32 max_MBps;
  	int tmp;
  
-@@ -4214,10 +4247,11 @@ fence_driver_init:
+@@ -4202,12 +4245,13 @@ fence_driver_init:
  		vga_client_register(adev->pdev, amdgpu_device_vga_set_decode);
  
  	px = amdgpu_device_supports_px(adev);
@@ -140,16 +138,18 @@ index e5f26e5..2175743 100644
 -	if (px)
 +	if (px || gmux)
  		vga_switcheroo_init_domain_pm_ops(adev->dev, &adev->vga_pm_domain);
-@@ -4344,7 +4378,7 @@ void amdgpu_device_fini_hw(struct amdgpu_device *adev)
+ 
+ 	adev->pm_nb.notifier_call = amdgpu_device_pm_notifier;
+@@ -4336,7 +4380,7 @@ void amdgpu_device_fini_hw(struct amdgpu
  void amdgpu_device_fini_sw(struct amdgpu_device *adev)
  {
- 	int i, idx;
+ 	int i;
 -	bool px;
 +	bool gmux, px;
  
  	amdgpu_device_ip_fini(adev);
  	amdgpu_fence_driver_sw_fini(adev);
-@@ -4375,11 +4409,12 @@ void amdgpu_device_fini_sw(struct amdgpu_device *adev)
+@@ -4367,11 +4411,12 @@ void amdgpu_device_fini_sw(struct amdgpu
  	adev->xcp_mgr = NULL;
  
  	px = amdgpu_device_supports_px(adev);
@@ -164,10 +164,9 @@ index e5f26e5..2175743 100644
  
  	if ((adev->pdev->class >> 8) == PCI_CLASS_DISPLAY_VGA)
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-index 4c0c77e..603ff39 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-@@ -2485,11 +2485,12 @@ retry_init:
+@@ -2494,11 +2494,12 @@ retry_init:
  		DRM_ERROR("Creating debugfs files failed (%d).\n", ret);
  
  	if (adev->pm.rpm_mode != AMDGPU_RUNPM_NONE) {
@@ -183,7 +182,7 @@ index 4c0c77e..603ff39 100644
  			dev_pm_set_driver_flags(ddev->dev, DPM_FLAG_SMART_PREPARE |
  						DPM_FLAG_SMART_SUSPEND |
  						DPM_FLAG_MAY_SKIP_RESUME);
-@@ -2598,7 +2599,9 @@ static int amdgpu_pmops_prepare(struct device *dev)
+@@ -2610,7 +2611,9 @@ static int amdgpu_pmops_prepare(struct d
  	/* Return a positive number here so
  	 * DPM_FLAG_SMART_SUSPEND works properly
  	 */
@@ -194,7 +193,7 @@ index 4c0c77e..603ff39 100644
  		return 1;
  
  	/* if we will not support s3 or s2i for the device
-@@ -2860,35 +2863,40 @@ static int amdgpu_pmops_runtime_suspend(struct device *dev)
+@@ -2881,6 +2884,7 @@ static int amdgpu_pmops_runtime_suspend(
  	}
  
  	adev->in_runpm = true;
@@ -202,10 +201,7 @@ index 4c0c77e..603ff39 100644
  	if (adev->pm.rpm_mode == AMDGPU_RUNPM_PX)
  		drm_dev->switch_power_state = DRM_SWITCH_POWER_CHANGING;
  
- 	/*
- 	 * By setting mp1_state as PP_MP1_STATE_UNLOAD, MP1 will do some
- 	 * proper cleanups and put itself into a state ready for PNP. That
- 	 * can address some random resuming failure observed on BOCO capable
+@@ -2891,7 +2895,8 @@ static int amdgpu_pmops_runtime_suspend(
  	 * platforms.
  	 * TODO: this may be also needed for PX capable platform.
  	 */
@@ -215,8 +211,7 @@ index 4c0c77e..603ff39 100644
  		adev->mp1_state = PP_MP1_STATE_UNLOAD;
  
  	ret = amdgpu_device_prepare(drm_dev);
- 	if (ret)
- 		return ret;
+@@ -2900,16 +2905,19 @@ static int amdgpu_pmops_runtime_suspend(
  	ret = amdgpu_device_suspend(drm_dev, false);
  	if (ret) {
  		adev->in_runpm = false;
@@ -240,14 +235,14 @@ index 4c0c77e..603ff39 100644
  		 * PCI core handles it for _PR3.
  		 */
  		amdgpu_device_cache_pci_state(pdev);
-@@ -2922,10 +2930,12 @@ static int amdgpu_pmops_runtime_resume(struct device *dev)
+@@ -2956,10 +2964,12 @@ static int amdgpu_pmops_runtime_resume(s
  	if (!pci_device_is_present(adev->pdev))
  		adev->no_hw_access = true;
  
 -	if (adev->pm.rpm_mode == AMDGPU_RUNPM_PX) {
+-		drm_dev->switch_power_state = DRM_SWITCH_POWER_CHANGING;
 +	if (adev->pm.rpm_mode == AMDGPU_RUNPM_PX ||
 +	    adev->pm.rpm_mode == AMDGPU_RUNPM_GMUX) {
--		drm_dev->switch_power_state = DRM_SWITCH_POWER_CHANGING;
 +		if (adev->pm.rpm_mode == AMDGPU_RUNPM_PX)
 +			drm_dev->switch_power_state = DRM_SWITCH_POWER_CHANGING;
  
@@ -256,7 +251,7 @@ index 4c0c77e..603ff39 100644
  		 * PCI core handles it for _PR3.
  		 */
  		pci_set_power_state(pdev, PCI_D0);
-@@ -2945,10 +2955,12 @@ static int amdgpu_pmops_runtime_resume(struct device *dev)
+@@ -2979,12 +2989,14 @@ static int amdgpu_pmops_runtime_resume(s
  	}
  	ret = amdgpu_device_resume(drm_dev, false);
  	if (ret) {
@@ -271,10 +266,12 @@ index 4c0c77e..603ff39 100644
 +	if (adev->pm.rpm_mode == AMDGPU_RUNPM_PX ||
 +	    adev->pm.rpm_mode == AMDGPU_RUNPM_GMUX)
  		drm_dev->switch_power_state = DRM_SWITCH_POWER_ON;
+ 
+ 	amdgpu_restore_umd_profile_pstate_after_runpm(adev);
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -75,6 +75,7 @@
+@@ -81,6 +81,7 @@
  #include <linux/moduleparam.h>
  #include <linux/types.h>
  #include <linux/pm_runtime.h>
@@ -282,7 +279,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
  #include <linux/pci.h>
  #include <linux/power_supply.h>
  #include <linux/firmware.h>
-@@ -2009,6 +2010,10 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
+@@ -623,6 +624,10 @@ static int amdgpu_dm_init(struct amdgpu_
  	else
  		init_data.bb_from_dmub = NULL;
  
@@ -293,7 +290,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
  	/* Display Core create. */
  	adev->dm.dc = dc_create(&init_data);
  
-@@ -5718,6 +5723,15 @@ static int amdgpu_dm_initialize_drm_device(struct amdgpu_device *adev)
+@@ -2545,6 +2550,15 @@ static int amdgpu_dm_initialize_drm_devi
  			dm->hpd_rx_offload_wq[aconnector->base.index].aconnector =
  				aconnector;
  
@@ -310,7 +307,6 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
  			drm_err(adev_to_drm(adev), "KMS: Failed to detect connector\n");
  
 diff --git a/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h b/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h
-index aa3f427..d76968f 100644
 --- a/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h
 +++ b/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h
 @@ -48,6 +48,7 @@ enum amdgpu_int_thermal_type {
@@ -321,5 +317,3 @@ index aa3f427..d76968f 100644
  	AMDGPU_RUNPM_BOCO,
  	AMDGPU_RUNPM_BACO,
  	AMDGPU_RUNPM_BAMACO,
--- 
-2.55.0

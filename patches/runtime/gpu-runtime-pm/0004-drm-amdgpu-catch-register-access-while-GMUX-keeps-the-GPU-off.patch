@@ -4,9 +4,22 @@ Subject: [PATCH] drm/amdgpu: catch register access while GMUX keeps the GPU off
 Like PANIC_ON_POWEROFF_REGISTER_ACCESS in AMDRadeonX6000, skip and report
 any register access after the GPU was runtime suspended for GMUX power-off.
 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+@@ -881,6 +881,8 @@ struct amdgpu_device {
+ 	/* enable runtime pm on the device */
+ 	bool                            in_runpm;
+ 	bool                            has_pr3;
++	/* GMUX has cut power, any register access would hang the PEG link */
++	bool                            gmux_off;
+ 
+ 	bool                            ucode_sysfs_en;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
-@@ -872,6 +872,16 @@
+@@ -946,6 +946,16 @@ bool amdgpu_device_skip_hw_access(struct
  	if (adev->no_hw_access)
  		return true;
  
@@ -23,9 +36,10 @@ any register access after the GPU was runtime suspended for GMUX power-off.
  #ifdef CONFIG_LOCKDEP
  	/*
  	 * This is a bit complicated to understand, so worth a comment. What we assert
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-@@ -2911,6 +2911,9 @@
+@@ -2932,6 +2932,9 @@ static int amdgpu_pmops_runtime_suspend(
  		amdgpu_device_baco_enter(adev);
  	}
  
@@ -35,7 +49,7 @@ any register access after the GPU was runtime suspended for GMUX power-off.
  	dev_dbg(&pdev->dev, "asic/device is runtime suspended\n");
  
  	return 0;
-@@ -2939,6 +2942,8 @@
+@@ -2960,6 +2963,8 @@ static int amdgpu_pmops_runtime_resume(s
  	if (adev->pm.rpm_mode == AMDGPU_RUNPM_NONE)
  		return -EINVAL;
  
@@ -44,20 +58,10 @@ any register access after the GPU was runtime suspended for GMUX power-off.
  	/* Avoids registers access if device is physically gone */
  	if (!pci_device_is_present(adev->pdev))
  		adev->no_hw_access = true;
---- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-+++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-@@ -1081,6 +1081,8 @@
- 	/* enable runtime pm on the device */
- 	bool                            in_runpm;
- 	bool                            has_pr3;
-+	/* GMUX has cut power, any register access would hang the PEG link */
-+	bool                            gmux_off;
- 
- 	bool                            ucode_sysfs_en;
- 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_reg_access.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_reg_access.c
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_reg_access.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_reg_access.c
-@@ -594,6 +594,9 @@
+@@ -594,6 +594,9 @@ u32 amdgpu_device_indirect_rreg(struct a
  	void __iomem *pcie_data_offset;
  	u32 r;
  
@@ -67,7 +71,7 @@ any register access after the GPU was runtime suspended for GMUX power-off.
  	pcie_index = adev->nbio.funcs->get_pcie_index_offset(adev);
  	pcie_data = adev->nbio.funcs->get_pcie_data_offset(adev);
  
-@@ -677,6 +680,9 @@
+@@ -677,6 +680,9 @@ u64 amdgpu_device_indirect_rreg64(struct
  	void __iomem *pcie_data_offset;
  	u64 r;
  
@@ -77,7 +81,7 @@ any register access after the GPU was runtime suspended for GMUX power-off.
  	pcie_index = adev->nbio.funcs->get_pcie_index_offset(adev);
  	pcie_data = adev->nbio.funcs->get_pcie_data_offset(adev);
  
-@@ -706,6 +712,9 @@
+@@ -706,6 +712,9 @@ u64 amdgpu_device_indirect_rreg64_ext(st
  	void __iomem *pcie_data_offset;
  	u64 r;
  
@@ -87,7 +91,7 @@ any register access after the GPU was runtime suspended for GMUX power-off.
  	pcie_index = adev->nbio.funcs->get_pcie_index_offset(adev);
  	pcie_data = adev->nbio.funcs->get_pcie_data_offset(adev);
  	if ((reg_addr >> 32) && (adev->nbio.funcs->get_pcie_index_hi_offset))
-@@ -762,6 +771,9 @@
+@@ -762,6 +771,9 @@ void amdgpu_device_indirect_wreg(struct
  	void __iomem *pcie_index_offset;
  	void __iomem *pcie_data_offset;
  
@@ -97,7 +101,7 @@ any register access after the GPU was runtime suspended for GMUX power-off.
  	pcie_index = adev->nbio.funcs->get_pcie_index_offset(adev);
  	pcie_data = adev->nbio.funcs->get_pcie_data_offset(adev);
  
-@@ -784,6 +796,9 @@
+@@ -784,6 +796,9 @@ void amdgpu_device_indirect_wreg_ext(str
  	void __iomem *pcie_index_hi_offset;
  	void __iomem *pcie_data_offset;
  
@@ -107,7 +111,7 @@ any register access after the GPU was runtime suspended for GMUX power-off.
  	pcie_index = adev->nbio.funcs->get_pcie_index_offset(adev);
  	pcie_data = adev->nbio.funcs->get_pcie_data_offset(adev);
  	if ((reg_addr >> 32) && (adev->nbio.funcs->get_pcie_index_hi_offset))
-@@ -832,6 +847,9 @@
+@@ -832,6 +847,9 @@ void amdgpu_device_indirect_wreg64(struc
  	void __iomem *pcie_index_offset;
  	void __iomem *pcie_data_offset;
  
@@ -117,7 +121,7 @@ any register access after the GPU was runtime suspended for GMUX power-off.
  	pcie_index = adev->nbio.funcs->get_pcie_index_offset(adev);
  	pcie_data = adev->nbio.funcs->get_pcie_data_offset(adev);
  
-@@ -861,6 +879,9 @@
+@@ -861,6 +879,9 @@ void amdgpu_device_indirect_wreg64_ext(s
  	void __iomem *pcie_index_hi_offset;
  	void __iomem *pcie_data_offset;
  

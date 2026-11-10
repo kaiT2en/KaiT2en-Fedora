@@ -8,6 +8,7 @@ reads for seconds. A runtime resume racing with that left the SMU
 firmware unable to start on MacBookPro15,1 and the GPU in runtime PM
 error state. Record the power source only and let the resume apply it.
 
+diff --git a/drivers/gpu/drm/amd/pm/amdgpu_dpm.c b/drivers/gpu/drm/amd/pm/amdgpu_dpm.c
 --- a/drivers/gpu/drm/amd/pm/amdgpu_dpm.c
 +++ b/drivers/gpu/drm/amd/pm/amdgpu_dpm.c
 @@ -31,6 +31,7 @@
@@ -18,7 +19,7 @@ error state. Record the power source only and let the resume apply it.
  #include "amdgpu_smu.h"
  
  #define amdgpu_dpm_notify_ac_dc(adev) \
-@@ -498,21 +499,35 @@
+@@ -498,21 +499,35 @@ int amdgpu_dpm_smu_i2c_bus_access(struct
  
  void amdgpu_pm_acpi_event_handler(struct amdgpu_device *adev)
  {
