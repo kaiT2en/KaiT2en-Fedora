@@ -24,3 +24,4 @@
 0024-Bluetooth-hci-bcm4377-treat-only-negative-hci-register-dev-returns-as-errors.patch
 0025-wifi-brcmfmac-pcie-make-the-antenna-SKU-check-optional-on-BCM4364-3.patch
 0026-Bluetooth-hci-bcm4377-keep-ASPM-off-only-while-the-firmware-boots.patch
+0027-wifi-brcmfmac-pcie-support-inband-device-wake-and-deep-sleep.patch
