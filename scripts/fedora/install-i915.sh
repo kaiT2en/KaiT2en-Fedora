@@ -202,6 +202,13 @@ done
 
 i915_dir="$kernel_tree/drivers/gpu/drm/i915"
 display_helper_dir="$kernel_tree/drivers/gpu/drm/display"
+kunit_line='obj-$(CONFIG_DRM_I915_KUNIT_TEST) += display/tests/'
+if grep -qxF "$kunit_line" "$i915_dir/Makefile"; then
+	info "disabling the i915 KUnit tests for the external build"
+	sed -i 's|^obj-\$(CONFIG_DRM_I915_KUNIT_TEST) += display/tests/$|obj-n += display/tests/|' \
+		"$i915_dir/Makefile"
+fi
+
 rewrite_trace_path "$i915_dir/i915_trace.h" ../../drivers/gpu/drm/i915 .
 rewrite_trace_path "$i915_dir/intel_uncore_trace.h" ../../drivers/gpu/drm/i915 .
 rewrite_trace_path "$i915_dir/display/intel_display_trace.h" \
