@@ -19,14 +19,11 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/commonring.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/commonring.c
-@@ -28,6 +28,19 @@
+@@ -28,6 +28,16 @@
  }
  
  
-+/*
-+ * cr_wake runs before a writer takes the ring lock and cr_idle after it
-+ * releases it. Both may sleep, the writers run in process context.
-+ */
++/* Both run outside the ring lock and may sleep */
 +void brcmf_commonring_register_pm_cb(struct brcmf_commonring *commonring,
 +				     void (*cr_wake)(void *ctx),
 +				     void (*cr_idle)(void *ctx))
@@ -39,7 +36,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  void brcmf_commonring_config(struct brcmf_commonring *commonring, u16 depth,
  			     u16 item_len, void *buf_addr)
  {
-@@ -53,6 +66,8 @@
+@@ -53,6 +63,8 @@
  {
  	unsigned long flags;
  
@@ -48,7 +45,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  	spin_lock_irqsave(&commonring->lock, flags);
  	commonring->flags = flags;
  }
-@@ -62,6 +77,8 @@
+@@ -62,6 +74,8 @@
  		__releases(&commonring->lock)
  {
  	spin_unlock_irqrestore(&commonring->lock, commonring->flags);
@@ -93,48 +90,44 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  #define BRCMF_HOSTCAP_H2D_DAR			0x10000
  
  #define BRCMF_PCIE_FLAGS_HTOD_SPLIT		0x4000
-@@ -274,6 +276,12 @@
+@@ -274,6 +276,11 @@
  #define BRCMF_H2D_HOST_DS_ACK			0x00000002
  #define BRCMF_H2D_HOST_D0_INFORM_IN_USE		0x00000008
  #define BRCMF_H2D_HOST_D0_INFORM		0x00000010
 +#define BRCMF_H2D_HOST_DW_DEASSERT		0x00000020
 +#define BRCMF_H2D_HOST_DW_ASSERT		0x00000040
 +
-+/* Time the host stays idle before it allows deep sleep again */
 +#define BRCMF_PCIE_DS_IDLE_MS			200
 +#define BRCMF_PCIE_DS_EXIT_TIMEOUT		msecs_to_jiffies(500)
  
  #define BRCMF_PCIE_MBDATA_TIMEOUT		msecs_to_jiffies(2000)
  
-@@ -338,6 +346,20 @@
+@@ -338,6 +345,15 @@
  	bool valid;
  };
  
-+/*
-+ * Inband device wake. The firmware asks for deep sleep while device wake
-+ * is deasserted, the host acknowledges it when it has nothing to send and
-+ * asserts device wake before it uses the rings again.
-+ */
 +enum brcmf_pcie_ds_state {
-+	BRCMF_PCIE_DS_NONE,		/* not supported by the firmware */
-+	BRCMF_PCIE_DS_ACTIVE,		/* device wake deasserted */
-+	BRCMF_PCIE_DS_SLEEP_PEND,	/* deep sleep requested, host busy */
-+	BRCMF_PCIE_DS_SLEEP,		/* deep sleep acknowledged */
-+	BRCMF_PCIE_DS_EXIT_WAIT,	/* device wake asserted, exit pending */
-+	BRCMF_PCIE_DS_WAKE,		/* device wake asserted */
++	BRCMF_PCIE_DS_NONE,
++	BRCMF_PCIE_DS_ALLOWED,
++	BRCMF_PCIE_DS_SLEEP_PEND,
++	BRCMF_PCIE_DS_SLEEP,
++	BRCMF_PCIE_DS_EXIT_WAIT,
++	BRCMF_PCIE_DS_AWAKE,
 +};
 +
  struct brcmf_pciedev_info {
  	enum brcmf_pcie_state state;
  	bool in_irq;
-@@ -371,6 +393,14 @@
+@@ -371,6 +387,16 @@
  	struct brcmf_mp_device *settings;
  	struct brcmf_otp_params otp;
  	bool fwseed;
++	/* protects ds_state, ds_active and ds_suspend */
 +	spinlock_t ds_lock;
 +	enum brcmf_pcie_ds_state ds_state;
 +	int ds_active;
 +	bool ds_suspend;
++	/* serializes the deep sleep mailbox messages */
 +	struct mutex ds_mutex;
 +	struct task_struct *ds_sender;
 +	wait_queue_head_t ds_wait;
@@ -142,11 +135,10 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  #ifdef DEBUG
  	u32 console_interval;
  	bool console_active;
-@@ -892,17 +922,187 @@
+@@ -892,17 +918,184 @@
  }
  
  
-+/* Mailbox messages of the deep sleep handshake, sent outside the hooks */
 +static void brcmf_pcie_ds_send(struct brcmf_pciedev_info *devinfo, u32 data)
 +{
 +	mutex_lock(&devinfo->ds_mutex);
@@ -156,15 +148,17 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	mutex_unlock(&devinfo->ds_mutex);
 +}
 +
++/* The handshake messages themselves go through the hooked rings */
 +static bool brcmf_pcie_ds_skip(struct brcmf_pciedev_info *devinfo)
 +{
 +	return READ_ONCE(devinfo->ds_state) == BRCMF_PCIE_DS_NONE ||
 +	       READ_ONCE(devinfo->ds_sender) == current;
 +}
 +
-+/* Called with ds_lock held once the host has nothing more to send */
 +static bool brcmf_pcie_ds_idle_locked(struct brcmf_pciedev_info *devinfo)
 +{
++	lockdep_assert_held(&devinfo->ds_lock);
++
 +	if (devinfo->ds_active || devinfo->ds_suspend)
 +		return false;
 +
@@ -172,7 +166,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +		devinfo->ds_state = BRCMF_PCIE_DS_SLEEP;
 +		return true;
 +	}
-+	if (devinfo->ds_state == BRCMF_PCIE_DS_WAKE)
++	if (devinfo->ds_state == BRCMF_PCIE_DS_AWAKE)
 +		mod_delayed_work(system_dfl_wq, &devinfo->ds_deassert_work,
 +				 msecs_to_jiffies(BRCMF_PCIE_DS_IDLE_MS));
 +	return false;
@@ -201,10 +195,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	if (!wait)
 +		return;
 +
-+	/*
-+	 * The exit note arrives through the interrupt thread, which must not
-+	 * wait for itself. The doorbell wakes the device in that case.
-+	 */
++	/* The exit note arrives through the interrupt thread itself */
 +	if (devinfo->in_irq) {
 +		usleep_range(1000, 1100);
 +		return;
@@ -219,7 +210,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +		  "no deep sleep exit after device wake\n");
 +	spin_lock(&devinfo->ds_lock);
 +	if (devinfo->ds_state == BRCMF_PCIE_DS_EXIT_WAIT)
-+		devinfo->ds_state = BRCMF_PCIE_DS_WAKE;
++		devinfo->ds_state = BRCMF_PCIE_DS_AWAKE;
 +	spin_unlock(&devinfo->ds_lock);
 +}
 +
@@ -249,9 +240,9 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	bool deassert = false;
 +
 +	spin_lock(&devinfo->ds_lock);
-+	if (devinfo->ds_state == BRCMF_PCIE_DS_WAKE && !devinfo->ds_active &&
++	if (devinfo->ds_state == BRCMF_PCIE_DS_AWAKE && !devinfo->ds_active &&
 +	    !devinfo->ds_suspend) {
-+		devinfo->ds_state = BRCMF_PCIE_DS_ACTIVE;
++		devinfo->ds_state = BRCMF_PCIE_DS_ALLOWED;
 +		deassert = true;
 +	}
 +	spin_unlock(&devinfo->ds_lock);
@@ -272,7 +263,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	}
 +
 +	spin_lock(&devinfo->ds_lock);
-+	if (devinfo->ds_state == BRCMF_PCIE_DS_ACTIVE) {
++	if (devinfo->ds_state == BRCMF_PCIE_DS_ALLOWED) {
 +		devinfo->ds_state = BRCMF_PCIE_DS_SLEEP_PEND;
 +		ack = brcmf_pcie_ds_idle_locked(devinfo);
 +	} else {
@@ -291,10 +282,9 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +		return;
 +
 +	spin_lock(&devinfo->ds_lock);
-+	/* The device also leaves deep sleep on its own, for received frames */
 +	if (devinfo->ds_state == BRCMF_PCIE_DS_EXIT_WAIT ||
 +	    devinfo->ds_state == BRCMF_PCIE_DS_SLEEP) {
-+		devinfo->ds_state = BRCMF_PCIE_DS_WAKE;
++		devinfo->ds_state = BRCMF_PCIE_DS_AWAKE;
 +		brcmf_pcie_ds_idle_locked(devinfo);
 +	}
 +	spin_unlock(&devinfo->ds_lock);
@@ -333,7 +323,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  	if (dtoh_mb_data & BRCMF_D2H_DEV_D3_ACK) {
  		brcmf_dbg(PCIE, "D2H_MB_DATA: D3 ACK\n");
  		devinfo->mbdata_completed = true;
-@@ -1308,6 +1508,10 @@
+@@ -1308,6 +1501,10 @@
  				     brcmf_pcie_ring_mb_update_wptr,
  				     brcmf_pcie_ring_mb_write_rptr,
  				     brcmf_pcie_ring_mb_write_wptr, ring);
@@ -344,7 +334,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  
  	return (ring);
  }
-@@ -1501,6 +1705,9 @@
+@@ -1501,6 +1698,9 @@
  					     brcmf_pcie_ring_mb_write_rptr,
  					     brcmf_pcie_ring_mb_write_wptr,
  					     ring);
@@ -354,18 +344,18 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  		ring->w_idx_addr = h2d_w_idx_ptr;
  		ring->r_idx_addr = h2d_r_idx_ptr;
  		h2d_w_idx_ptr += idx_offset;
-@@ -1821,6 +2028,10 @@
+@@ -1821,6 +2021,10 @@
  		if (shared->flags & BRCMF_PCIE_SHARED_DAR)
  			host_cap |= BRCMF_HOSTCAP_H2D_DAR;
  		host_cap |= BRCMF_HOSTCAP_DS_NO_OOB_DW;
 +		if (shared->flags & BRCMF_PCIE_SHARED_INBAND_DS) {
 +			host_cap |= BRCMF_HOSTCAP_DS_INBAND_DW;
-+			devinfo->ds_state = BRCMF_PCIE_DS_ACTIVE;
++			devinfo->ds_state = BRCMF_PCIE_DS_ALLOWED;
 +		}
  
  		brcmf_pcie_write_tcm32(devinfo, sharedram_addr +
  				       BRCMF_SHARED_HOST_CAP_OFFSET,
-@@ -2645,6 +2856,11 @@
+@@ -2645,6 +2849,11 @@
  		return ret;
  
  	devinfo->pdev = pdev;
@@ -377,7 +367,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  	pcie_bus_dev = NULL;
  	devinfo->ci = brcmf_chip_attach(devinfo, pdev->device,
  					&brcmf_pcie_buscore_ops);
-@@ -2772,6 +2988,8 @@
+@@ -2772,6 +2981,8 @@
  		return;
  
  	devinfo = bus->bus_priv.pcie->devinfo;
@@ -386,7 +376,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  	brcmf_pcie_bus_console_read(devinfo, false);
  	brcmf_pcie_fwcon_timer(devinfo, false);
  
-@@ -2826,6 +3044,15 @@
+@@ -2826,6 +3037,15 @@
  	brcmf_pcie_fwcon_timer(devinfo, false);
  	brcmf_bus_change_state(bus, BRCMF_BUS_DOWN);
  
@@ -402,14 +392,14 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  	devinfo->mbdata_completed = false;
  	brcmf_pcie_send_mb_data(devinfo, BRCMF_H2D_HOST_D3_INFORM);
  
-@@ -2876,6 +3103,13 @@
+@@ -2876,6 +3096,13 @@
  		if (brcmf_pcie_send_mb_data(devinfo, BRCMF_H2D_HOST_D0_INFORM))
  			goto cleanup;
  		brcmf_dbg(PCIE, "Hot resume, continue....\n");
 +		if (devinfo->ds_state != BRCMF_PCIE_DS_NONE) {
 +			spin_lock(&devinfo->ds_lock);
 +			devinfo->ds_suspend = false;
-+			devinfo->ds_state = BRCMF_PCIE_DS_WAKE;
++			devinfo->ds_state = BRCMF_PCIE_DS_AWAKE;
 +			brcmf_pcie_ds_idle_locked(devinfo);
 +			spin_unlock(&devinfo->ds_lock);
 +		}
