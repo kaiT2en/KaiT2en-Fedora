@@ -108,20 +108,70 @@ items:
       Moves Apple device-link discovery into the Thunderbolt PCI code
       and adds Titan Ridge and Ice Lake support. Expected in kernel 7.4.
 
+  - id: thunderbolt-titan-ridge-rtd3
+    title: "Titan Ridge runtime power off"
+    state: available
+    upstream: downstream
+    project: KAIT2EN Fedora
+    subsystem: Thunderbolt
+    authors:
+      - deqrocks
+    updated: "2026-11-10"
+    notes: >-
+      Idle Titan Ridge controllers of T2 MacBook Pros are powered off
+      with the macOS sequence on their PCIe root ports, which lets the
+      package go below PC7. KAIT2EN ships it in a patched
+      thunderbolt module, upstream it needs a PCI quirk for these ports.
+
+  - id: thunderbolt-ice-lake-rtd3
+    title: "Ice Lake Thunderbolt runtime power off"
+    state: available
+    upstream: submitted
+    version: v1
+    project: Linux kernel
+    subsystem: Thunderbolt
+    authors:
+      - deqrocks
+    link: "https://lore.kernel.org/all/20261111130851.62101-1-dev@deq.rocks/"
+    updated: "2026-11-11"
+    notes: >-
+      The software connection manager enabled runtime PM only for USB4
+      routers, so the Ice Lake NHI of the MacBookAir9,1 never suspended.
+      With runtime PM for the Ice Lake router PC10 at idle with the
+      display on rises from 33% to 64%. Needs pcie_ports=compat removed,
+      which the installer does.
+
   - id: apple-t2-early-cpu-offlining
     title: "CPU restore after suspend"
     state: available
-    upstream: submitted
+    upstream: superseded
     version: v1
     project: Linux kernel
     subsystem: ACPI / CPU hotplug
     authors:
       - deqrocks
     link: "https://lore.kernel.org/all/20260812120326.155226-1-dev@deq.rocks/"
-    updated: "2026-08-12"
+    updated: "2026-11-11"
     notes: >-
-      Moves secondary CPU hotplug outside the CPU PM notifier window.
-      Removes multi-second delays per CPU during resume.
+      Withdrawn in favor of the MTRR restore on resume below, which fixes
+      the cause instead of offlining the CPUs early.
+
+  - id: x86-mtrr-resume
+    title: "Fast CPU bring-up after suspend"
+    state: available
+    upstream: submitted
+    version: v1
+    project: Linux kernel
+    subsystem: x86 / cache
+    authors:
+      - deqrocks
+    link: "https://lore.kernel.org/all/20261111123747.49446-1-dev@deq.rocks/"
+    updated: "2026-11-11"
+    notes: >-
+      The firmware leaves the secondary CPUs with invalid MTRRs after
+      resume and x86 restored them only once all CPUs were online, so the
+      CPUs ran uncached and a resume could take up to a minute. Each CPU
+      now gets its MTRRs back as it comes online. Based on Chen Yu's fix.
 
   - id: touchbar-runtime-pm-deadlock
     title: "Touch Bar runtime PM in suspend and resume"
@@ -572,13 +622,13 @@ items:
     title: "Wi-Fi cold resume after S3"
     state: available
     upstream: submitted
-    version: v1
+    version: v2
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261107154810.89780-1-dev@deq.rocks/"
-    updated: "2026-11-07"
+    link: "https://lore.kernel.org/all/20261111120748.23795-1-dev@deq.rocks/"
+    updated: "2026-11-11"
     notes: >-
       The chip loses its firmware in S3 but its registers can read as
       running, so brcmfmac took the hot resume path and commands timed
@@ -593,13 +643,13 @@ items:
     title: "BCM4377 Bluetooth cold resume after S3"
     state: available
     upstream: submitted
-    version: v1
+    version: v2
     project: Linux kernel
     subsystem: Bluetooth / hci_bcm4377
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261107154839.89941-1-dev@deq.rocks/"
-    updated: "2026-11-07"
+    link: "https://lore.kernel.org/all/20261111120248.21062-1-dev@deq.rocks/"
+    updated: "2026-11-11"
     notes: >-
       The controller loses its firmware in S3. hci_bcm4377 now probes it
       again after such a resume and skips the ring teardown messages
@@ -609,13 +659,13 @@ items:
     title: "BCM4377 Bluetooth probe with another controller present"
     state: available
     upstream: submitted
-    version: v1
+    version: v2
     project: Linux kernel
     subsystem: Bluetooth / hci_bcm4377
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261107154839.89941-2-dev@deq.rocks/"
-    updated: "2026-11-08"
+    link: "https://lore.kernel.org/all/20261111120248.21062-2-dev@deq.rocks/"
+    updated: "2026-11-11"
     notes: >-
       With another controller on hci0, a USB dongle for example, probe
       returned the new index and the PCI core took it as success without
@@ -627,15 +677,50 @@ items:
     title: "BCM4377 flowring delete"
     state: available
     upstream: submitted
-    version: v1
+    version: v2
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261107154810.89780-1-dev@deq.rocks/"
-    updated: "2026-11-07"
+    link: "https://lore.kernel.org/all/20261111120748.23795-1-dev@deq.rocks/"
+    updated: "2026-11-11"
     notes: >-
       The firmware reports queued packets only after the host deletes a
       flowring. brcmfmac waited up to 100 ms per flowring first, on
       every disconnect and suspend, and miscounted them. It now deletes
       right away.
+
+  - id: brcmfmac-deep-sleep
+    title: "Wi-Fi deep sleep on BCM4364 and BCM4377"
+    state: available
+    upstream: submitted
+    version: v2
+    project: Linux kernel
+    subsystem: Wi-Fi / brcmfmac
+    authors:
+      - deqrocks
+    link: "https://lore.kernel.org/all/20261111120748.23795-6-dev@deq.rocks/"
+    updated: "2026-11-11"
+    notes: >-
+      The firmware supports inband deep sleep, but brcmfmac left it
+      disabled, so the chip stayed awake and its latency tolerance held
+      the package out of PC10. brcmfmac now follows the deep sleep
+      handshake of the firmware and the package reaches PC10 with Wi-Fi
+      associated, without ignoring the LTR of the Wi-Fi port.
+
+  - id: bluetooth-bcm4377-aspm
+    title: "BCM4377 link power management"
+    state: available
+    upstream: submitted
+    version: v2
+    project: Linux kernel
+    subsystem: Bluetooth / hci_bcm4377
+    authors:
+      - deqrocks
+    link: "https://lore.kernel.org/all/20261111120248.21062-4-dev@deq.rocks/"
+    updated: "2026-11-11"
+    notes: >-
+      hci_bcm4377 kept ASPM off on the whole link to the Wi-Fi and
+      Bluetooth chip because of a hardware erratum, which held the
+      MacBookAir9,1 package at PC3. ASPM is now off only while the
+      firmware boots.

@@ -1,6 +1,6 @@
 # Apple T2 early CPU offlining
 
-- Status: submitted
+- Status: superseded by x86-cache-mtrr-resume-v1
 - Version: v1
 - Base: Linux master
 - Tested: MacBookPro15,1, MacBookPro16,2, MacBookAir9,1 and a 27-inch T2 iMac

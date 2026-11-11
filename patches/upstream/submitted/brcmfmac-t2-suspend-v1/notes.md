@@ -1,6 +1,6 @@
 # [PATCH 0/4] wifi: brcmfmac: pcie: S3 suspend and resume on the T2 Mac chips
 
-- Status: submitted
+- Status: superseded by v2
 - Version: v1
 - Date: 2026-11-07
 - Base: wireless-next `991a73f4909` with Michael Reeves' BCM4388 series 01-05

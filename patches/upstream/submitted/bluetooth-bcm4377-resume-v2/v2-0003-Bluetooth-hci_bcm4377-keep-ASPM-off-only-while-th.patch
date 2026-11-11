@@ -1,0 +1,97 @@
+From 0c09291ce2d2d9bf89e2edce0c9e24bb3debcee7 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Tue, 10 Nov 2026 18:02:02 +0100
+Subject: [PATCH v2 3/3] Bluetooth: hci_bcm4377: keep ASPM off only while the
+ firmware boots
+
+The BCM4377 needs ASPM disabled because of a hardware erratum, and the
+driver disables it on the whole link for as long as the device is bound.
+On the MacBookAir9,1 this keeps the link to the Wi-Fi and Bluetooth chip
+in L0, and the package does not go deeper than PC3.
+
+Disable ASPM only in this function's Link Control register before the
+function level reset and the firmware boot, and restore the saved value
+once the firmware runs. A non-ARI Multi-Function Device enables only the
+ASPM states enabled in all of its functions, so the link stays in L0
+until then.
+
+Tested on a MacBookAir9,1: with ASPM L1 enabled by the PCI core the link
+returns to L1 after probe and after the re-probe that follows ACPI S3,
+Bluetooth and Wi-Fi keep working, and the package reaches PC8 instead of
+PC3 at idle.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ drivers/bluetooth/hci_bcm4377.c | 32 +++++++++++++++++++++++---------
+ 1 file changed, 23 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/bluetooth/hci_bcm4377.c b/drivers/bluetooth/hci_bcm4377.c
+index 4e3630774c0..0d2103cfd9b 100644
+--- a/drivers/bluetooth/hci_bcm4377.c
++++ b/drivers/bluetooth/hci_bcm4377.c
+@@ -497,7 +497,8 @@ struct bcm4377_data;
+  * clear_pciecfg_subsystem_ctrl_bit19: Set to true if bit 19 in the
+  *                                     vendor-specific subsystem control
+  *                                     register has to be cleared
+- * disable_aspm: Set to true if ASPM must be disabled due to hardware errata
++ * disable_aspm: Set to true if ASPM must be disabled while the firmware is
++ *               loaded and booted due to hardware errata
+  * broken_ext_scan: Set to true if the chip erroneously claims to support
+  *                  extended scanning
+  * broken_mws_transport_config: Set to true if the chip erroneously claims to
+@@ -572,6 +573,9 @@ struct bcm4377_data {
+ 	/* set when the controller lost its firmware during system sleep */
+ 	bool fw_lost;
+ 
++	/* Link Control value saved while ASPM is disabled for the boot */
++	u16 link_ctl;
++
+ 	void __iomem *bar0;
+ 	void __iomem *bar2;
+ 
+@@ -2260,20 +2264,27 @@ static int bcm4377_probe_of(struct bcm4377_data *bcm4377)
+ 	return 0;
+ }
+ 
++/*
++ * ASPM is disabled in this function's Link Control register only. A
++ * non-ARI Multi-Function Device enables only the ASPM states enabled in
++ * all of its functions, so the link stays in L0 until it is restored.
++ */
+ static void bcm4377_disable_aspm(struct bcm4377_data *bcm4377)
+ {
+-	pci_disable_link_state(bcm4377->pdev,
+-			       PCIE_LINK_STATE_L0S | PCIE_LINK_STATE_L1);
+-
+-	/*
+-	 * pci_disable_link_state can fail if either CONFIG_PCIEASPM is disabled
+-	 * or if the BIOS hasn't handed over control to us. We must *always*
+-	 * disable ASPM for this device due to hardware errata though.
+-	 */
++	pcie_capability_read_word(bcm4377->pdev, PCI_EXP_LNKCTL,
++				  &bcm4377->link_ctl);
+ 	pcie_capability_clear_word(bcm4377->pdev, PCI_EXP_LNKCTL,
+ 				   PCI_EXP_LNKCTL_ASPMC);
+ }
+ 
++static void bcm4377_restore_aspm(struct bcm4377_data *bcm4377)
++{
++	pcie_capability_clear_and_set_word(bcm4377->pdev, PCI_EXP_LNKCTL,
++					   PCI_EXP_LNKCTL_ASPMC,
++					   bcm4377->link_ctl &
++					   PCI_EXP_LNKCTL_ASPMC);
++}
++
+ static void bcm4377_pci_free_irq_vectors(void *data)
+ {
+ 	pci_free_irq_vectors(data);
+@@ -2425,6 +2436,9 @@ static int bcm4377_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 	if (ret)
+ 		return ret;
+ 
++	if (bcm4377->hw->disable_aspm)
++		bcm4377_restore_aspm(bcm4377);
++
+ 	ret = hci_register_dev(hdev);
+ 	if (ret < 0)
+ 		return ret;

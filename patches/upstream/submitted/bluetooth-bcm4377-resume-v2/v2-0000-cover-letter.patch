@@ -1,0 +1,44 @@
+From 0c09291ce2d2d9bf89e2edce0c9e24bb3debcee7 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Wed, 11 Nov 2026 12:27:24 +0100
+Subject: [PATCH v2 0/3] Bluetooth: hci_bcm4377: resume after ACPI S3 and ASPM
+
+After ACPI S3 the Bluetooth function of the BCM4377 comes back without
+its firmware. Patch 2 probes it again after such a resume.
+
+When the previous controller is still being released, the re-probe
+registers the new one under another index, which runs into the probe
+return check fixed in patch 1. Patch 1 is a fix on its own and goes
+first.
+
+Patch 3 is new in v2. Because of a hardware erratum the driver keeps
+ASPM disabled on the whole link to the Wi-Fi and Bluetooth chip for as
+long as it is bound, which holds the CPU package at PC3.
+Patch 3 disables ASPM only while the firmware boots and restores it
+once the firmware runs, also after the re-probe from patch 2.
+
+The Wi-Fi function of the same chip needs the same after S3 and goes to
+linux-wireless in "wifi: brcmfmac: pcie: S3 suspend and resume on the
+T2 Mac chips".
+
+Successfully ested on MacBookAir9,1 and MacBookPro15,4.
+
+v1 [1] has not received any feedback yet.
+
+Changes in v2:
+- Add patch 3, keep ASPM off only while the firmware boots
+- Patches 1 and 2 are unchanged
+
+[1] https://lore.kernel.org/all/20261107154839.89941-1-dev@deq.rocks/
+
+Andre Eikmeyer (3):
+  Bluetooth: hci_bcm4377: treat only negative hci_register_dev() returns
+    as errors
+  Bluetooth: hci_bcm4377: probe again after a resume through firmware
+  Bluetooth: hci_bcm4377: keep ASPM off only while the firmware boots
+
+ drivers/bluetooth/hci_bcm4377.c | 93 +++++++++++++++++++++++++++++----
+ 1 file changed, 83 insertions(+), 10 deletions(-)
+
+
+base-commit: 3f425f95ba3923d605f6a8b382e8fcdc59d479db

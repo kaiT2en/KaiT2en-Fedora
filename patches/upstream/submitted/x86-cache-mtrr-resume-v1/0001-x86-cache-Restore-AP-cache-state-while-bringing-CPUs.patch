@@ -1,0 +1,49 @@
+From 804e70df5366ea3cbf1d9be35943a67302c14fd4 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Sat, 15 Aug 2026 19:41:39 +0200
+Subject: [PATCH] x86/cache: Restore AP cache state while bringing CPUs online
+ on resume
+
+Some platform firmware, including that of Intel Macs, leaves the APs
+with an invalid MTRR state after resume. x86 delays the AP cache
+initialization until all APs are online, so an affected AP runs
+uncached through its bring-up. On a Core i9 MacBook Pro a resume can
+take up to a minute.
+
+Drop the x86 thaw hooks so that cache_ap_online() restores the MTRR and
+PAT state of each AP as it comes online, as on CPU hotplug. The APs then
+come online right away. Boot keeps the delayed initialization.
+
+Tested on a MacBookAir9,1, MacBookPro15,1 and MacBookPro16,1.
+
+Link: https://lore.kernel.org/all/20180319041843.28218-1-yu.c.chen@intel.com/
+Link: https://lore.kernel.org/all/aoCJGj8HixmJ9oaZ@wunner.de/
+Suggested-by: Chen Yu <yu.c.chen@intel.com>
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ arch/x86/kernel/smpboot.c | 10 ----------
+ 1 file changed, 10 deletions(-)
+
+diff --git a/arch/x86/kernel/smpboot.c b/arch/x86/kernel/smpboot.c
+index dcbaf3f27..bb3fc9a7c 100644
+--- a/arch/x86/kernel/smpboot.c
++++ b/arch/x86/kernel/smpboot.c
+@@ -1251,16 +1251,6 @@ void __init native_smp_prepare_cpus(unsigned int max_cpus)
+ 	snp_set_wakeup_secondary_cpu();
+ }
+ 
+-void arch_thaw_secondary_cpus_begin(void)
+-{
+-	set_cache_aps_delayed_init(true);
+-}
+-
+-void arch_thaw_secondary_cpus_end(void)
+-{
+-	cache_aps_init();
+-}
+-
+ /*
+  * Early setup to make printk work.
+  */
+
+base-commit: c6279551a44c06f4cb1f7b1df2fb8e0d6d6e54cd
