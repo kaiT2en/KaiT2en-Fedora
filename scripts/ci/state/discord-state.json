@@ -19,7 +19,11 @@
     },
     "apple-t2-early-cpu-offlining": {
       "message_id": "1537074756724199444",
-      "hash": "8c2507de8e6583ef25047d1aa0f4466c3ac39b93d5d3980a7e87b7f3ce176fa6"
+      "hash": "4a37e60ad335c40699fb37b462d05e8abee1fa9109fb7be5293b0760208dd0aa"
+    },
+    "x86-mtrr-resume": {
+      "message_id": "1570056596514545739",
+      "hash": "5ee1d9666c287f5d1da619499774410e90ef01df5079ae76fbaace0fe01a18a0"
     },
     "touchbar-runtime-pm-deadlock": {
       "message_id": "1536401561570246706",
@@ -95,19 +99,27 @@
     },
     "brcmfmac-cold-resume": {
       "message_id": "1568654937867555029",
-      "hash": "fe38936e35cf214c6db3103be71da0454e11a3494e13f33ef55a6e6b9495aa7d"
+      "hash": "a804abe2c691650e7bf4e1a12d51c7b101e710ccfaa6c5f08d3e784ed3713d82"
     },
     "bluetooth-bcm4377-cold-resume": {
       "message_id": "1568654941910736956",
-      "hash": "bbe00309b76e38aa871a5925c2de36a0817b5260115b99caf56a42fd3901dee1"
+      "hash": "f4149bcde0a66dbf890846ac25ac2daa31f913679c53d9ff61077accd3e742ee"
     },
     "bluetooth-bcm4377-register-index": {
       "message_id": "1568983322196185169",
-      "hash": "fb3e3f70e5bd2f7b54d26e076e2f103ef4692274a56ca4da9a4b058e4928d40d"
+      "hash": "f504ece9c7f25e43f837af9f1caebb5a87ea3810aa8596bd5580a0aa7cf78ee7"
     },
     "brcmfmac-flowring-delete": {
       "message_id": "1568654946235191326",
-      "hash": "2d5bc929a5735e739e5369aa9e4d8aa67e46c5e2eb7feb31d253fb1da59bc2dd"
+      "hash": "34ee50ce767cedc91df5be5c592888da710a34ca49667c0858fd96d10fd7a031"
+    },
+    "brcmfmac-deep-sleep": {
+      "message_id": "1570056616991264896",
+      "hash": "537f96cadf81ba70995a2d6ba48d23f7a0f0a5000e0c126f713937c96f03f6bc"
+    },
+    "bluetooth-bcm4377-aspm": {
+      "message_id": "1570056621458067526",
+      "hash": "3b6e214e5c9cb5d4dae7cf071fb200aec863c065604cf6e1e70d1ec357d5a0f0"
     },
     "brcmfmac-bcm4377-d3-ack": {
       "message_id": "1550620841786740856",
