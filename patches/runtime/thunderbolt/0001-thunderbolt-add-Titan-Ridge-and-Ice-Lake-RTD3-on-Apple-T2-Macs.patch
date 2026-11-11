@@ -25,12 +25,12 @@ that keeps them with pcieport.
 Signed-off-by: Andre Eikmeyer <andre.eikmeyer@kait2en.org>
 ---
  drivers/thunderbolt/Makefile |   2 +-
- drivers/thunderbolt/apple.c  | 618 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ drivers/thunderbolt/apple.c  | 619 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  drivers/thunderbolt/pci.c    |  11 +-
  drivers/thunderbolt/switch.c |   7 +
  drivers/thunderbolt/tb.c     |  78 +++++++++++++++-
  drivers/thunderbolt/tb.h     |  27 +++++
- 6 files changed, 736 insertions(+), 7 deletions(-)
+ 6 files changed, 737 insertions(+), 7 deletions(-)
 
 diff --git a/drivers/thunderbolt/Makefile b/drivers/thunderbolt/Makefile
 index beb054c..a3f0efc 100644
@@ -47,10 +47,10 @@ index beb054c..a3f0efc 100644
  thunderbolt-${CONFIG_USB4_KUNIT_TEST} += test.o
 diff --git a/drivers/thunderbolt/apple.c b/drivers/thunderbolt/apple.c
 new file mode 100644
-index 0000000..b85bea5
+index 0000000..7a20a2e
 --- /dev/null
 +++ b/drivers/thunderbolt/apple.c
-@@ -0,0 +1,618 @@
+@@ -0,0 +1,619 @@
 +// SPDX-License-Identifier: GPL-2.0
 +
 +#include <linux/acpi.h>
@@ -260,8 +260,9 @@ index 0000000..b85bea5
 +	if (tb_apple_has_ps(pdev))
 +		tb_apple_set_power(pdev, ACPI_STATE_D0);
 +	tb_apple_pmcsr(pdev, PCI_D0);
-+	pci_restore_state(pdev);
++	/* The MSI message is only written back to a function in D0. */
 +	pdev->current_state = PCI_D0;
++	pci_restore_state(pdev);
 +}
 +
 +/*
