@@ -1,0 +1,84 @@
+From 3878ab94388e9616a931a4cdb967d97bc9bacd0d Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Sat, 7 Nov 2026 16:28:27 +0100
+Subject: [PATCH v2 4/5] wifi: brcmfmac: msgbuf: send the flowring delete
+ without waiting for tx status
+
+The BCM4377 firmware returns the tx status of queued packets only when
+it gets the flowring delete request. brcmf_msgbuf_delete_flowring()
+waits up to 100 ms for them before it sends the request, so every
+disconnect logs a timeout, and the cleared counter goes below zero when
+the status arrives.
+
+The race the wait was added for in commit 0fa24196e425 ("wifi: brcmfmac:
+fix continuous 802.1x tx pending timeout error") is covered by
+RING_CLOSING since commit 09be7546a602 ("wifi: brcmfmac: fix scheduling
+while atomic issue when deleting flowring"), and late tx status still
+releases the packet. Send the delete right away and reset the counter
+when the ring is created.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ .../broadcom/brcm80211/brcmfmac/msgbuf.c      | 23 ++++++++-----------
+ 1 file changed, 10 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
+index 8e5c697e7f1..a9ccf647f9a 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
+@@ -73,7 +73,6 @@
+ #define BRCMF_MSGBUF_TRICKLE_TXWORKER_THRS	32
+ #define BRCMF_MSGBUF_UPDATE_RX_PTR_THRS		48
+ 
+-#define BRCMF_MAX_TXSTATUS_WAIT_RETRIES		10
+ 
+ struct msgbuf_common_hdr {
+ 	u8				msgtype;
+@@ -645,6 +644,7 @@ brcmf_msgbuf_flowring_create_worker(struct brcmf_msgbuf *msgbuf,
+ 	brcmf_commonring_config(msgbuf->flowrings[flowid],
+ 				BRCMF_H2D_TXFLOWRING_MAX_ITEM,
+ 				BRCMF_H2D_TXFLOWRING_ITEMSIZE, dma_buf);
++	atomic_set(&msgbuf->flowrings[flowid]->outstanding_tx, 0);
+ 
+ 	commonring = msgbuf->commonrings[BRCMF_H2D_MSGRING_CONTROL_SUBMIT];
+ 	brcmf_commonring_lock(commonring);
+@@ -1330,6 +1330,10 @@ brcmf_msgbuf_process_flow_ring_delete_response(struct brcmf_msgbuf *msgbuf,
+ 	}
+ 	brcmf_dbg(MSGBUF, "Flowring %d Delete response status %d\n", flowid,
+ 		  status);
++	if (atomic_read(&msgbuf->flowrings[flowid]->outstanding_tx))
++		brcmf_dbg(MSGBUF, "Flowring %d deleted with %d tx status outstanding\n",
++			  flowid,
++			  atomic_read(&msgbuf->flowrings[flowid]->outstanding_tx));
+ 
+ 	brcmf_msgbuf_remove_flowring(msgbuf, flowid);
+ }
+@@ -1471,23 +1475,16 @@ void brcmf_msgbuf_delete_flowring(struct brcmf_pub *drvr, u16 flowid)
+ 	void *ret_ptr;
+ 	u8 ifidx;
+ 	int err;
+-	int retry = BRCMF_MAX_TXSTATUS_WAIT_RETRIES;
+ 
+-	/* make sure it is not in txflow */
++	/*
++	 * Make sure txflow posts nothing more to the ring. The firmware returns
++	 * the tx status of the posted packets when it deletes the ring, before
++	 * it sends the delete response.
++	 */
+ 	brcmf_commonring_lock(commonring_del);
+ 	flow->rings[flowid]->status = RING_CLOSING;
+ 	brcmf_commonring_unlock(commonring_del);
+ 
+-	/* wait for commonring txflow finished */
+-	while (retry && atomic_read(&commonring_del->outstanding_tx)) {
+-		usleep_range(5000, 10000);
+-		retry--;
+-	}
+-	if (!retry) {
+-		brcmf_err("timed out waiting for txstatus\n");
+-		atomic_set(&commonring_del->outstanding_tx, 0);
+-	}
+-
+ 	/* no need to submit if firmware can not be reached */
+ 	if (drvr->bus_if->state != BRCMF_BUS_UP) {
+ 		brcmf_dbg(MSGBUF, "bus down, flowring will be removed\n");

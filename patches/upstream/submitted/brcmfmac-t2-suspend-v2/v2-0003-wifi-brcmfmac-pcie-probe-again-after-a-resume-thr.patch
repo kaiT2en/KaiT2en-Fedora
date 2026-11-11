@@ -1,0 +1,47 @@
+From a30b800aafc3027f77677a70c9dee52a5ac29811 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Sat, 7 Nov 2026 16:28:27 +0100
+Subject: [PATCH v2 3/5] wifi: brcmfmac: pcie: probe again after a resume
+ through firmware
+
+After ACPI S3 the chip comes back without its firmware, but the
+interrupt mask can read back nonzero, so brcmf_pcie_pm_leave_D3()
+takes the hot resume path and every command times out afterwards.
+Seen on the BCM4377 and BCM4364 of the T2 Macs.
+
+When the platform firmware handled the resume and WoWL is off, go
+straight to the existing remove and re-probe path.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ .../net/wireless/broadcom/brcm80211/brcmfmac/pcie.c    | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+index fc0f23477eb..faa1e16ed4f 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -7,6 +7,7 @@
+ #include <linux/module.h>
+ #include <linux/firmware.h>
+ #include <linux/pci.h>
++#include <linux/suspend.h>
+ #include <linux/vmalloc.h>
+ #include <linux/delay.h>
+ #include <linux/interrupt.h>
+@@ -2844,6 +2845,15 @@ static int brcmf_pcie_pm_leave_D3(struct device *dev)
+ 	devinfo = bus->bus_priv.pcie->devinfo;
+ 	brcmf_dbg(PCIE, "Enter, dev=%p, bus=%p\n", dev, bus);
+ 
++	/*
++	 * Without WoWL the device is powered off when the platform firmware
++	 * handles the system sleep, as with ACPI S3, and comes back without
++	 * its firmware. Its registers can still read back nonzero, so probe
++	 * it again.
++	 */
++	if (pm_resume_via_firmware() && !devinfo->wowl_enabled)
++		goto cleanup;
++
+ 	/* Check if device is still up and running, if so we are ready */
+ 	if (brcmf_pcie_read_pcie32(devinfo, devinfo->reginfo->intmask) != 0) {
+ 		brcmf_dbg(PCIE, "Try to wakeup device....\n");

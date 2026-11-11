@@ -1,6 +1,6 @@
 # [PATCH 0/2] Bluetooth: hci_bcm4377: resume after ACPI S3
 
-- Status: submitted
+- Status: superseded by v2
 - Version: v1
 - Date: 2026-11-07
 - Base: bluetooth-next `3f425f95ba3`
