@@ -34,7 +34,7 @@ Dropped presses are logged with their interval once dynamic debug is enabled for
 
 This fork is part of a set of fixes that make suspend/resume work on T2 Macs. Deploying the other fixes is mandatory to make it work.
 
-- `t2bce`
+- `apple-t2-bridge`
 - `t2smc`
 
 ## Build and install

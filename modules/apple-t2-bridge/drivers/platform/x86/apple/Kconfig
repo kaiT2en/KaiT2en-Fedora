@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Apple x86 platform drivers
+#
+
+config APPLE_T2_BRIDGE
+	tristate "Apple T2 Bridge Controller"
+	depends on PCI && X86
+	select AUXILIARY_BUS
+	help
+	  Driver for the Bridge Controller of Intel Macs with a T2 chip. It
+	  carries the host traffic to the T2 and is required for the internal
+	  keyboard, trackpad, Touch Bar and audio of these machines.
+
+	  To compile this driver as a module, choose M here: the module will
+	  be called apple-t2-bridge.

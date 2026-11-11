@@ -23,7 +23,7 @@ they tried and failed, or never tried.
 Traditional distros like CachyOS or T2Linux work around this by shipping patched
 kernels. The patches are not created by the distro people. T2Linux collects
 the code we talked earlier about and maintains it in a GitHub repo.
-Also KAIT2EN provides some patches to that repo. Like t2bce and audio drivers.
+Also KAIT2EN provides some patches to that repo. Like the T2 bridge and audio drivers.
 Then these patches are compiled against the current kernel. This means they
 integrate the drivers into the latest release. Distros like CachyOS or Omarchy make
 use of the same T2Linux patches and also integrate them in their kernels.

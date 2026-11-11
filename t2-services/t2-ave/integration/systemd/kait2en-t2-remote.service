@@ -5,8 +5,8 @@ Wants=NetworkManager.service network-online.target
 
 [Service]
 Type=simple
-ExecStartPre=/usr/sbin/modprobe t2bce_ave
-ExecStartPre=-/usr/sbin/modprobe t2bce_sidecar
+ExecStartPre=/usr/sbin/modprobe t2-ave
+ExecStartPre=-/usr/sbin/modprobe t2-sidecar
 ExecStart=@BINDIR@/t2remote daemon
 Restart=on-failure
 RestartSec=2

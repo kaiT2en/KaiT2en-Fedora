@@ -1,7 +1,0 @@
-.tmp_versions/
-*.mod*
-*.o*
-*.ko*
-*.order
-*Module.symvers*
-*.patch

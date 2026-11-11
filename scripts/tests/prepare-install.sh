@@ -85,7 +85,7 @@ cat >"$fake_bin/cpio" <<'EOF'
 #!/usr/bin/env bash
 destination="$PWD/usr/lib/modules/$KAIT2EN_TEST_TARGET/updates/kait2en"
 mkdir -p "$destination"
-for module in t2bce_dma t2hid hid_t2magicmouse t2_trackpad_actuator t2_precision_trackpad t2bce_core t2bce_vhci; do
+for module in t2hid hid_t2magicmouse t2_trackpad_actuator t2_precision_trackpad apple-t2-bridge apple-t2-vhci-hcd; do
 	[[ "$module" != "${KAIT2EN_TEST_OMIT_MODULE:-}" ]] || continue
 	touch "$destination/$module.ko"
 done
@@ -101,7 +101,7 @@ printf 'dracut %s\n' "$*" >>"$KAIT2EN_TEST_LOG"
 EOF
 cat >"$fake_bin/lsinitrd" <<'EOF'
 #!/usr/bin/env bash
-for module in t2bce_dma t2hid hid_t2magicmouse t2_trackpad_actuator t2_precision_trackpad t2bce_core t2bce_vhci; do
+for module in t2hid hid_t2magicmouse t2_trackpad_actuator t2_precision_trackpad apple-t2-bridge apple-t2-vhci-hcd; do
 	printf 'usr/lib/modules/test/updates/%s.ko.xz\n' "$module"
 done
 EOF
@@ -145,7 +145,7 @@ for bls_prefix in /boot /root/boot /@/boot; do
 	grep -Fq "build-input-kmod kernel=$target arguments=3" "$log"
 	# Forced, not merely added: the modules are deleted from the disk below.
 	grep -Fq \
-		'dracut --force --force-drivers t2bce_dma t2hid hid_t2magicmouse t2_trackpad_actuator t2_precision_trackpad t2bce_core t2bce_vhci' \
+		'dracut --force --force-drivers t2hid hid_t2magicmouse t2_trackpad_actuator t2_precision_trackpad apple-t2-bridge apple-t2-vhci-hcd' \
 		"$log"
 	grep -Fq 'rpm -e kmod-kait2en-input' "$log"
 	[[ ! -d "$fake_modules/$target/updates/kait2en-transition" ]]

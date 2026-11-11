@@ -47,7 +47,7 @@ Each `packaging/` directory contains RPM and Debian recipes. See
 
 `shared/integration/systemd/t2-services-suspend.service` runs feature sleep/resume
 hooks around system suspend. The T2 NCM link survives suspend on its own
-(`t2bce_vhci` reset-resumes it after a stateful sleep), so the helper no longer
+(`apple-t2-vhci-hcd` reset-resumes it after system sleep), so the helper no longer
 touches it. The AVE hook closes/reopens only its own sessions, and skips an
 inactive AVE daemon. Touch ID uses its existing logind resume watcher and
 connection retry loop. Journal holds no persistent daemon session.
@@ -56,10 +56,11 @@ The remaining `kait2en-suspend.service` handles WLAN/Bluetooth only.
 
 ## Kernel boundary
 
-AVE and Sidecar kernel sources live in `t2-ave/kernel/t2bce_ave` and
-`t2-ave/kernel/t2bce_sidecar`. The existing Fedora DKMS installer stages them
-together with `modules/t2bce_stack` so the shared symbol namespace is preserved.
+AVE and Sidecar kernel sources live in `t2-ave/kernel/t2-ave` and
+`t2-ave/kernel/t2-sidecar`. The existing Fedora DKMS installer stages them
+into the `modules/apple-t2-bridge` DKMS package so the shared symbol namespace is
+preserved.
 The userspace package does not bundle a `.ko`. Distributions must provide
-compatible `t2bce_ave`, `t2bce_sidecar` and BCE core modules, either in their
+compatible `t2-ave`, `t2-sidecar` and `apple-t2-bridge` modules, either in their
 kernel or via a separately maintained kernel-module package. This is not a
 dependency on Touch ID or Journal.

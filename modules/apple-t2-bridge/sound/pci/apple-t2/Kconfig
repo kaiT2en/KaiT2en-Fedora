@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# Fragment of sound/pci/Kconfig
+
+config SND_APPLE_T2
+	tristate "Apple T2 audio"
+	depends on APPLE_T2_BRIDGE
+	select SND_PCM
+	select SND_JACK
+	help
+	  Say Y here for the speakers, microphones and headphone jack of
+	  Intel Macs with a T2 chip.
+
+	  To compile this driver as a module, choose M here: the module will
+	  be called snd-apple-t2.

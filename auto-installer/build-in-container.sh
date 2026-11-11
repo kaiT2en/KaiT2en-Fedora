@@ -124,7 +124,7 @@ mkdir -p "$EXTRACT_ROOT"
 	rpm2cpio "$RPM_PATH" | cpio -idm --quiet
 )
 RPM_FILE_LIST=$(rpm -qpl "$RPM_PATH")
-for module in t2bce_dma t2bce_core t2bce_vhci t2hid hid_t2magicmouse t2_precision_trackpad t2_trackpad_actuator; do
+for module in apple-t2-bridge apple-t2-vhci-hcd t2hid hid_t2magicmouse t2_precision_trackpad t2_trackpad_actuator; do
 	grep -Eq "/${module}\.ko$" <<<"$RPM_FILE_LIST"
 	VERMAGIC=$(modinfo -F vermagic \
 		"$EXTRACT_ROOT/usr/lib/modules/$ISO_KERNEL_RELEASE/updates/kait2en/$module.ko")
@@ -206,7 +206,7 @@ mkdir -p \
 	"$TRANSITION_SOURCE/auto-installer"
 install -m 0644 "$SOURCE_ROOT/LICENSE" "$TRANSITION_SOURCE/"
 printf '%s\n' "$SOURCE_DATE_EPOCH" >"$TRANSITION_SOURCE/source-date-epoch"
-for module in t2bce_dma t2bce_core t2bce_vhci t2touchbar hid_t2magicmouse t2_precision_trackpad t2_trackpad_actuator; do
+for module in apple-t2-bridge t2touchbar hid_t2magicmouse t2_precision_trackpad t2_trackpad_actuator; do
 	cp -a "$SOURCE_ROOT/modules/$module" "$TRANSITION_SOURCE/modules/"
 done
 install -m 0755 "$SOURCE_ROOT/auto-installer/build-input-kmod.sh" \
@@ -243,7 +243,7 @@ mkdir -p \
 	"$INITRAMFS_ROOT/var/lib/dracut/hooks/pre-trigger" \
 	"$INITRAMFS_ROOT/var/lib/dracut/hooks/pre-pivot"
 ln -s kmod "$INITRAMFS_ROOT/usr/bin/insmod"
-for module in t2bce_dma t2bce_core t2bce_vhci t2hid hid_t2magicmouse t2_precision_trackpad t2_trackpad_actuator; do
+for module in apple-t2-bridge apple-t2-vhci-hcd t2hid hid_t2magicmouse t2_precision_trackpad t2_trackpad_actuator; do
 	install -m 0644 \
 		"$EXTRACT_ROOT/usr/lib/modules/$ISO_KERNEL_RELEASE/updates/kait2en/$module.ko" \
 		"$MODULE_TARGET/"
@@ -314,7 +314,7 @@ gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 	grep -Fx 'usr/share/kait2en-installer/transition-source/auto-installer/build-input-kmod.sh' >/dev/null
 gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
-	grep -Fx 'usr/share/kait2en-installer/transition-source/modules/t2bce_core/t2bce_main.c' >/dev/null
+	grep -Fx 'usr/share/kait2en-installer/transition-source/modules/apple-t2-bridge/drivers/platform/x86/apple/t2-bridge.c' >/dev/null
 for module in t2_precision_trackpad t2_trackpad_actuator; do
 	gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 		grep -Fx "usr/share/kait2en-installer/transition-source/modules/$module/$module.c" >/dev/null
@@ -324,7 +324,7 @@ done
 ! gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 	grep -F 'transition-source/auto-installer/patches/' >/dev/null
 gzip -dc "$INITRAMFS_IMAGE" | cpio -it --quiet |
-	grep -Fx "usr/lib/modules/$ISO_KERNEL_RELEASE/updates/kait2en/t2bce_vhci.ko" >/dev/null
+	grep -Fx "usr/lib/modules/$ISO_KERNEL_RELEASE/updates/kait2en/apple-t2-vhci-hcd.ko" >/dev/null
 gzip -dc "$INITRAMFS_IMAGE" | cpio -it --quiet |
 	grep -Fx 'usr/lib/kait2en/install-wifi-firmware.sh' >/dev/null
 gzip -dc "$INITRAMFS_IMAGE" | cpio -it --quiet |

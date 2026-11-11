@@ -38,7 +38,7 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("pci", rules)
         self.assertIn('ACTION=="add",', rules)
         self.assertNotIn('add|change', rules)
-        self.assertIn('KERNELS=="t2bce_audio", GOTO="t2_dsp_model"', rules)
+        self.assertIn('DRIVERS=="snd_apple_t2", GOTO="t2_dsp_model"', rules)
         for model, profile in builder.models().items():
             self.assertLessEqual(len(f"t2-{profile}"), 15)
             self.assertIn(f'RESULT=="{model}", ATTR{{id}}="t2-{profile}"', rules)

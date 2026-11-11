@@ -6,13 +6,12 @@ from pyanaconda.modules.common.constants.namespaces import ADDONS_NAMESPACE
 KERNEL_RELEASE = "@KERNEL_RELEASE@"
 RPM_FILENAME = "@RPM_FILENAME@"
 MODULES = (
-    "t2bce_dma",
     "t2hid",
     "hid_t2magicmouse",
     "t2_trackpad_actuator",
     "t2_precision_trackpad",
-    "t2bce_core",
-    "t2bce_vhci",
+    "apple-t2-bridge",
+    "apple-t2-vhci-hcd",
 )
 KERNEL_ARGUMENTS = (
     "initcall_blacklist=magicmouse_driver_init",

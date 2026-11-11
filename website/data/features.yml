@@ -25,7 +25,7 @@ items:
     state: available
     upstream: downstream
     project: KAIT2EN Fedora
-    subsystem: t2bce_audio
+    subsystem: snd-apple-t2
     authors:
       - deqrocks
     link: post-install/audio-dsp.md
@@ -367,7 +367,7 @@ items:
     state: available
     upstream: downstream
     project: KAIT2EN Fedora
-    subsystem: t2bce_ave
+    subsystem: t2-ave
     authors:
       - deqrocks
     link: post-install/hardware-video-encoding.md
@@ -382,7 +382,7 @@ items:
     state: available
     upstream: downstream
     project: KAIT2EN Fedora
-    subsystem: t2bce_sidecar
+    subsystem: t2-sidecar
     authors:
       - deqrocks
     link: post-install/sidecar.md

@@ -7,7 +7,7 @@ under, a license choice only applies going forward.
 ## GPL-2.0 (kernel modules)
 
 Kernel modules under `modules/` and `t2-services/t2-ave/kernel/` stay GPL-2.0 as the
-kernel requires. This includes `t2bce_*`, `t2ave` (in the BCE stack), `t2sep`,
+kernel requires. This includes `apple-t2-bridge`, `t2-ave`, `t2-sidecar`, `t2sep`,
 `t2smc`, `t2smp` and the others.
 
 ## GPL-3.0-or-later

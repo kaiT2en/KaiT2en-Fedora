@@ -9,7 +9,7 @@ require_command dkms make install rm chown mktemp depmod sed tar find grep
 require_kernel_headers
 
 MODULES=(
-	t2bce_stack
+	apple-t2-bridge
 	t2smc
 	t2bdrm
 	t2touchbar
@@ -25,6 +25,7 @@ MODULES=(
 
 LEGACY_MODULES=(
 	t2sep
+	t2bce_stack
 	t2bce_dma
 	t2bce_core
 	t2bce_vhci
@@ -45,6 +46,7 @@ RETIRED_MODULES=(
 )
 
 RETIRED_BCE_DKMS_PACKAGES=(
+	t2bce_stack
 	t2bce_dma
 	t2bce_core
 	t2bce_vhci
@@ -83,7 +85,7 @@ kernelver=${2:-}
 [[ "$command" == add && -n "$kernelver" ]] || exit 0
 
 modules=(
-	t2bce_stack
+	apple-t2-bridge
 	t2smc
 	t2bdrm
 	t2touchbar
@@ -147,7 +149,7 @@ remove_legacy_dkms_modules() {
 	done
 
 	# Older kernels may still rely on the split packages. Keep those installed,
-	# but stop DKMS from automatically rebuilding them alongside t2bce_stack for
+	# but stop DKMS from automatically rebuilding them alongside apple-t2-bridge for
 	# future kernels. They can be removed once those older kernels are retired.
 	for module in "${RETIRED_BCE_DKMS_PACKAGES[@]}"; do
 		for conf in /usr/src/"$module"-*/dkms.conf; do
@@ -243,13 +245,10 @@ copy_module_source() {
 		--exclude='modules.order' \
 		-cf - . | tar -C "$dst" -xf -
 
-	if [[ "$name" == "t2bce_stack" ]]; then
+	if [[ "$name" == "apple-t2-bridge" ]]; then
 		local component component_src
-		for component in t2bce_dma t2bce_core t2bce_vhci t2bce_audio t2bce_ave t2bce_sidecar; do
-			component_src="$REPO_ROOT/modules/$component"
-			if [[ "$component" == t2bce_ave || "$component" == t2bce_sidecar ]]; then
-				component_src="$REPO_ROOT/t2-services/t2-ave/kernel/$component"
-			fi
+		for component in t2-ave t2-sidecar; do
+			component_src="$REPO_ROOT/t2-services/t2-ave/kernel/$component"
 			info "staging $component in $dst"
 			install -d -o root -g root -m 0755 "$dst/$component"
 			tar -C "$component_src" \
@@ -308,7 +307,7 @@ run_step "retire DKMS modules the repository no longer ships" remove_retired_dkm
 
 for module in "${MODULES[@]}"; do
 	run_step "install DKMS module $module" install_module "$module"
-	if [[ "$module" == t2bce_stack ]] && (( STEP_STATUS == 0 )); then
+	if [[ "$module" == apple-t2-bridge ]] && (( STEP_STATUS == 0 )); then
 		run_step "retire old DKMS packages" remove_legacy_dkms_modules
 	fi
 done

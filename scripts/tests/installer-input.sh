@@ -36,12 +36,12 @@ assert "t2hid" in loaded
 assert "t2_trackpad_actuator" in loaded
 assert "t2_precision_trackpad" in loaded
 if sys.argv[2]:
-    assert "t2bce_core" not in loaded
-    assert "t2bce_vhci" not in loaded
+    assert "apple-t2-bridge" not in loaded
+    assert "apple-t2-vhci-hcd" not in loaded
 else:
     for driver in ("t2hid", "t2_trackpad_actuator", "t2_precision_trackpad"):
-        assert loaded.index(driver) < loaded.index("t2bce_core")
-    assert loaded.index("t2bce_core") < loaded.index("t2bce_vhci")
+        assert loaded.index(driver) < loaded.index("apple-t2-bridge")
+    assert loaded.index("apple-t2-bridge") < loaded.index("apple-t2-vhci-hcd")
 PY
 done
 
@@ -98,7 +98,7 @@ dracut = next(args for command, args in calls if command == "dracut")
 assert "--force-drivers" in dracut
 forced = dracut[dracut.index("--force-drivers") + 1].split()
 for driver in ("t2hid", "t2_trackpad_actuator", "t2_precision_trackpad"):
-    assert forced.index(driver) < forced.index("t2bce_core")
+    assert forced.index(driver) < forced.index("apple-t2-bridge")
 assert not (root / "tmp" / constants["RPM_FILENAME"]).exists()
 for failure in ("rpm", "depmod", "dracut", "lsinitrd"):
     calls.clear()

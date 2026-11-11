@@ -55,7 +55,7 @@ sudo make -C build install
 
 The T2 offers this encoder to macOS for Sidecar. It only exists while the
 `kait2en-t2-remote` service holds its connection to the T2. The T2 then shows
-the virtual USB device "SideCar AVE" (`05ac:9312`) and the `t2bce_sidecar`
+the virtual USB device "SideCar AVE" (`05ac:9312`) and the `t2-sidecar`
 module turns it into the `t2-sidecar` encoder.
 
 - H.264 (High profile) and HEVC (Main profile) from 8-bit `NV12` input.

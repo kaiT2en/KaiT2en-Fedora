@@ -48,7 +48,7 @@ def build(output, datadir):
     udev = [
         "# SPDX-License-Identifier: GPL-3.0-or-later",
         "# Based on sharpenedblade's PR #63. Generated from config/models.json.",
-        'ACTION=="add", SUBSYSTEM=="sound", KERNEL=="card[0-9]*", KERNELS=="t2bce_audio", GOTO="t2_dsp_model"',
+        'ACTION=="add", SUBSYSTEM=="sound", KERNEL=="card[0-9]*", DRIVERS=="snd_apple_t2", GOTO="t2_dsp_model"',
         'GOTO="t2_dsp_end"',
         'LABEL="t2_dsp_model"',
         'PROGRAM!="/usr/bin/cat /sys/class/dmi/id/product_name", GOTO="t2_dsp_end"',

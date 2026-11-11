@@ -1,8 +1,8 @@
 # Apple T2 Audio DSP
 
 PipeWire/WirePlumber DSP graphs for the internal speakers and microphones of
-Apple T2 Macs using the t2bce_audio driver and the AppleT2 UCM profiles from
-`modules/t2bce_audio-alsa-ucm-conf/ucm2/`. This is host-side processing.
+Apple T2 Macs using the snd-apple-t2 driver and the AppleT2 UCM profiles from
+`modules/apple-t2-alsa-ucm-conf/ucm2/`. This is host-side processing.
 
 The speaker graphs reproduce the model-specific processing that macOS applies
 to the internal speakers: equalization and crossovers as `bq_raw` biquads,

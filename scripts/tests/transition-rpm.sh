@@ -61,7 +61,7 @@ baseline = rpm("--install", str(source_rpm))
 assert baseline.returncode != 0, baseline.stdout
 assert "no signature" in baseline.stdout, baseline.stdout
 module_root = pathlib.Path("/usr/lib/modules") / kernel / "updates/kait2en"
-assert not (module_root / "t2bce_dma.ko").exists()
+assert not (module_root / "apple-t2-bridge.ko").exists()
 
 calls = []
 def redirect(command, arguments, **kwargs):
@@ -102,7 +102,7 @@ except RuntimeError as error:
 else:
     raise AssertionError("A damaged RPM was accepted")
 assert calls == ["rpm"], calls
-assert not (module_root / "t2bce_dma.ko").exists()
+assert not (module_root / "apple-t2-bridge.ko").exists()
 assert not (pathlib.Path("/tmp") / input_rpm.name).exists()
 
 shutil.copy2(input_rpm, source_rpm)

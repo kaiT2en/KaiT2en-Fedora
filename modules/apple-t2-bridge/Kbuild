@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Out-of-tree build of the Apple T2 bridge stack. The directory layout
+# matches the kernel tree, so the sources map 1:1 onto upstream patches.
+
+export CONFIG_APPLE_T2_BRIDGE := m
+export CONFIG_USB_APPLE_T2_VHCI := m
+export CONFIG_SND_APPLE_T2 := m
+
+subdir-ccflags-y += -I$(src)/include
+
+obj-y += drivers/platform/x86/apple/
+obj-y += drivers/usb/host/
+obj-y += sound/pci/apple-t2/
+
+# The installer stages the out-of-tree AVE and Sidecar drivers next to the
+# kernel tree so that all modules share one symbol namespace.
+ifneq ($(wildcard $(src)/t2-ave/Makefile),)
+obj-y += t2-ave/
+endif
+ifneq ($(wildcard $(src)/t2-sidecar/Makefile),)
+obj-y += t2-sidecar/
+endif

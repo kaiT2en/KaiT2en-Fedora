@@ -26,7 +26,7 @@ feature package. Feature protocols and daemons remain in their own directories.
 
 `t2-services-suspend.service` runs `t2-ncm-sleep pre` before sleep and
 `t2-ncm-sleep post` on resume. Despite the name, the helper no longer touches
-the T2 NCM link itself: `t2bce_vhci` reset-resumes it in-kernel after a
+the T2 NCM link itself: `apple-t2-vhci-hcd` reset-resumes it in-kernel after a
 stateful sleep, so it survives suspend without host-side unbind/rebind. The
 helper's only remaining job is running installed feature hooks with `pre` and
 `post`.
@@ -57,7 +57,7 @@ The internal CDC-NCM link (USB `05ac:8233`) is unmanaged by NetworkManager.
 the IPv6 link-local address the services use. NetworkManager would otherwise
 take the link down on `PrepareForSleep`, before `t2-services-suspend.service`
 runs. The AVE hook could then no longer close its T2 sessions, and bridgeOS
-would drop the SideCar device while the host sleeps, which kills `t2bce_vhci`
+would drop the SideCar device while the host sleeps, which kills `apple-t2-vhci-hcd`
 on resume.
 
 The Fedora source installer, `scripts/fedora/install-t2-services-common.sh`,

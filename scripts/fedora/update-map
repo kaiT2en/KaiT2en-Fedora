@@ -18,7 +18,7 @@ install-gpu-runtime-pm.sh     patches/runtime/gpu-runtime-pm/
 install-i915.sh               patches/runtime/i915/
 install-thunderbolt.sh        patches/runtime/thunderbolt/
 install-wireless.sh           patches/runtime/wireless/
-install-alsa-ucm.sh           modules/t2bce_audio-alsa-ucm-conf/
+install-alsa-ucm.sh           modules/apple-t2-alsa-ucm-conf/
 install-dsp.sh                dsp/
 install-acpi-fixes.sh         scripts/fedora/acpi-autofix.py
 install-plymouth-theme.sh     assets/plymouth/

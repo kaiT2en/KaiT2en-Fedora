@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# Fragment of drivers/usb/host/Kconfig
+
+config USB_APPLE_T2_VHCI
+	tristate "Apple T2 virtual USB host controller"
+	depends on APPLE_T2_BRIDGE
+	help
+	  The T2 chip of Intel Macs connects keyboard, trackpad, Touch Bar
+	  and other internal devices through a virtual USB host controller.
+
+	  To compile this driver as a module, choose M here: the module will
+	  be called apple-t2-vhci-hcd.

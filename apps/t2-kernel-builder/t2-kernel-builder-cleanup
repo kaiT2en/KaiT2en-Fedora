@@ -11,7 +11,7 @@ import sys
 import tempfile
 import time
 
-INPUT_MODULES = ("t2bce_dma", "t2bce_core", "t2bce_vhci", "t2hid")
+INPUT_MODULES = ("apple-t2-bridge", "apple-t2-vhci-hcd", "t2hid")
 REQUIRED_MODULES = (
     "acpi_tad", "rtc_cmos", "applesmc",
     "hid_apple", "hid_appletb_bl", "hid_appletb_kbd",
@@ -81,11 +81,11 @@ if len(sys.argv) in (4, 5) and sys.argv[1] == "install-kernel":
                             text=True, capture_output=True)
     if actual.returncode or actual.stdout.strip() != release: fail("kernel release validation failed")
     has_t2_chip = detect_t2_chip()
-    # t2bce_ave in the t2bce_stack DKMS build links against v4l2-mem2mem.
+    # t2-ave in the apple-t2-bridge DKMS build links against v4l2-mem2mem.
     # Refuse before touching the system instead of rolling back after DKMS.
     if has_t2_chip and not re.search(r"^CONFIG_V4L2_MEM2MEM_DEV=[ym]$",
                                      (tree / ".config").read_text(encoding="utf-8"), re.MULTILINE):
-        fail("kernel config lacks CONFIG_V4L2_MEM2MEM_DEV required by t2bce_ave, "
+        fail("kernel config lacks CONFIG_V4L2_MEM2MEM_DEV required by t2-ave, "
              "rebuild it with the current kernel builder")
     module_dir = pathlib.Path("/lib/modules") / release
     boot_paths = [pathlib.Path("/boot") / name for name in

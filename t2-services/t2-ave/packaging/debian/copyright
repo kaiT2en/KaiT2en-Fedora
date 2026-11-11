@@ -12,7 +12,7 @@ Comment: The GPL-3.0-or-later components carry an additional attribution term
 Files: t2-services/t2-ave/kernel/*
 Copyright: 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 License: GPL-2
-Comment: The t2bce_ave kernel module is GPL-2.0 (SPDX-License-Identifier
+Comment: The t2-ave and t2-sidecar kernel modules are GPL-2.0 (SPDX-License-Identifier
  GPL-2.0, MODULE_LICENSE("GPL")). It is part of the source tree but is not
  shipped in the userspace binary package.
 

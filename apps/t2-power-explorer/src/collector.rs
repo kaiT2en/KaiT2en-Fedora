@@ -181,8 +181,16 @@ pub fn collect() -> DeviceTree {
         tree.nodes.get_mut(&id).unwrap().parent = Some(parent);
     }
 
-    if let Ok(entries) = fs::read_dir("/sys/class/t2bce_vhci") {
-        let mut devices: Vec<_> = entries.flatten().collect();
+    if let Ok(entries) = fs::read_dir("/sys/bus/auxiliary/devices") {
+        let mut devices: Vec<_> = entries
+            .flatten()
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("apple_t2_bridge.vhci.")
+            })
+            .collect();
         devices.sort_by_key(|entry| entry.file_name());
         for entry in devices {
             let bus_id = entry.file_name().to_string_lossy().into_owned();

@@ -16,7 +16,7 @@ shopt -s nullglob
 mount_root=${KAIT2EN_RESCUE_ROOT:-/mnt/kait2en-rescue}
 probe_root=${KAIT2EN_RESCUE_PROBE:-/run/kait2en-rescue-probe}
 live_mount=${KAIT2EN_RESCUE_LIVE_MOUNT:-/run/initramfs/live}
-input_modules=(t2bce_dma t2bce_core t2bce_vhci t2hid)
+input_modules=(apple-t2-bridge apple-t2-vhci-hcd t2hid)
 skip_filesystems=(apfs hfsplus hfs ntfs vfat swap iso9660 squashfs)
 root_filesystems=(btrfs ext4 xfs)
 

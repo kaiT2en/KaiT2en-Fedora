@@ -92,7 +92,7 @@ impl Manager {
         let sidecar = sidecar_device_present();
         self.close_live();
         // The T2 removes the SideCar AVE USB device after the connection
-        // closes. A suspend that starts while it does fails in t2bce_vhci
+        // closes. A suspend that starts while it does fails in apple-t2-vhci-hcd
         // with quiesce error 2, so let the removal finish first.
         if sidecar {
             let start = Instant::now();
@@ -196,7 +196,7 @@ fn serve(socket: &Path, mut manager: Manager) -> Result<()> {
     }
 
     // The T2 exposes the Sidecar encoder as a USB device only while this
-    // connection is held; t2bce_sidecar binds to that device. A failure stays
+    // connection is held; t2-sidecar binds to that device. A failure stays
     // desired, so resume retries it, and must not hold up AVE.
     for attempt in 0..5 {
         match manager.acquire(SIDECAR_SERVICE.to_owned()) {

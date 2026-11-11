@@ -62,11 +62,11 @@ kernel updates. `modinfo -n <module>` prints the installed kernel object path.
 
 | DKMS source | Installed module | Purpose |
 | --- | --- | --- |
-| `t2bce_stack` | `t2bce_dma` | Shared DMA queue engine for T2 BCE clients |
-| `t2bce_stack` | `t2bce_core` | T2 bridge PCI device, mailbox, power management and transport |
-| `t2bce_stack` | `t2bce_vhci` | Virtual USB host for internal T2 input devices |
-| `t2bce_stack` | `t2bce_audio` | Apple T2 audio driver |
-| `t2bce_stack` | `t2bce_ave` | Apple T2 AVE HEVC encoder |
+| `apple-t2-bridge` | `apple-t2-bridge` | T2 Bridge Controller: DMA queues, mailbox and power management |
+| `apple-t2-bridge` | `apple-t2-vhci-hcd` | Virtual USB host for internal T2 input devices |
+| `apple-t2-bridge` | `snd-apple-t2` | Apple T2 audio driver |
+| `apple-t2-bridge` | `t2-ave` | Apple T2 AVE HEVC encoder |
+| `apple-t2-bridge` | `t2-sidecar` | Sidecar video encoder over the T2 NCM link |
 | `t2smc` | `t2smc` | Fan, temperature, charge-limit, RTC and SMC power limit access through hwmon |
 | `t2bdrm` | `t2bdrm` | Touch Bar DRM display device |
 | `t2touchbar` | `t2hid`, `t2touchbar_bl`, `t2touchbar_kbd` | Internal HID quirks, Touch Bar backlight and keyboard mode |
@@ -226,7 +226,7 @@ KAIT2EN does not install a custom kernel or a separate GRUB configuration file.
 ## Audio configuration
 
 `install-alsa-ucm.sh` installs the ALSA UCM profiles for the T2 speaker,
-microphone and headset paths from `modules/t2bce_audio-alsa-ucm-conf/ucm2/`:
+microphone and headset paths from `modules/apple-t2-alsa-ucm-conf/ucm2/`:
 
 ```text
 /usr/share/alsa/ucm2/AppleT2/HiFi-x2.conf
@@ -283,7 +283,7 @@ for the supported-model table, audio behavior and diagnostics.
 | `/etc/systemd/system/t2-services-suspend.service` | Runs feature sleep/resume hooks around sleep |
 | `/usr/local/libexec/t2-services/t2-ncm-sleep` | Runs installed feature hooks before sleep and after resume |
 | `/usr/local/libexec/t2-services/sleep.d/t2-ave` | Closes/reopens sessions only when the AVE daemon is running |
-| `/etc/systemd/system/kait2en-t2-remote.service` | Loads `t2bce_ave` and runs `t2remote`, which holds the bridgeOS services Linux uses, currently `com.apple.aveservice` for the video encoder |
+| `/etc/systemd/system/kait2en-t2-remote.service` | Loads `t2-ave` and runs `t2remote`, which holds the bridgeOS services Linux uses, currently `com.apple.aveservice` for the video encoder |
 | `/usr/local/bin/t2remote` | RemoteXPC service manager; `t2remote status` shows the live services. Listens on `/run/t2remote.sock` |
 | `/etc/NetworkManager/conf.d/10-t2-services.conf` | Keeps NetworkManager away from the internal CDC-NCM interface to the T2, so it stays up until the suspend hooks have closed their T2 sessions. Replaces the former `Apple T2 Bridge` profile |
 | `/usr/local/lib/udev/rules.d/90-t2-services-ncm.rules` | Brings the internal CDC-NCM interface up with an IPv6 link-local address |

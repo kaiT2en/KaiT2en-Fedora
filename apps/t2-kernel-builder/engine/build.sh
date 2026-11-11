@@ -443,9 +443,9 @@ if [[ ! -f $WORK/.prepared ]]; then
 		# keyboard module, which requires sparse-keymap symbols from the kernel.
 		# USB4 must also survive localmodconfig: pcie_ports=compat can keep the
 		# in-tree Thunderbolt driver unloaded while the profile is captured.
-		# t2bce_ave in the t2bce_stack DKMS build links against v4l2-mem2mem.
+		# t2-ave in the apple-t2-bridge DKMS build links against v4l2-mem2mem.
 		# That helper has no prompt and only survives localmodconfig while
-		# t2bce_ave is loaded, so VIDEO_VIM2M is kept as its selecting driver.
+		# t2-ave is loaded, so VIDEO_VIM2M is kept as its selecting driver.
 		# The initcall and module blacklists used by Kait2en replace drivers at
 		# runtime; they do not make those drivers optional at build time.
 		"$TREE/scripts/config" --file "$TREE/.config" \
@@ -526,9 +526,9 @@ TREE=$(<"$WORK/kernel-tree")
 
 if ((T2_CONFIG)) && ! grep -Eq '^CONFIG_V4L2_MEM2MEM_DEV=[ym]$' "$TREE/.config"; then
 	# Trees prepared before VIDEO_VIM2M became required can lack the
-	# v4l2-mem2mem helper that t2bce_ave links against. Repair them in place
+	# v4l2-mem2mem helper that t2-ave links against. Repair them in place
 	# so an existing build only recompiles the media core.
-	printf 'Enabling v4l2-mem2mem for t2bce_ave in the prepared tree\n'
+	printf 'Enabling v4l2-mem2mem for t2-ave in the prepared tree\n'
 	"$TREE/scripts/config" --file "$TREE/.config" \
 		--enable MEDIA_TEST_SUPPORT \
 		--enable V4L_TEST_DRIVERS \

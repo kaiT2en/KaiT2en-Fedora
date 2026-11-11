@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Runs feature sleep/resume hooks. The T2 NCM link now survives suspend on
-# its own (t2bce_vhci reset-resumes it after a stateful sleep), so this no
+# its own (apple-t2-vhci-hcd reset-resumes it after system sleep), so this no
 # longer needs to unbind/rebind cdc_ncm or wait for the link to come back.
 set -uo pipefail
 HOOK_DIR=${T2_HOOK_DIR:-"$(dirname -- "$0")/sleep.d"}

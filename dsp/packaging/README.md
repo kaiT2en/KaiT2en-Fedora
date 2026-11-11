@@ -48,7 +48,7 @@ Runtime dependencies are PipeWire with filter-chain/LV2 support, WirePlumber
 | `systemd-udev` | `udev` |
 
 The driver and the AppleT2x2/x4/x6 UCM profiles come from separate packages.
-The UCM source is `modules/t2bce_audio-alsa-ucm-conf/ucm2/` in the
+The UCM source is `modules/apple-t2-alsa-ucm-conf/ucm2/` in the
 alsa-ucm-conf layout. Add the distribution-specific dependencies once those
 are packaged. WirePlumber must support UCM split PCMs.
 

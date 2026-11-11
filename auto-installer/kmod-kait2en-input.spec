@@ -24,9 +24,7 @@ KaiT2en installer replaces this package with DKMS modules for an updated kernel.
 %setup -q -n kait2en-input-%{version}
 
 %build
-make -C modules/t2bce_dma KVERSION=%{kernel_release}
-make -C modules/t2bce_core KVERSION=%{kernel_release}
-make -C modules/t2bce_vhci KVERSION=%{kernel_release}
+make -C modules/apple-t2-bridge KVERSION=%{kernel_release}
 make -C modules/t2touchbar KDIR=/usr/src/kernels/%{kernel_release} KVER=%{kernel_release}
 make -C modules/hid_t2magicmouse KDIR=/usr/src/kernels/%{kernel_release} KVER=%{kernel_release}
 make -C modules/t2_precision_trackpad KDIR=/usr/src/kernels/%{kernel_release} KVER=%{kernel_release}
@@ -34,11 +32,9 @@ make -C modules/t2_trackpad_actuator KDIR=/usr/src/kernels/%{kernel_release} KVE
 
 %install
 install -d -m 0755 %{buildroot}/usr/lib/modules/%{kernel_release}/updates/kait2en
-install -m 0644 modules/t2bce_dma/t2bce_dma.ko \
+install -m 0644 modules/apple-t2-bridge/drivers/platform/x86/apple/apple-t2-bridge.ko \
     %{buildroot}/usr/lib/modules/%{kernel_release}/updates/kait2en/
-install -m 0644 modules/t2bce_core/t2bce_core.ko \
-    %{buildroot}/usr/lib/modules/%{kernel_release}/updates/kait2en/
-install -m 0644 modules/t2bce_vhci/t2bce_vhci.ko \
+install -m 0644 modules/apple-t2-bridge/drivers/usb/host/apple-t2-vhci-hcd.ko \
     %{buildroot}/usr/lib/modules/%{kernel_release}/updates/kait2en/
 install -m 0644 modules/t2touchbar/t2hid.ko \
     %{buildroot}/usr/lib/modules/%{kernel_release}/updates/kait2en/
