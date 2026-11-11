@@ -639,6 +639,24 @@ items:
       series, carried until merged:
       https://lore.kernel.org/all/20260925-brcm4388-submit-v1-5-b5cbc2cde2fb@gmail.com/
 
+  - id: brcmfmac-bcm4364-antenna-sku
+    title: "BCM4364/3 firmware selection without antenna SKU"
+    state: available
+    upstream: submitted
+    version: v1
+    project: Linux kernel
+    subsystem: Wi-Fi / brcmfmac
+    authors:
+      - AdityaGarg8
+    link: "https://lore.kernel.org/all/20261111141756.11564-1-aditya.garg@linux.dev/"
+    updated: "2026-11-11"
+    notes: >-
+      ACPI on iMacPro1,1, iMac19,1 and iMac19,2 does not advertise the
+      antenna SKU that brcmfmac requires for Apple firmware selection.
+      The macOS firmware for BCM4364/3 does not depend on it, so the
+      antenna SKU is optional on this chip and used only when ACPI
+      provides it.
+
   - id: bluetooth-bcm4377-cold-resume
     title: "BCM4377 Bluetooth cold resume after S3"
     state: available
