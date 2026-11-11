@@ -105,6 +105,10 @@
       "message_id": "1568654937867555029",
       "hash": "a804abe2c691650e7bf4e1a12d51c7b101e710ccfaa6c5f08d3e784ed3713d82"
     },
+    "brcmfmac-bcm4364-antenna-sku": {
+      "message_id": "1570117115447476376",
+      "hash": "089350ed6f7cdcfccc73627c102795bccff782901960c86c492238d53070e50f"
+    },
     "bluetooth-bcm4377-cold-resume": {
       "message_id": "1568654941910736956",
       "hash": "f4149bcde0a66dbf890846ac25ac2daa31f913679c53d9ff61077accd3e742ee"
@@ -123,7 +127,7 @@
     },
     "bluetooth-bcm4377-aspm": {
       "message_id": "1570056621458067526",
-      "hash": "3b6e214e5c9cb5d4dae7cf071fb200aec863c065604cf6e1e70d1ec357d5a0f0"
+      "hash": "efe0c072c23141ce33d5d84e38a89387ab6a338af9b97fb8334a5852768b26f2"
     },
     "brcmfmac-bcm4377-d3-ack": {
       "message_id": "1550620841786740856",
