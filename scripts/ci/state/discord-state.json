@@ -17,6 +17,10 @@
       "message_id": "1533951135214469344",
       "hash": "712d4fbbe249e3918e26a5d0d1d12313ee260413a630af6940dce5c3660afa15"
     },
+    "thunderbolt-ice-lake-rtd3": {
+      "message_id": "1570063111216697354",
+      "hash": "482995ba2f270ff4041b7196f9d6c6b90eee467ee3deb41dd6c36829477ad753"
+    },
     "apple-t2-early-cpu-offlining": {
       "message_id": "1537074756724199444",
       "hash": "4a37e60ad335c40699fb37b462d05e8abee1fa9109fb7be5293b0760208dd0aa"
