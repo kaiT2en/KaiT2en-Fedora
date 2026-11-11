@@ -1,0 +1,63 @@
+From 6289d1cc3fcb46b624de6184b0ef9c1393aac57d Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Tue, 10 Nov 2026 18:02:33 +0100
+Subject: [PATCH] thunderbolt: Enable runtime PM for the Ice Lake router with
+ the software CM
+
+The firmware connection manager reports RTD3 for the Ice Lake router.
+On Apple systems the software connection manager takes over and enables
+runtime PM only for USB4 routers, so the Ice Lake NHI stays in D0 for as
+long as the driver is bound and the package does not reach deep C-states.
+
+Enable runtime PM for the Ice Lake router as well. The Ice Lake NHI
+already has runtime suspend and resume callbacks.
+
+Tested on a MacBookAir9,1.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ drivers/thunderbolt/tb.c |  5 +++--
+ drivers/thunderbolt/tb.h | 12 ++++++++++++
+ 2 files changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/thunderbolt/tb.c b/drivers/thunderbolt/tb.c
+index 418ad0a61a..139ef49b49 100644
+--- a/drivers/thunderbolt/tb.c
++++ b/drivers/thunderbolt/tb.c
+@@ -3044,8 +3044,9 @@ static int tb_start(struct tb *tb, bool reset)
+ 	 * implement the necessary router operations.
+ 	 */
+ 	tb->root_switch->no_nvm_upgrade = !tb_switch_is_usb4(tb->root_switch);
+-	/* All USB4 routers support runtime PM */
+-	tb->root_switch->rpm = tb_switch_is_usb4(tb->root_switch);
++	/* All USB4 routers support runtime PM. Ice Lake also supports RTD3 */
++	tb->root_switch->rpm = tb_switch_is_usb4(tb->root_switch) ||
++			       tb_switch_is_ice_lake(tb->root_switch);
+ 
+ 	ret = tb_switch_configure(tb->root_switch);
+ 	if (ret) {
+diff --git a/drivers/thunderbolt/tb.h b/drivers/thunderbolt/tb.h
+index e86845762e..eff4a342d6 100644
+--- a/drivers/thunderbolt/tb.h
++++ b/drivers/thunderbolt/tb.h
+@@ -1011,6 +1011,18 @@ static inline bool tb_switch_is_tiger_lake(const struct tb_switch *sw)
+ 	return false;
+ }
+ 
++static inline bool tb_switch_is_ice_lake(const struct tb_switch *sw)
++{
++	if (sw->config.vendor_id == PCI_VENDOR_ID_INTEL) {
++		switch (sw->config.device_id) {
++		case PCI_DEVICE_ID_INTEL_ICL_NHI0:
++		case PCI_DEVICE_ID_INTEL_ICL_NHI1:
++			return true;
++		}
++	}
++	return false;
++}
++
+ /**
+  * tb_switch_is_icm() - Is the switch handled by ICM firmware
+  * @sw: Switch to check
+
+base-commit: 13527afe5f15c60b82920fe9915f3cabf1315302

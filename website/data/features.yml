@@ -126,11 +126,13 @@ items:
   - id: thunderbolt-ice-lake-rtd3
     title: "Ice Lake Thunderbolt runtime power off"
     state: available
-    upstream: preparing
+    upstream: submitted
+    version: v1
     project: Linux kernel
     subsystem: Thunderbolt
     authors:
       - deqrocks
+    link: "https://lore.kernel.org/all/20261111130851.62101-1-dev@deq.rocks/"
     updated: "2026-11-11"
     notes: >-
       The software connection manager enabled runtime PM only for USB4
