@@ -741,4 +741,4 @@ items:
       hci_bcm4377 kept ASPM off on the whole link to the Wi-Fi and
       Bluetooth chip because of a hardware erratum, which held the
       MacBookAir9,1 package at PC3. ASPM is now off only while the
-      firmware boots.
+      firmware boots. Acked by Sven Peter.
