@@ -25,12 +25,12 @@ that keeps them with pcieport.
 Signed-off-by: Andre Eikmeyer <andre.eikmeyer@kait2en.org>
 ---
  drivers/thunderbolt/Makefile |   2 +-
- drivers/thunderbolt/apple.c  | 645 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ drivers/thunderbolt/apple.c  | 618 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  drivers/thunderbolt/pci.c    |  11 +-
  drivers/thunderbolt/switch.c |   7 +
  drivers/thunderbolt/tb.c     |  78 +++++++++++++++-
  drivers/thunderbolt/tb.h     |  27 +++++
- 6 files changed, 763 insertions(+), 7 deletions(-)
+ 6 files changed, 736 insertions(+), 7 deletions(-)
 
 diff --git a/drivers/thunderbolt/Makefile b/drivers/thunderbolt/Makefile
 index beb054c..a3f0efc 100644
@@ -47,10 +47,10 @@ index beb054c..a3f0efc 100644
  thunderbolt-${CONFIG_USB4_KUNIT_TEST} += test.o
 diff --git a/drivers/thunderbolt/apple.c b/drivers/thunderbolt/apple.c
 new file mode 100644
-index 0000000..9152c44
+index 0000000..b85bea5
 --- /dev/null
 +++ b/drivers/thunderbolt/apple.c
-@@ -0,0 +1,645 @@
+@@ -0,0 +1,618 @@
 +// SPDX-License-Identifier: GPL-2.0
 +
 +#include <linux/acpi.h>
@@ -66,11 +66,11 @@ index 0000000..9152c44
 +
 +#define TB_APPLE_DSB_NHI	PCI_DEVFN(0, 0)
 +#define TB_APPLE_DSB_XHCI	PCI_DEVFN(2, 0)
-+#define TB_APPLE_MAX_BUSES	16
 +#define TB_APPLE_AUTOSUSPEND_MS	1000
 +
 +struct tb_apple_port {
 +	struct pci_dev *port;
++	struct pci_ops *ops;
 +	struct pci_dev *upsb;
 +	struct pci_dev *dsb_nhi;
 +	struct pci_dev *dsb_xhci;
@@ -81,48 +81,39 @@ index 0000000..9152c44
 +};
 +
 +/* Config accesses below an unpowered port raise a CATERR, drop them. */
-+struct tb_apple_bus {
-+	struct pci_bus *bus;
-+	struct pci_ops *ops;
-+	struct tb_apple_port *tap;
-+};
-+
-+static struct tb_apple_bus tb_apple_buses[TB_APPLE_MAX_BUSES];
-+static DEFINE_MUTEX(tb_apple_buses_lock);
-+
-+static struct tb_apple_bus *tb_apple_find_bus(struct pci_bus *bus)
++/* Buses added by hotplug inherit these ops, so find the port from the bus. */
++static struct tb_apple_port *tb_apple_bus_port(struct pci_bus *bus)
 +{
-+	int i;
++	while (bus->parent && !pci_is_root_bus(bus->parent))
++		bus = bus->parent;
 +
-+	for (i = 0; i < TB_APPLE_MAX_BUSES; i++)
-+		if (tb_apple_buses[i].bus == bus)
-+			return &tb_apple_buses[i];
-+
-+	return NULL;
++	return bus->self ? pci_get_drvdata(bus->self) : NULL;
 +}
 +
 +static int tb_apple_read(struct pci_bus *bus, unsigned int devfn, int where,
 +			 int size, u32 *val)
 +{
-+	struct tb_apple_bus *tab = tb_apple_find_bus(bus);
++	struct tb_apple_port *tap = tb_apple_bus_port(bus);
 +
-+	if (READ_ONCE(tab->tap->off)) {
++	if (!tap || READ_ONCE(tap->off)) {
 +		PCI_SET_ERROR_RESPONSE(val);
-+		return PCIBIOS_SUCCESSFUL;
++		return tap ? PCIBIOS_SUCCESSFUL : PCIBIOS_DEVICE_NOT_FOUND;
 +	}
 +
-+	return tab->ops->read(bus, devfn, where, size, val);
++	return tap->ops->read(bus, devfn, where, size, val);
 +}
 +
 +static int tb_apple_write(struct pci_bus *bus, unsigned int devfn, int where,
 +			  int size, u32 val)
 +{
-+	struct tb_apple_bus *tab = tb_apple_find_bus(bus);
++	struct tb_apple_port *tap = tb_apple_bus_port(bus);
 +
-+	if (READ_ONCE(tab->tap->off))
++	if (!tap)
++		return PCIBIOS_DEVICE_NOT_FOUND;
++	if (READ_ONCE(tap->off))
 +		return PCIBIOS_SUCCESSFUL;
 +
-+	return tab->ops->write(bus, devfn, where, size, val);
++	return tap->ops->write(bus, devfn, where, size, val);
 +}
 +
 +static struct pci_ops tb_apple_ops = {
@@ -130,43 +121,28 @@ index 0000000..9152c44
 +	.write = tb_apple_write,
 +};
 +
-+static int tb_apple_wrap_bus(struct tb_apple_port *tap, struct pci_bus *bus)
++/* Callers hold pci_lock_rescan_remove(), no bus is added or removed. */
++static void tb_apple_swap_ops(struct pci_bus *bus, struct pci_ops *from,
++			      struct pci_ops *to)
 +{
 +	struct pci_bus *child;
-+	int i, ret;
 +
-+	for (i = 0; i < TB_APPLE_MAX_BUSES; i++)
-+		if (!tb_apple_buses[i].bus)
-+			break;
-+	if (i == TB_APPLE_MAX_BUSES)
-+		return -ENOSPC;
++	if (bus->ops == from)
++		bus->ops = to;
 +
-+	tb_apple_buses[i].ops = bus->ops;
-+	tb_apple_buses[i].tap = tap;
-+	tb_apple_buses[i].bus = bus;
-+	bus->ops = &tb_apple_ops;
++	list_for_each_entry(child, &bus->children, node)
++		tb_apple_swap_ops(child, from, to);
++}
 +
-+	list_for_each_entry(child, &bus->children, node) {
-+		ret = tb_apple_wrap_bus(tap, child);
-+		if (ret)
-+			return ret;
-+	}
-+
-+	return 0;
++static void tb_apple_wrap_buses(struct tb_apple_port *tap)
++{
++	tap->ops = tap->port->subordinate->ops;
++	tb_apple_swap_ops(tap->port->subordinate, tap->ops, &tb_apple_ops);
 +}
 +
 +static void tb_apple_unwrap_buses(struct tb_apple_port *tap)
 +{
-+	int i;
-+
-+	mutex_lock(&tb_apple_buses_lock);
-+	for (i = 0; i < TB_APPLE_MAX_BUSES; i++) {
-+		if (tb_apple_buses[i].tap != tap)
-+			continue;
-+		tb_apple_buses[i].bus->ops = tb_apple_buses[i].ops;
-+		memset(&tb_apple_buses[i], 0, sizeof(tb_apple_buses[i]));
-+	}
-+	mutex_unlock(&tb_apple_buses_lock);
++	tb_apple_swap_ops(tap->port->subordinate, &tb_apple_ops, tap->ops);
 +}
 +
 +static int tb_apple_set_power(struct pci_dev *pdev, int state)
@@ -527,14 +503,7 @@ index 0000000..9152c44
 +	pci_set_drvdata(port, tap);
 +	tb_apple_hold_bridges(tap, true);
 +
-+	mutex_lock(&tb_apple_buses_lock);
-+	ret = tb_apple_wrap_bus(tap, port->subordinate);
-+	mutex_unlock(&tb_apple_buses_lock);
-+	if (ret) {
-+		tb_apple_unwrap_buses(tap);
-+		tb_apple_hold_bridges(tap, false);
-+		return ret;
-+	}
++	tb_apple_wrap_buses(tap);
 +
 +	status = acpi_install_notify_handler(ACPI_HANDLE(&tap->nhi->dev),
 +					     ACPI_SYSTEM_NOTIFY,
@@ -682,7 +651,9 @@ index 0000000..9152c44
 +		return 0;
 +
 +	tb_apple_take_ports();
++	pci_lock_rescan_remove();
 +	ret = pci_register_driver(&tb_apple_driver);
++	pci_unlock_rescan_remove();
 +	if (ret)
 +		tb_apple_return_ports();
 +	return ret;
@@ -693,7 +664,9 @@ index 0000000..9152c44
 +	if (!x86_apple_machine)
 +		return;
 +
++	pci_lock_rescan_remove();
 +	pci_unregister_driver(&tb_apple_driver);
++	pci_unlock_rescan_remove();
 +	tb_apple_return_ports();
 +}
 diff --git a/drivers/thunderbolt/pci.c b/drivers/thunderbolt/pci.c
