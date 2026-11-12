@@ -1,0 +1,67 @@
+From: Andre Eikmeyer <dev@deq.rocks>
+Subject: [PATCH] drm/amd/display: keep the swap lock of the 5K iMac tiles on DCE
+
+On DCE the timing sync of the two 5K iMac panel tiles sets up the global
+swap lock for surface flips and tears it down once the tiles are in
+sync. The flips of the two tiles are programmed one after the other, so
+a flip can land a frame later on one tile than on the other, which shows
+as tearing between the tiles with vsync.
+
+Keep the swap lock of the tile pair after the timing sync, and tear it
+down once the new state no longer drives both tiles.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+  .../drm/amd/display/dc/hwss/dce110/dce110_hwseq.c  | 25 ++++++++++++++++++++++
+  1 file changed, 25 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c b/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
+index edffaca..e1c2fbf 100644
+--- a/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
++++ b/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
+@@ -2690,6 +2690,14 @@ enum dc_status dce110_apply_ctx_to_hw(
+ 		if (!old->stream ||
+ 		    pipe_need_reprogram(old, &context->res_ctx.pipe_ctx[primary]))
+ 			right->link_state_valid = false;
++	} else if (dc->config.imac5K_support) {
++		/* Without both tiles no pipe may wait for the 5K flip lock */
++		for (i = 0; i < dc->res_pool->timing_generator_count; i++) {
++			struct timing_generator *tg = dc->res_pool->timing_generators[i];
++
++			if (tg->funcs->tear_down_global_swap_lock)
++				tg->funcs->tear_down_global_swap_lock(tg);
++		}
+ 	}
+ 
+ 	/* Reset old context */
+@@ -2963,6 +2971,18 @@ static bool wait_for_reset_trigger_to_occur(
+ 	return rc;
+ }
+ 
++/*
++ * The two tiles of the 5K iMac panel keep the global swap lock after the
++ * timing sync, so both tiles flip in the same frame.
++ */
++static bool dce110_is_5k_tile_group(struct dc *dc, int group_size,
++				    struct pipe_ctx *grouped_pipes[])
++{
++	return dc->config.imac5K_support && group_size == 2 &&
++	       grouped_pipes[0]->stream->link->link_index <= 1 &&
++	       grouped_pipes[1]->stream->link->link_index <= 1;
++}
++
+ /* Enable timing synchronization for a group of Timing Generators. */
+ static void dce110_enable_timing_synchronization(
+ 		struct dc *dc,
+@@ -3004,6 +3024,11 @@ static void dce110_enable_timing_synchronization(
+ 				grouped_pipes[i]->stream_res.tg);
+ 	}
+ 
++	if (dce110_is_5k_tile_group(dc, group_size, grouped_pipes)) {
++		DC_SYNC_INFO("GSL: keeping the flip lock of the 5K tiles.\n");
++		return;
++	}
++
+ 	/* GSL Vblank synchronization is a one time sync mechanism, assumption
+ 	 * is that the sync'ed displays will not drift out of sync over time*/
+ 	DC_SYNC_INFO("GSL: Restoring register states.\n");
