@@ -10,7 +10,7 @@ site:
     modules. Kernel updates come from Fedora, the T2 modules come from us.
   url: https://kait2en.org
   language: en
-  copyright: MIT · KAIT2EN Fedora
+  copyright: GPL · KAIT2EN Fedora
   footer_note: Made for T2 Macs that deserve a current kernel
 
 links:

@@ -1,9 +1,10 @@
 # KAIT2EN name and brand
 
-The KAIT2EN code is free software. The scripts, docs and helper code are MIT
-licensed; the kernel modules and some components carry GPL or their own
-licenses, noted in their directories. You may use, study, modify and
-redistribute the code under those licenses. Nothing here narrows them.
+The KAIT2EN code is free software. The kernel modules are GPL-2.0, everything
+else KAIT2EN writes is GPL-3.0-or-later, and vendored third-party code keeps
+its upstream license. [LICENSING.md](LICENSING.md) has the full breakdown. You
+may use, study, modify and redistribute the code under those licenses. Nothing
+here narrows them.
 
 The **name "KAIT2EN", the logo and the project's visual identity are separate
 from the code licenses** and are not granted by them. They identify this

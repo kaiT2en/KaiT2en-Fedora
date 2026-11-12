@@ -35,15 +35,10 @@ There is a distinct difference between making broken things work and fixing thin
 
 ## License
 
-KAIT2EN-owned scripts, howto documents, project text and helper code are MIT
-licensed.
-
-Kernel modules, apps and third-party tools may include code with different
-origins. Those components keep their own licenses in their directories.
-
-The kernel modules are GPL-2.0; everything else KAIT2EN writes, apps, protocols,
-audio DSP profiles and scripts, is GPL-3.0-or-later. The full breakdown is in
-[LICENSING.md](LICENSING.md).
+The kernel modules are GPL-2.0. Everything else KAIT2EN writes, apps,
+protocols, audio DSP profiles, scripts, howto documents and project text, is
+GPL-3.0-or-later. Vendored third-party code keeps its upstream license. The
+full breakdown is in [LICENSING.md](LICENSING.md).
 
 The code licenses do not grant the KAIT2EN name or logo. Their use, and what
 the project stands for, are described in [TRADEMARK.md](TRADEMARK.md) and
