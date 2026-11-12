@@ -121,21 +121,6 @@ HOOK
 	chmod 0755 "$KERNEL_INSTALL_HOOK"
 }
 
-patch_needed_for_kernel() {
-	local patch_file=$1 kver=$2
-	local patch_name=${patch_file##*/}
-
-	case "$patch_name" in
-		0001-drm-amdgpu-reset-VI-ASIC-on-MacBookPro15-1.patch)
-			# Merged upstream in 7.3 and backported to stable 7.2.10+
-			if kernel_version_ge "$kver" 7 2 10; then
-				return 1
-			fi
-			;;
-	esac
-	return 0
-}
-
 case "$ACTION" in
 	remove)
 		require_command dracut rm
@@ -207,10 +192,6 @@ else
 fi
 
 for patch_file in "${PATCH_FILES[@]}"; do
-	if ! patch_needed_for_kernel "$patch_file" "$KVER"; then
-		info "skipping ${patch_file##*/} (already present in kernel $KVER)"
-		continue
-	fi
 	apply_patch_if_needed "$kernel_tree" "$patch_file"
 done
 

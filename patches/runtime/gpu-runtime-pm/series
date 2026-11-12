@@ -1,4 +1,3 @@
-0001-drm-amdgpu-reset-VI-ASIC-on-MacBookPro15-1.patch
 0002-drm-amdgpu-Add-Apple-GMUX-runtime-PM-support.patch
 0003-drm-amdgpu-add-support-for-5K-iMacs.patch
 0004-drm-amdgpu-catch-register-access-while-GMUX-keeps-the-GPU-off.patch
