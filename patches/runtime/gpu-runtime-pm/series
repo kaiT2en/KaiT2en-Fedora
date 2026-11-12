@@ -10,4 +10,3 @@
 0012-drm-amd-display-avoid-MPC-pipe-split-on-the-MacBookPro16-1.patch
 0013-drm-amd-display-support-the-5K-panel-of-the-iMacPro1-1.patch
 0014-drm-amd-display-scope-the-5K-iMac-quirk-and-keep-the-timing-check.patch
-0015-drm-amd-display-keep-the-swap-lock-of-the-5K-iMac-tiles-on-DCE.patch
