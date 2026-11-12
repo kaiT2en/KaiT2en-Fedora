@@ -10,11 +10,7 @@ use std::{
     cell::{Cell, RefCell},
     collections::VecDeque,
     rc::Rc,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc,
-        Arc,
-    },
+    sync::mpsc,
     thread,
     time::Duration,
 };
@@ -378,29 +374,41 @@ fn main() -> glib::ExitCode {
 
 fn daemon_main() -> error::Result<()> {
     let listener = ipc::bind_listener()?;
+    // SIGHUP arrives as None on the same channel so a sleeping daemon wakes
     let (connections_tx, connections_rx) = mpsc::channel();
+    let hup_tx = connections_tx.clone();
     thread::spawn(move || loop {
-        if connections_tx.send(listener.accept()).is_err() {
+        if connections_tx.send(Some(listener.accept())).is_err() {
             break;
         }
     });
-    let reload_requested = Arc::new(AtomicBool::new(false));
-    signal_hook::flag::register(SIGHUP, reload_requested.clone()).map_err(|source| {
+    let mut signals = signal_hook::iterator::Signals::new([SIGHUP]).map_err(|source| {
         error::FanControlError::Io {
             path: std::path::PathBuf::from("<signal-hook>"),
             source,
         }
     })?;
+    thread::spawn(move || {
+        for _ in signals.forever() {
+            if hup_tx.send(None).is_err() {
+                break;
+            }
+        }
+    });
     let mut runtime = DaemonRuntime::new()?;
 
     loop {
-        if reload_requested.swap(false, Ordering::Relaxed) {
-            runtime.reload_config()?;
-        }
-
         runtime.tick();
-        match connections_rx.recv_timeout(runtime.controller.next_wakeup()) {
-            Ok(Ok((stream, _addr))) => {
+        // With the SMC in charge the readings only feed the UI, so the
+        // daemon sleeps until the UI asks again
+        let next = if runtime.config.automatic_control_enabled || runtime.ui_active() {
+            connections_rx.recv_timeout(runtime.controller.next_wakeup())
+        } else {
+            connections_rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected)
+        };
+        match next {
+            Ok(None) => runtime.reload_config()?,
+            Ok(Some(Ok((stream, _addr)))) => {
                 let request = ipc::read_request(&stream);
                 match request {
                     Ok(request) => match runtime.handle_request(request) {
@@ -416,7 +424,7 @@ fn daemon_main() -> error::Result<()> {
                     }
                 }
             }
-            Ok(Err(source)) => return Err(error::FanControlError::Io {
+            Ok(Some(Err(source))) => return Err(error::FanControlError::Io {
                 path: std::path::PathBuf::from(ipc::SOCKET_PATH),
                 source,
             }),
@@ -485,10 +493,14 @@ impl DaemonRuntime {
         })
     }
 
+    fn ui_active(&self) -> bool {
+        self.last_ui_request
+            .is_some_and(|seen| seen.elapsed() <= Duration::from_secs(3))
+    }
+
     fn tick(&mut self) {
         if self.controller.should_tick() {
-            let ui_active = self.last_ui_request
-                .is_some_and(|seen| seen.elapsed() <= Duration::from_secs(3));
+            let ui_active = self.ui_active();
             if ui_active {
                 for fan in &mut self.fans {
                     let _ = fan.refresh_state();
