@@ -9,4 +9,3 @@
 0011-drm-amd-pm-remove-UMC-CDR-workaround-for-Apple-systems.patch
 0012-drm-amd-display-avoid-MPC-pipe-split-on-the-MacBookPro16-1.patch
 0013-drm-amd-display-support-the-5K-panel-of-the-iMacPro1-1.patch
-0014-drm-amd-display-keep-the-5K-iMac-DP-tile-receiver-powered.patch
