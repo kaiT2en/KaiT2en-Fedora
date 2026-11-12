@@ -1,36 +1,14 @@
 From: Andre Eikmeyer <dev@deq.rocks>
 Subject: [PATCH] drm/amd/display: support the 5K panel of the iMacPro1,1
 
-The iMacPro1,1 drives its 5K panel as two 2560x2880 tiles, like the
-iMac20,x. On the iMac20,x the tiles are an eDP root link and a DP tile
-link, on the iMacPro1,1 both tiles are eDP links. The 5K quirk matches
-the tile pair by signal type and never applies to the iMacPro1,1.
-
-Add the iMacPro1,1 to the quirk and match the tiles by link index, the
-root on link 0 and the tile on link 1. Write the tile latch to the root
-link only.
+The iMacPro1,1 drives its 5K panel like the iMac20,x, as two 2560x2880
+tiles on an eDP root link and a DP tile link. Add it to the 5K quirk.
 
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
-  drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c        | 2 +-
   drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_quirks.c | 7 +++++++
-  drivers/gpu/drm/amd/display/dc/core/dc_resource.c        | 6 ++----
-  drivers/gpu/drm/amd/display/dc/link/link_detection.c     | 2 +-
-  4 files changed, 11 insertions(+), 6 deletions(-)
+  1 file changed, 7 insertions(+)
 
-diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-index fee9ff8..8c21ae3 100644
---- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-+++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -4667,7 +4667,7 @@ static void amdgpu_dm_commit_streams(struct drm_atomic_commit *state,
- 			if (!dm_new_crtc_state->stream)
- 				continue;
- 
--			if (dm_new_crtc_state->stream->signal != SIGNAL_TYPE_EDP)
-+			if (dm_new_crtc_state->stream->link != dm->dc->links[0])
- 				continue;
- 
- 			if (new_crtc_state->mode.vdisplay == 2880 && new_crtc_state->mode.hdisplay == 2560) {
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_quirks.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_quirks.c
 index 8657dd9..a34a455 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_quirks.c
@@ -49,33 +27,3 @@ index 8657dd9..a34a455 100644
  	{}
  	/* TODO: refactor this from a fixed table to a dynamic option */
  };
-diff --git a/drivers/gpu/drm/amd/display/dc/core/dc_resource.c b/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
-index 4bf16f3..0ef4c44 100644
---- a/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
-+++ b/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
-@@ -687,10 +687,8 @@ bool resource_are_streams_timing_synchronizable(
- {
- 
- 	if (stream1->ctx->dc->config.imac5K_support &&
--		((stream1->signal == SIGNAL_TYPE_EDP && stream2->signal == SIGNAL_TYPE_DISPLAY_PORT &&
--		stream2->link->link_index == 1) ||
--		(stream2->signal == SIGNAL_TYPE_EDP && stream1->signal == SIGNAL_TYPE_DISPLAY_PORT &&
--		stream1->link->link_index == 1)))
-+		stream1->link->link_index <= 1 && stream2->link->link_index <= 1 &&
-+		stream1->link != stream2->link)
- 		return true;
- 
- 	if (stream1->timing.h_total != stream2->timing.h_total)
-diff --git a/drivers/gpu/drm/amd/display/dc/link/link_detection.c b/drivers/gpu/drm/amd/display/dc/link/link_detection.c
-index f254f2d..f6a55ae 100644
---- a/drivers/gpu/drm/amd/display/dc/link/link_detection.c
-+++ b/drivers/gpu/drm/amd/display/dc/link/link_detection.c
-@@ -1203,7 +1203,7 @@ static bool detect_link_and_local_sink(struct dc_link *link,
- 				if (!link->dpcd_caps.set_power_state_capable_edp)
- 					link->wa_flags.dp_keep_receiver_powered = true;
- 			}
--			if (dc->config.imac5K_support) {
-+			if (dc->config.imac5K_support && link->link_index == 0) {
- 				const uint8_t val = 1;
- 				core_link_write_dpcd(link, 0x4F1, &val, 1);
- 			}
