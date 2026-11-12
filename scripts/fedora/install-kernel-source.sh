@@ -80,11 +80,13 @@ case "$ACTION" in
 	*) usage ;;
 esac
 
+# Refresh the hook copy before the fetch, so a failed fetch for the running
+# kernel cannot leave an outdated hook behind for the next kernel.
+((FROM_REPO == 0)) || install_kernel_hook
+
 ((SKIP_DEPS)) || dnf install -y cpio curl git-core rpm tar xz
 require_command cpio curl git rpm rpm2cpio tar xz
 
 prune_kernel_sources
 tree=$(kernel_source_tree "$KVER") || fail "kernel source for $KVER is unavailable"
 info "kernel source for $KVER: $tree"
-
-((FROM_REPO == 0)) || install_kernel_hook

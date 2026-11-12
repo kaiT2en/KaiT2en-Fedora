@@ -173,6 +173,9 @@ if ! has_broadcom_wireless; then
 fi
 
 load_patch_series
+# Refresh the hook copy before the build, so a failed build for the running
+# kernel cannot leave an outdated hook behind for the next kernel.
+((FROM_REPO == 0)) || install_kernel_hook
 
 info "installing build dependencies for $KVER"
 build_tree=$(readlink -f "/lib/modules/$KVER/build" || true)
@@ -262,8 +265,6 @@ depmod -a "$KVER"
 if ((DEFER_INITRAMFS == 0)); then
 	dracut --force "/boot/initramfs-$KVER.img" "$KVER"
 fi
-
-((FROM_REPO == 0)) || install_kernel_hook
 
 info "wireless modules installed for $KVER"
 info "reboot into $KVER, then verify with: modinfo -n brcmfmac btbcm"
