@@ -77,6 +77,18 @@ if [[ "$model" == iMac* ]]; then
 	info "not forcing PCIe ASPM on $model"
 fi
 
+# Without pcie_ports=compat the iMacPro1,1 hangs in the SMP bring up on
+# resume from S3.
+if [[ "$model" == iMacPro1,1 ]]; then
+	kept_args=()
+	for arg in "${REMOVE_ARGS[@]}"; do
+		[[ "$arg" == pcie_ports=compat ]] || kept_args+=("$arg")
+	done
+	REMOVE_ARGS=("${kept_args[@]}")
+	ADD_ARGS+=("pcie_ports=compat")
+	info "using pcie_ports=compat on $model"
+fi
+
 INITCALL_BLACKLIST="initcall_blacklist=cmos_init,magicmouse_driver_init"
 BLACKLIST_MODULES=(
 	acpi_tad
