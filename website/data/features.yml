@@ -55,12 +55,12 @@ items:
     subsystem: DRM / i915
     authors:
       - 4f1sh3r
-    link: "https://lore.kernel.org/all/20261016140707.1900947-1-alexander.fischer@kait2en.org/"
-    updated: "2026-10-16"
+    link: "https://lore.kernel.org/all/20261112165956.61633-1-aditya.garg@linux.dev/"
+    updated: "2026-11-12"
     notes: >-
       Enables PSR with the sink-specific DPCD setup. Lowers idle display
       power and allows package C-states up to PC10. KAIT2EN ships it in a
-      patched i915 module until it is merged.
+      patched i915 module until it is merged. Resend by AdityaGarg()
 
   - id: gmux-brightness-after-panel-power-on
     title: "Display brightness after screen lock and resume in iGPU mode"
