@@ -1,0 +1,210 @@
+From: Andre Eikmeyer <dev@deq.rocks>
+Subject: [PATCH] drm/amd/display: scope the 5K iMac quirk and keep the timing check
+
+The 5K iMac quirk is enabled from the host DMI alone, so an external AMD
+GPU on a 5K iMac also treats its links 0 and 1 as the panel tiles. The
+tile pair is also reported as synchronizable before the timings are
+compared, so tiles running different modes are synchronized.
+
+Enable the quirk only for a GPU that is not Thunderbolt attached or
+removable, and report the tile pair as synchronizable only when the
+timings match. Look up the DMI table once in IP discovery, name the
+TCON tile mode register and document why the quirk forces full
+scaling, hides max bpc and only checks AUX on the tile link.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+  drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c             | 15 +++++++++++++--
+  drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c         |  4 ++--
+  .../gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c   |  2 ++
+  drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_quirks.c  |  4 +++-
+  drivers/gpu/drm/amd/display/dc/core/dc_resource.c         | 15 +++++++--------
+  drivers/gpu/drm/amd/display/dc/dc_dp_types.h              |  2 ++
+  drivers/gpu/drm/amd/display/dc/link/link_detection.c      |  2 +-
+  .../gpu/drm/amd/display/dc/link/protocols/link_dp_phy.c   |  2 +-
+  .../drm/amd/display/dc/link/protocols/link_dp_training.c  |  1 +
+  9 files changed, 32 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c
+index 572a9a0..4cb19ee 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c
+@@ -3099,8 +3099,18 @@ static const struct dmi_system_id imac5k_table[] = {
+ 	{}
+ };
+ 
++static bool amdgpu_discovery_is_imac5k(struct amdgpu_device *adev)
++{
++	if (pci_is_thunderbolt_attached(adev->pdev) ||
++	    dev_is_removable(&adev->pdev->dev))
++		return false;
++
++	return dmi_check_system(imac5k_table);
++}
++
+ int amdgpu_discovery_set_ip_blocks(struct amdgpu_device *adev)
+ {
++	bool imac5k;
+ 	int r;
+ 
+ 	switch (adev->asic_type) {
+@@ -3697,7 +3707,8 @@ int amdgpu_discovery_set_ip_blocks(struct amdgpu_device *adev)
+ 	}
+ 
+ 	/* TODO: We should enable 5K in EFI and remove this quirk */
+-	if (unlikely(dmi_check_system(imac5k_table))) {
++	imac5k = amdgpu_discovery_is_imac5k(adev);
++	if (unlikely(imac5k)) {
+ 		r = amdgpu_discovery_set_display_ip_blocks(adev);
+ 		if (r)
+ 			return r;
+@@ -3709,7 +3720,7 @@ int amdgpu_discovery_set_ip_blocks(struct amdgpu_device *adev)
+ 			return r;
+ 	}
+ 
+-	if (likely(!dmi_check_system(imac5k_table))) {
++	if (likely(!imac5k)) {
+ 		r = amdgpu_discovery_set_display_ip_blocks(adev);
+ 		if (r)
+ 			return r;
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+index f57a9af..38c3262 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -1945,7 +1945,7 @@ static int dm_resume(struct amdgpu_ip_block *ip_block)
+ 		if (dm->dc->config.imac5K_using_5K) {
+ 			const u8 value = 1;
+ 
+-			core_link_write_dpcd(dm->dc->links[0], 0x4F1, &value, 1);
++			core_link_write_dpcd(dm->dc->links[0], DP_APPLE_5K_TILE_MODE, &value, 1);
+ 		}
+ 		dm_gpureset_commit_state(dm->cached_dc_state, dm);
+ 
+@@ -4671,7 +4671,7 @@ static void amdgpu_dm_commit_streams(struct drm_atomic_commit *state,
+ 			if (new_crtc_state->mode.vdisplay == 2880 && new_crtc_state->mode.hdisplay == 2560) {
+ 				u8 value = 1;
+ 
+-				core_link_write_dpcd(dm->dc->links[0], 0x4F1, &value, 1);
++				core_link_write_dpcd(dm->dc->links[0], DP_APPLE_5K_TILE_MODE, &value, 1);
+ 				dm->dc->config.imac5K_using_5K = true;
+ 			} else
+ 				dm->dc->config.imac5K_using_5K = false;
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+index d541b61..91ae057 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+@@ -126,6 +126,7 @@ STATIC_IFN_KUNIT int dm_encoder_helper_atomic_check(struct drm_encoder *encoder,
+ 			dm_new_connector_state->scaling = RMX_ASPECT;
+ 		}
+ 
++		/* The 5K panel reports no scaling info, scale every non 5K mode to full */
+ 		if (aconnector->dc_link && aconnector->dc_link->dc->config.imac5K_support) {
+ 			if (crtc_state->mode.vdisplay != 2880)
+ 				dm_new_connector_state->scaling = RMX_FULL;
+@@ -3306,6 +3307,7 @@ void amdgpu_dm_connector_init_helper(struct amdgpu_display_manager *dm,
+ 				adev->mode_info.underscan_vborder_property,
+ 				0);
+ 
++	/* Both 5K panel tiles must run at the same bpc, so userspace cannot set it */
+ 	if (!aconnector->mst_root && !(dm->imac5K_support && link_index <= 1))
+ 		drm_connector_attach_max_bpc_property(&aconnector->base, 8, 16);
+ 
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_quirks.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_quirks.c
+index a34a455..a84ff90 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_quirks.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_quirks.c
+@@ -206,7 +206,9 @@ void retrieve_dmi_info(struct amdgpu_display_manager *dm)
+ 		dm->edp0_on_dp1_quirk = true;
+ 		drm_info(dev, "support_edp0_on_dp1 attached\n");
+ 	}
+-	if (quirk_entries.imac5K_support) {
++	if (quirk_entries.imac5K_support &&
++	    !pci_is_thunderbolt_attached(dm->adev->pdev) &&
++	    !dev_is_removable(&dm->adev->pdev->dev)) {
+ 		dm->imac5K_support = true;
+ 		drm_info(dev, "imac5K_support attached\n");
+ 	}
+diff --git a/drivers/gpu/drm/amd/display/dc/core/dc_resource.c b/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
+index 4bf16f3..92e260f 100644
+--- a/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
+@@ -685,14 +685,6 @@ bool resource_are_streams_timing_synchronizable(
+ 	struct dc_stream_state *stream1,
+ 	struct dc_stream_state *stream2)
+ {
+-
+-	if (stream1->ctx->dc->config.imac5K_support &&
+-		((stream1->signal == SIGNAL_TYPE_EDP && stream2->signal == SIGNAL_TYPE_DISPLAY_PORT &&
+-		stream2->link->link_index == 1) ||
+-		(stream2->signal == SIGNAL_TYPE_EDP && stream1->signal == SIGNAL_TYPE_DISPLAY_PORT &&
+-		stream1->link->link_index == 1)))
+-		return true;
+-
+ 	if (stream1->timing.h_total != stream2->timing.h_total)
+ 		return false;
+ 
+@@ -715,6 +707,13 @@ bool resource_are_streams_timing_synchronizable(
+ 				!= stream2->timing.pix_clk_100hz)
+ 		return false;
+ 
++	if (stream1->ctx->dc->config.imac5K_support &&
++		((stream1->signal == SIGNAL_TYPE_EDP && stream2->signal == SIGNAL_TYPE_DISPLAY_PORT &&
++		stream2->link->link_index == 1) ||
++		(stream2->signal == SIGNAL_TYPE_EDP && stream1->signal == SIGNAL_TYPE_DISPLAY_PORT &&
++		stream1->link->link_index == 1)))
++		return true;
++
+ 	if (stream1->clamping.c_depth != stream2->clamping.c_depth)
+ 		return false;
+ 
+diff --git a/drivers/gpu/drm/amd/display/dc/dc_dp_types.h b/drivers/gpu/drm/amd/display/dc/dc_dp_types.h
+index d0ba9ad..04185fc 100644
+--- a/drivers/gpu/drm/amd/display/dc/dc_dp_types.h
++++ b/drivers/gpu/drm/amd/display/dc/dc_dp_types.h
+@@ -1509,6 +1509,8 @@ struct dp_trace {
+ /* TODO - This is a temporary location for any new DPCD definitions.
+  * We should move these to drm_dp header.
+  */
++/* Apple 5K iMac TCON, 1 drives the panel as two tiles */
++#define DP_APPLE_5K_TILE_MODE				0x4F1
+ #ifndef DP_LINK_SQUARE_PATTERN
+ #define DP_LINK_SQUARE_PATTERN				0x10F
+ #endif
+diff --git a/drivers/gpu/drm/amd/display/dc/link/link_detection.c b/drivers/gpu/drm/amd/display/dc/link/link_detection.c
+index 906f8a3..deb52e3 100644
+--- a/drivers/gpu/drm/amd/display/dc/link/link_detection.c
++++ b/drivers/gpu/drm/amd/display/dc/link/link_detection.c
+@@ -1205,7 +1205,7 @@ static bool detect_link_and_local_sink(struct dc_link *link,
+ 			}
+ 			if (dc->config.imac5K_support) {
+ 				const uint8_t val = 1;
+-				core_link_write_dpcd(link, 0x4F1, &val, 1);
++				core_link_write_dpcd(link, DP_APPLE_5K_TILE_MODE, &val, 1);
+ 			}
+ 			sink_caps.transaction_type = DDC_TRANSACTION_TYPE_I2C_OVER_AUX;
+ 			sink_caps.signal = SIGNAL_TYPE_EDP;
+diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_phy.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_phy.c
+index e90164a..e7ce8e9 100644
+--- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_phy.c
++++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_phy.c
+@@ -56,7 +56,7 @@ void dpcd_write_rx_power_ctrl(struct dc_link *link, bool on)
+ 	if (on && link->dc->config.imac5K_support &&
+ 	    link->connector_signal == SIGNAL_TYPE_EDP) {
+ 		state = 1;
+-		core_link_write_dpcd(link, 0x4F1, &state, sizeof(state));
++		core_link_write_dpcd(link, DP_APPLE_5K_TILE_MODE, &state, sizeof(state));
+ 	}
+ }
+ 
+diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_training.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_training.c
+index 818850a..e9e836d 100644
+--- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_training.c
++++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_training.c
+@@ -1531,6 +1531,7 @@ static enum link_training_result dp_transition_to_video_idle(
+ 		if (link->connector_signal != SIGNAL_TYPE_EDP && status == LINK_TRAINING_SUCCESS) {
+ 			msleep(5);
+ 			if (link->dc->config.imac5K_support && link->link_index == 1) {
++				/* The 5K tile link only has to answer AUX */
+ 				uint8_t lanes;
+ 
+ 				if (core_link_read_dpcd(link, DP_LANE0_1_STATUS,
