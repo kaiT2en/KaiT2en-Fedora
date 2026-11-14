@@ -10,7 +10,10 @@ require_command dnf
 KVER="$(kernel_release)"
 
 if [[ "$KVER" == *.fc*.x86_64 ]]; then
-	development_package=("kernel-devel-$KVER")
+	# kernel-devel-matched requires the kernel-devel of the same version as
+	# kernel-core, so every later kernel update pulls its kernel-devel in for
+	# the DKMS and patched module builds of the kernel-install hooks.
+	development_package=("kernel-devel-$KVER" "kernel-devel-matched-$KVER")
 else
 	build_link="/lib/modules/$KVER/build"
 	[[ -f "$build_link/Makefile" ]] ||
