@@ -1,0 +1,76 @@
+From: Andre Eikmeyer <dev@deq.rocks>
+Subject: [PATCH] TEMPORARY: drm/amd/display: hide GFX6-8 modifiers until Mesa 26.3
+
+Drop this patch once the distribution ships Mesa 26.3.
+
+Since Linux 7.3, DC exposes DRM format modifiers on GFX6-8. Mesa before
+26.3 rejects every modifier on GFX6-8, LINEAR included, so allocating
+with the plane IN_FORMATS list fails. Mutter allocates the scanout
+buffers of a secondary GPU that way without a fallback, so an external
+display on the dGPU of a MacBookPro15,1 stays dark.
+
+Expose no modifiers on GFX6-8 again, as before Linux 7.3. DC takes the
+tiling only from the modifier, so keep converting the tiling flags of
+framebuffers without modifiers and accept the converted modifier in the
+plane check.
+
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_display.c             |  3 ++-
+ drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c | 18 ++++++++++++++++--
+ 2 files changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_display.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_display.c
+index 59ea338..0bd2020 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_display.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_display.c
+@@ -1418,7 +1418,8 @@ static int amdgpu_display_framebuffer_init(struct drm_device *dev,
+ 			return ret;
+ 	}
+ 
+-	if (!dev->mode_config.fb_modifiers_not_supported &&
++	/* DC takes the tiling only from the modifier. */
++	if ((!dev->mode_config.fb_modifiers_not_supported || adev->dc_enabled) &&
+ 	    !(rfb->base.flags & DRM_MODE_FB_MODIFIERS)) {
+ 		if (amdgpu_ip_version(adev, GC_HWIP, 0) >= IP_VERSION(12, 0, 0))
+ 			ret = convert_tiling_flags_to_modifier_gfx12(rfb);
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c
+index a2b8f70..6ab394d 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c
+@@ -994,6 +994,16 @@ static void amdgpu_dm_plane_add_gfx12_modifiers(struct amdgpu_device *adev,
+ STATIC_IFN_KUNIT int amdgpu_dm_plane_get_plane_modifiers(struct amdgpu_device *adev, unsigned int plane_type, uint64_t **mods)
+ {
+ 	uint64_t size = 0, capacity = 128;
++
++	/*
++	 * TEMPORARY: Mesa before 26.3 cannot allocate with GFX6-8 modifiers,
++	 * so a compositor that allocates with the IN_FORMATS list fails. Keep
++	 * them hidden until the distributions ship Mesa 26.3.
++	 */
++	*mods = NULL;
++	if (adev->family < AMDGPU_FAMILY_AI)
++		return 0;
++
+ 	*mods = kmalloc_array(capacity, sizeof(uint64_t), GFP_KERNEL);
+ 
+ 	if (plane_type == DRM_PLANE_TYPE_CURSOR) {
+@@ -1853,12 +1863,16 @@ STATIC_IFN_KUNIT bool amdgpu_dm_plane_format_mod_supported(struct drm_plane *pla
+ 		return true;
+ 	}
+ 
+-	/* Check that the modifier is on the list of the plane's supported modifiers. */
++	/*
++	 * Check that the modifier is on the list of the plane's supported
++	 * modifiers. Without exposed modifiers it comes from the tiling flags.
++	 */
+ 	for (i = 0; i < plane->modifier_count; i++) {
+ 		if (modifier == plane->modifiers[i])
+ 			break;
+ 	}
+-	if (i == plane->modifier_count)
++	if (i == plane->modifier_count &&
++	    !plane->dev->mode_config.fb_modifiers_not_supported)
+ 		return false;
+ 
+ 	if (AMD_FMT_MOD_GET(TILE_VERSION, modifier) == AMD_FMT_MOD_TILE_VER_GFX6)
