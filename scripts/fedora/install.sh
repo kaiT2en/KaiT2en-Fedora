@@ -7,6 +7,8 @@ require_repo_root
 require_fedora
 require_min_kernel 7 0
 
+GDM_BRANDING_MARKER=/etc/dconf/db/gdm.d/00-kait2en
+
 # --only step,step runs just those steps, as kait2en-update does after it
 # compared the installed state with GitHub. Optional parts then keep what is
 # installed, no question is asked.
@@ -17,6 +19,10 @@ if [[ ${1:-} == --only ]]; then
 	if [[ -z "${KAIT2EN_INSTALL_TOUCHBAR:-}" ]]; then
 		KAIT2EN_INSTALL_TOUCHBAR=0
 		[[ -x /usr/local/bin/kait2en-touchbar ]] && KAIT2EN_INSTALL_TOUCHBAR=1
+	fi
+	if [[ -z "${KAIT2EN_INSTALL_GDM_BRANDING:-}" ]]; then
+		KAIT2EN_INSTALL_GDM_BRANDING=0
+		[[ -e "$GDM_BRANDING_MARKER" ]] && KAIT2EN_INSTALL_GDM_BRANDING=1
 	fi
 	KAIT2EN_INSTALL_VORNEHM=0
 elif (( $# > 0 )); then
@@ -75,6 +81,40 @@ TEXT
 }
 ask_touchbar
 export KAIT2EN_INSTALL_TOUCHBAR
+
+# KAIT2EN_INSTALL_GDM_BRANDING=1|0 answers it ahead of time. Without a
+# terminal the previous default (install) is kept.
+ask_gdm_branding() {
+	local answer
+	if [[ ! -d /etc/dconf/db/gdm.d ]]; then
+		KAIT2EN_INSTALL_GDM_BRANDING=0
+		return
+	fi
+	case "${KAIT2EN_INSTALL_GDM_BRANDING:-}" in
+		1 | 0) return ;;
+	esac
+	if [[ ! -t 0 ]]; then
+		KAIT2EN_INSTALL_GDM_BRANDING=1
+		return
+	fi
+	cat <<'TEXT'
+
+KaiT2en login screen (optional)
+
+  Gives the GDM login screen a black background and the KaiT2en logo.
+  Remove it at any time with install-gdm-branding.sh --remove or in
+  KaiT2en Update.
+
+  Without it, the login screen keeps the Fedora look.
+
+TEXT
+	read -r -p "Install the KaiT2en login screen? [Y/n] " answer || answer=
+	case "${answer,,}" in
+		n | no) KAIT2EN_INSTALL_GDM_BRANDING=0 ;;
+		*) KAIT2EN_INSTALL_GDM_BRANDING=1 ;;
+	esac
+}
+ask_gdm_branding
 
 # KaiT2en Vornehm changes the GNOME desktop of the user who runs sudo, so
 # it is only offered when GNOME is there. KAIT2EN_INSTALL_VORNEHM=1|0
@@ -245,6 +285,15 @@ fi
 failed_steps=()
 for step in "${STEPS[@]}"; do
 	selected "$step" || continue
+	if [[ "$step" == install-gdm-branding.sh && $KAIT2EN_INSTALL_GDM_BRANDING != 1 ]]; then
+		if [[ -e "$GDM_BRANDING_MARKER" ]]; then
+			info "KaiT2en login screen not selected, the existing branding is left unchanged"
+			info "remove it with: sudo $SCRIPT_DIR/install-gdm-branding.sh --remove"
+		else
+			info "KaiT2en login screen not selected, GDM keeps the Fedora look"
+		fi
+		continue
+	fi
 	info "running $step"
 	if [[ "$step" == install-plymouth-theme.sh ]]; then
 		step_args=(--defer-initramfs)

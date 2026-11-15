@@ -26,6 +26,15 @@ pub const TOUCH_BAR: Part = Part {
     privileged: true,
 };
 
+pub const GDM_BRANDING: Part = Part {
+    name: "install-gdm-branding.sh",
+    title: "KaiT2en login screen",
+    description: "Black GDM login screen with the KaiT2en logo. Without it, the login screen \
+                  keeps the Fedora look.",
+    marker: "/etc/dconf/db/gdm.d/00-kait2en",
+    privileged: true,
+};
+
 pub const VORNEHM: Part = Part {
     name: "install-vornehm.sh",
     title: "KaiT2en Vornehm",
@@ -47,6 +56,9 @@ pub fn available() -> Vec<&'static Part> {
     let mut parts = Vec::new();
     if has_touch_bar() {
         parts.push(&TOUCH_BAR);
+    }
+    if Path::new("/etc/dconf/db/gdm.d").is_dir() {
+        parts.push(&GDM_BRANDING);
     }
     let gnome = glib::find_program_in_path("gnome-shell").is_some();
     if gnome {

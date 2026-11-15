@@ -28,8 +28,8 @@ install.sh --only step,step
 KAIT2EN_APPS=app,app install.sh --only install-apps.sh
 ```
 
-Optional parts like the Touch Bar and KaiT2en Vornehm stay as they are.
-They are added or removed in the Optional section.
+Optional parts like the Touch Bar, the KaiT2en login screen and KaiT2en
+Vornehm stay as they are. They are added or removed in the Optional section.
 
 ## Adding a step or an app
 

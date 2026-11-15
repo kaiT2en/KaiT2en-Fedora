@@ -14,22 +14,35 @@ BRANDING_DST=/etc/dconf/db/gdm.d/00-kait2en
 LOGO_DST=/usr/share/pixmaps/kait2en-gdm-logo.png
 BACKGROUND_DST=/usr/share/backgrounds/kait2en/gdm-black.png
 
+# --remove takes the branding out again and leaves GDM as Fedora ships it.
+REMOVE=0
+case ${1:-} in
+	"") ;;
+	--remove) REMOVE=1 ;;
+	*) fail "usage: install-gdm-branding.sh [--remove]" ;;
+esac
+
 missing_requirements=()
 for command_name in cat dconf glib-compile-resources gresource install mktemp readlink rm sed; do
 	command -v "$command_name" >/dev/null 2>&1 ||
 		missing_requirements+=("command $command_name")
 done
 [[ -d /etc/dconf/db/gdm.d ]] || missing_requirements+=("GDM dconf database")
-[[ -r "$BRANDING_SRC" ]] || missing_requirements+=("asset 00-kait2en")
-[[ -r "$LOGO_SRC" ]] || missing_requirements+=("asset kait2en-gdm-logo.png")
-[[ -r "$BACKGROUND_SRC" ]] || missing_requirements+=("asset gdm-black.png")
-[[ -r "$THEME_CSS_SRC" ]] || missing_requirements+=("asset kait2en-gdm.css")
+if (( REMOVE == 0 )); then
+	[[ -r "$BRANDING_SRC" ]] || missing_requirements+=("asset 00-kait2en")
+	[[ -r "$LOGO_SRC" ]] || missing_requirements+=("asset kait2en-gdm-logo.png")
+	[[ -r "$BACKGROUND_SRC" ]] || missing_requirements+=("asset gdm-black.png")
+	[[ -r "$THEME_CSS_SRC" ]] || missing_requirements+=("asset kait2en-gdm.css")
+fi
 
 if (( ${#missing_requirements[@]} > 0 )); then
 	warn "skipping GDM branding; missing: ${missing_requirements[*]}"
 	exit 0
 fi
 
+# Rebuilds the GNOME Shell theme. Earlier KaiT2en additions sit at the end of
+# the theme, so they are cut off, and unless REMOVE is set the current
+# stylesheet is appended once.
 patch_gnome_shell_theme() {
 	local css_file file_name manifest resource_path theme_resource work
 	theme_resource=$(readlink -f /usr/share/gnome-shell/gnome-shell-theme.gresource) || return 1
@@ -53,11 +66,10 @@ patch_gnome_shell_theme() {
 	done < <(gresource list "$theme_resource")
 	printf '%s\n' '  </gresource>' '</gresources>' >>"$manifest"
 
-	# Earlier KaiT2en additions sit at the end of the theme, so they are cut
-	# off and the current stylesheet is appended once.
 	for css_file in "$work"/gnome-shell-*.css; do
 		[[ -f "$css_file" ]] || continue
 		sed -i '/^\/\* KaiT2en GDM/,$d' "$css_file"
+		(( REMOVE == 1 )) && continue
 		printf '\n' >>"$css_file"
 		cat "$THEME_CSS_SRC" >>"$css_file"
 	done
@@ -74,6 +86,16 @@ patch_gnome_shell_theme() {
 	fi
 	rm -rf "$work"
 }
+
+if (( REMOVE == 1 )); then
+	info "removing KaiT2en GDM branding"
+	rm -f "$BRANDING_DST" "$LOGO_DST" "$BACKGROUND_DST"
+	rmdir "${BACKGROUND_DST%/*}" 2>/dev/null || true
+	dconf update || warn "could not update the GDM dconf database"
+	patch_gnome_shell_theme || warn "could not restore the GNOME Shell login theme"
+	info "KaiT2en GDM branding removed"
+	exit 0
+fi
 
 info "installing KaiT2en GDM branding"
 if ! install -d -o root -g root -m 0755 "${BACKGROUND_DST%/*}"; then

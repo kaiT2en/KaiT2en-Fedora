@@ -22,7 +22,7 @@ install-alsa-ucm.sh           modules/apple-t2-alsa-ucm-conf/
 install-dsp.sh                dsp/
 install-acpi-fixes.sh         scripts/fedora/acpi-autofix.py
 install-plymouth-theme.sh     assets/plymouth/
-install-gdm-branding.sh       assets/gdm/
+install-gdm-branding.sh       if=/etc/dconf/db/gdm.d/00-kait2en assets/gdm/
 install-suspend-service.sh    scripts/fedora/kait2en-suspend.sh
 install-rtc-sync.sh
 app:assets                    scripts/fedora/install-apps.sh assets/kait2en-app-logo.png assets/kait2en-app-logo-light.png assets/fonts/
