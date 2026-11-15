@@ -1,5 +1,6 @@
 # Questions on faq.html, in this order. Each question has `q` (plain text) and
-# `a` (Markdown).
+# `a` (Markdown). Write `a: >-` for plain text and `a: |-` for answers with a
+# list, `>-` folds all lines into one and the list items run together.
 # Links in answers are relative to the site root, for example
 # documentation.html#updating or patches.html. The build checks them.
 #
@@ -8,18 +9,19 @@
 questions:
 
   - q: Any known issues?
-    a: >-
+    a: |-
       - Imac 5k screen tearing on the seam of display tiles.
       - MacBookPro 15,3 Vega dGPUS die on suspend.
       - MacPro7,1 fabric link, Bluetooth and DSP not supported.
 
   - q: What is not recommended to do?
-    a: >-
+    a: |-
       Your T2 Mac is not a regular PC. We put big effort in optimizing
       the proprietary drivers and power management.
       You should definitely not use any "power optimizers" like:
+
       - TLP
-      - Powertune
+      - powertop
       - LACT
       - Also keep fingers off our T2-power-tune app without good reasons.
 
