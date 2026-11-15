@@ -329,35 +329,23 @@ items:
       and configurable Force Click actions.
 
   - id: hybrid-graphics
-    title: "Hybrid graphics on MacBookPro15,1"
+    title: "Hybrid graphics on T2 MacBook Pros"
     state: available
     upstream: submitted
-    version: v1
-    project: KAIT2EN Fedora
-    subsystem: t2gmux / amdgpu
+    version: v2
+    project: Linux kernel
+    subsystem: apple-gmux / amdgpu
     authors:
       - byte
       - deqrocks
-    link: "https://lore.kernel.org/all/20260812144750.36797-1-dev@deq.rocks/"
-    updated: "2026-08-12"
+    link: "https://lore.kernel.org/all/20261114160731.3756-1-atharvatiwarilinuxdev@gmail.com/"
+    updated: "2026-11-14"
     notes: >-
-      Runtime GPU switching and dGPU power management. The apple-gmux,
-      amdgpu and ALSA HDA changes are submitted upstream.
-
-  - id: hybrid-graphics-16-x
-    title: "Hybrid graphics on MacBookPro16,1 and 16,4"
-    state: available
-    upstream: downstream
-    project: KAIT2EN Fedora
-    subsystem: t2gmux / amdgpu
-    authors:
-      - byte
-      - deqrocks
-    link: post-install/configuring-gpus.md
-    updated: "2026-09-29"
-    notes: >-
-      Runtime GPU switching, dGPU power management and suspend and
-      resume.
+      Fixes apple-gmux on T2 Macs: dGPU power sequencing, the MMIO
+      interface, interrupts with hotplug wake of the dGPU for external
+      monitors, and the gpu-active EFI variable the T2 reads. amdgpu gets
+      vga_switcheroo runtime PM on top, so the dGPU powers off when idle.
+      Tested on MacBookPro15,1, 16,1 and 16,4.
 
   - id: navi14-mbp161-trained-uclk
     title: "Navi14 memory clock levels on MacBookPro16,1"

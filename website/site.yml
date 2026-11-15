@@ -68,7 +68,7 @@ features:
       on its own, through suspend and resume. On the MacBookPro15,1, 16,1 and
       16,4.
     doc: post-install/configuring-gpus.md
-    covers: [hybrid-graphics, hybrid-graphics-16-x]
+    covers: [hybrid-graphics]
   - name: AirShare
     text: >-
       AirDrop with iPhones, iPads and Macs in both directions, while your Mac
