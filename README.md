@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/kait2en-fedora.jpeg" alt="KAIT2EN logo" width="720">
+  <img src="website/static/img/og-image.png" alt="KAIT2EN: Built for T2 Macs." width="720">
 </p>
 
 # KAIT2EN Fedora
