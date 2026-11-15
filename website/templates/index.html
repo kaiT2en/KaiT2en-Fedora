@@ -4,41 +4,45 @@
 {% block title %}{{ site.title }} - {{ site.tagline }}{% endblock %}
 
 {% block content %}
-    <!-- Hero Section -->
-    <header class="hero">
-        <div class="container">
-            <div class="hero-brand">
-                <h1><img class="hero-logo" src="{{ base }}img/kait2en-wordmark.png" alt="{{ site.name }}"></h1>
-            </div>
-
-            <div class="hero-trust">
-                {% for quote in hero.quotes %}
-                <div class="trust-quote{% if loop.first %} active{% endif %}" data-index="{{ loop.index0 }}">
-                    <p class="trust-text">&ldquo;{{ quote.text }}&rdquo;</p>
-                    <span class="trust-source">{{ quote.source }}</span>
+    <header class="home-hero">
+        <div class="home-stage">
+            <div class="mbp">
+                <div class="mbp-screen">
+                    <div class="mbp-edge" aria-hidden="true"></div>
+                    <div class="mbp-lid">
+                        <h1 class="home-title"><span class="home-glow" data-text="{{ hero.title }}">{{ hero.title }}</span></h1>
+                    </div>
                 </div>
-                {% endfor %}
+                <div class="mbp-base" aria-hidden="true"></div>
             </div>
-
-            <div class="hero-screenshots">
-                <img src="{{ base }}{{ hero.image }}" alt="{{ hero.image_alt }}" class="screenshot-desktop">
-            </div>
-
-            <div class="hero-content">
-                <p class="tagline">{{ hero.tagline }}</p>
-                <p class="tagline-sub">{{ hero.sub }}</p>
-                <p class="tagline-sub"><strong>{{ hero.note }}</strong></p>
-
-                <div class="hero-actions">
-                    <a href="#installation" class="btn btn-primary">Get Started</a>
-                    <a href="{{ links.repo }}" class="btn btn-secondary" target="_blank" rel="noopener">
-                        {{ icon.github(20) }}
-                        GitHub
-                    </a>
-                </div>
-            </div>
+            <p class="home-lede">{{ hero.sub }}</p>
         </div>
+        <div class="home-runway"></div>
     </header>
+
+    <section class="home-block" id="features">
+        <h2>Features</h2>
+        <p class="home-block-sub">Built by us. Shipped to you.</p>
+        <div class="home-features">
+            {% for feature in features %}
+            {% if feature.href %}<a class="home-feature" href="{{ base }}{{ feature.href }}">{% else %}<div class="home-feature">{% endif %}
+                <h3>{{ feature.name }}</h3>
+                <p>{{ feature.text }}</p>
+            {% if feature.href %}</a>{% else %}</div>{% endif %}
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="home-block" id="fixes">
+        <h2>Fixes</h2>
+        <p class="home-block-sub">Aimed upstream.</p>
+        <ul class="home-fixes">
+            {% for fix in fixes %}
+            <li><a href="{{ base }}patches.html#{{ fix.id }}"><span class="home-fix-dot home-fix-dot--{{ fix.upstream }}" title="{{ fix.upstream_label }}"></span><code>{{ fix.label }}:</code> {{ fix.title }}</a></li>
+            {% endfor %}
+        </ul>
+        <p class="home-fixes-more"><a href="{{ base }}patches.html">All patches and their upstream status</a></p>
+    </section>
 
     <main class="page-container">
         <aside class="page-sidebar page-sidebar--narrow">
@@ -138,13 +142,6 @@
                             <p>For those who don't like Discord or Matrix. This is the way.</p>
                         </a>
                     </div>
-
-                    {% elif section.type == 'feature-board' %}
-                    <div class="section-head">
-                        <h2>{{ section.title }}</h2>
-                        <p>{{ section.subtitle }}</p>
-                    </div>
-                    <div class="page-content">{{ section.html }}</div>
 
                     {% else %}
                     <div class="concept-story">

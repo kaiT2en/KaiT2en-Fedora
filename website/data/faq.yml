@@ -1,0 +1,50 @@
+# Questions on faq.html, in this order. Each question has `q` (plain text) and
+# `a` (Markdown).
+# Links in answers are relative to the site root, for example
+# documentation.html#updating or patches.html. The build checks them.
+#
+# A question's anchor is made from its text, so faq.html#<anchor> opens it.
+
+questions:
+
+  - q: Any known issues?
+    a: >-
+      - Imac 5k screen tearing on the seam of display tiles.
+      - MacBookPro 15,3 Vega dGPUS die on suspend.
+      - MacPro7,1 fabric link, Bluetooth and DSP not supported.
+
+  - q: What is not recommended to do?
+    a: >-
+      Your T2 Mac is not a regular PC. We put big effort in optimizing
+      the proprietary drivers and power management.
+      You should definitely not use any "power optimizers" like:
+      - TLP
+      - Powertune
+      - LACT
+      - Also keep fingers off our T2-power-tune app without good reasons.
+
+  - q: What Fedora spin is recommended?
+    a: >-
+      Fedora Workstation with Gnome. Our devs use it. Some features will
+      only work with Gnome. Like TrueTone or the KaiT2en Vornehm theme.
+
+  - q: Do I need to keep macOS?
+    a: >-
+      Yes and no. TouchID requires to be warmed up by MacOS after your T2
+      crashed or rebooted. If you want TouchID, it is recommended to keep
+      MacOS. But you can simply install it on an external hard drive and
+      wipe it from the internal drive. Or just go all-in and wipe it if
+      you so wish.
+    
+  - q: Are you guys seasoned Devs?
+    a: >-
+      Yes we are. Reaching from enthusiast youngster to greybeard.
+
+  - q: Is AI used in this project?
+    a: >-
+      Yes, it is. Mainly for userspace code and for maintaining the
+      website. Code supposed to go upstream is human-written.
+      Otherwise this project wouldn't be possible due to lack of
+      manpower.
+
+

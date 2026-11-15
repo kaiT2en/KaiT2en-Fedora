@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}{{ patches.title }} - {{ site.name }}{% endblock %}
+{% block description %}{{ patches.description }}{% endblock %}
+
+{% block content %}
+    <main class="pt">
+        <header class="pt-head">
+            <h1>{{ patches.title }}</h1>
+            <p>{{ patches.description }} Click a patch for the details.</p>
+        </header>
+
+        <div class="pt-summary">
+            {% for counter in counters %}
+            <div class="pt-sum pt-sum--{{ counter.key }}"><b>{{ counter.count }}</b><span>{{ counter.label }}</span></div>
+            {% endfor %}
+        </div>
+
+        <div class="pt-filter" role="group" aria-label="Filter by project">
+            <button class="pt-chip is-active" type="button" data-project="all" aria-pressed="true">All<i>{{ total }}</i></button>
+            {% for project in projects %}
+            <button class="pt-chip" type="button" data-project="{{ project.key }}" aria-pressed="false">{{ project.name }}<i>{{ project.count }}</i></button>
+            {% endfor %}
+        </div>
+
+        {% for group in groups %}
+        <section class="pt-group" id="{{ group.id }}">
+            <h2>{{ group.title }}<span>{{ group.patches | length }}</span></h2>
+            {% for item in group.patches %}
+            <details class="pt-item" id="{{ item.id }}" data-project="{{ item.project_key }}">
+                <summary>
+                    <span class="pt-sub">{{ item.subsystem }}</span>
+                    <span class="pt-name"><span class="pt-title">{{ item.title }}</span>{% if item.version %}<span class="pt-ver">{{ item.version }}</span>{% endif %}</span>
+                    <span class="pt-right">
+                        <span class="pt-pill pt-pill--{{ item.upstream }}">{{ item.upstream_label }}</span>
+                        <time class="pt-date" datetime="{{ item.updated }}">{{ item.updated_label }}</time>
+                    </span>
+                </summary>
+                <div class="pt-body">
+                    {% if item.notes %}<p>{{ item.notes }}</p>{% endif %}
+                    {% if item.help %}<p class="pt-help">Help wanted: {{ item.help }}</p>{% endif %}
+                    <div class="pt-meta">
+                        {{ item.meta }}
+                        {% if item.href %}
+                        <a href="{{ item.href }}"{% if item.external %} target="_blank" rel="noopener"{% endif %}>{{ item.link_label }}</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </details>
+            {% endfor %}
+        </section>
+        {% endfor %}
+        <p class="pt-empty" hidden>No patches for this project.</p>
+    </main>
+{% endblock %}

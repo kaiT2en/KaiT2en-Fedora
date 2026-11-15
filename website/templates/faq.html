@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}{{ faq.title }} - {{ site.name }}{% endblock %}
+{% block description %}{{ faq.description }}{% endblock %}
+
+{% block content %}
+    <main class="faq">
+        <header class="pt-head">
+            <h1>{{ faq.title }}</h1>
+            <p>{{ faq.description }}</p>
+        </header>
+
+        {% for item in questions %}
+        <details class="faq-item" id="{{ item.id }}">
+            <summary>{{ item.q }}</summary>
+            <div class="faq-answer">{{ item.a }}</div>
+        </details>
+        {% endfor %}
+    </main>
+{% endblock %}

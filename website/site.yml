@@ -20,36 +20,106 @@ links:
   matrix: https://matrix.to/#/%23kait2en:matrix.org
 
 nav:
-  - {label: Home, href: index.html}
-  - {label: Documentation, href: documentation.html}
+  - {label: Install, href: 'index.html#installation'}
+  - {label: Patches, href: patches.html}
+  - {label: FAQ, href: faq.html}
+  - {label: Docs, href: documentation.html}
   - {label: Blog, href: blog.html}
   - {label: Funding, href: 'index.html#donate'}
 
 hero:
-  image: img/hero-touchbar.jpg
-  image_alt: Touch Bar and keyboard of a MacBook Pro running KAIT2EN Fedora
-  tagline: You Run It, We Fix It.
-  sub: >-
-    We bring Linux to your T2 Mac with instant driver fixes, straight from the developers.
-  note: Vanilla Fedora. DKMS modules. Aimed upstream.
-  quotes:
-    - text: We truly believe T2 MacBooks can make the best Linux laptops.
-      source:
-    - text: KAIT2EN is meant to disappear. Every module and fix that gets upstreamed leaves the repo.
-      source:
-    - text: There is a distinct difference in making broken things work and fixing things.
-      source:
+  title: Built for T2 Macs.
+  sub: We are specialized on T2 Macs. Vanilla Fedora. DKMS modules.
+
+# Features on the landing page, in this order. `doc` links a page below docs/,
+# `covers` lists the ids in data/features.yml that the feature stands for, so
+# they are not listed again under fixes.
+features:
+  - name: Touch ID
+    text: >-
+      The fingers you enrolled in macOS unlock the login screen and sudo on
+      Linux. The Secure Enclave keeps the fingerprint and sends Linux its
+      verdict, through stock fprintd.
+    doc: post-install/touch-id.md
+    covers: [touch-id]
+  - name: Audio DSP
+    text: >-
+      DSP for the internal speakers and microphone, with processing derived
+      from macOS for every model. Sounds like macOS.
+    doc: post-install/audio-dsp.md
+    covers: [audio-dsp]
+  - name: Zone Power
+    text: >-
+      The SMC controls the heat pipe budget natively and lowers CPU and GPU
+      limits in steps, like on macOS, instead of throttling the CPU to
+      800 MHz. At least 30% more compute, no fan daemon needed.
+    doc: post-install/applications/t2-zone-power.md
+    covers: [smc-power-limits]
+  - name: Efficiency
+    text: >-
+      Dramatic power savings without losing performance. Every T2 MacBook
+      reaches its deepest idle state, even with the display on, thanks to
+      Panel Self Refresh, Wi-Fi deep sleep and Thunderbolt that powers off
+      when idle.
+    covers: [package-c-states]
+  - name: Hybrid GPU offload
+    text: >-
+      The iGPU is always primary. The dGPU wakes for offloading and turns off
+      on its own, through suspend and resume. On the MacBookPro15,1, 16,1 and
+      16,4.
+    doc: post-install/configuring-gpus.md
+    covers: [hybrid-graphics, hybrid-graphics-16-x]
+  - name: AirShare
+    text: >-
+      AirDrop with iPhones, iPads and Macs in both directions, while your Mac
+      stays on its Wi-Fi network. Quick Share with Android phones. One window
+      and one notification for both.
+    doc: post-install/applications/t2-airshare.md
+    covers: [t2-airshare]
+  - name: True Tone
+    text: >-
+      Same as the original, but adjustable. The display white follows the
+      light in the room, with an evening mode on a schedule. Automatic
+      brightness follows the macOS curve.
+    doc: post-install/applications/t2-truetone.md
+    covers: [true-tone, automatic-brightness]
+  - name: AVE
+    text: >-
+      T2 hardware video encoding. HEVC on the Apple Video Encoder, usable
+      through ffmpeg and our HandBrake build.
+    doc: post-install/hardware-video-encoding.md
+    covers: [t2-ave-hardware-encode]
+  - name: Sidecar
+    text: >-
+      A tablet or iPad as a wireless second display. The T2 encodes the stream
+      with low latency, Sunshine sends it.
+    doc: post-install/sidecar.md
+    covers: [t2-sidecar-encode]
+  - name: Taptic Engine
+    text: >-
+      Precision trackpad, actuator driver and programmable Force Click. Set
+      click pressure and Force Click actions, with real haptic feedback.
+    doc: post-install/applications/t2-force-click.md
+    covers: [force-click]
+  - name: Touch Bar
+    text: >-
+      Our own daemon, optimized for energy saving and convenience. Media and
+      F-key rows, multitouch gestures for volume and brightness and the
+      Touch ID prompt. Dark until you touch it.
+    doc: post-install/applications/t2-touch-bar.md
+    covers: [t2-touch-bar]
+  - name: No more black boxes
+    text: >-
+      The T2 runs its own operating system, and now you can see into it. T2
+      Journal merges the bridgeOS logs with your Linux journal. T2 Debug shows
+      every bridgeOS process and streams its log live.
+    doc: post-install/applications/t2-journal.md
 
 # The landing page. Section order here is the order on the page and in its
 # sidebar; `group` sets the sidebar heading a section is listed under.
 index:
   sidebar_title: Home
   sections:
-    - id: features
-      title: Features & status
-      subtitle: What works today, and what is on its way into mainline Linux.
-      group: Overview
-      type: feature-board
     - id: concept
       title: Concept
       group: Overview
@@ -101,6 +171,16 @@ index:
       group: Get started
       type: community
 
+# The patches page, rendered from data/features.yml.
+patches:
+  title: Patches
+  description: Every fix we wrote for T2 Macs, and where it stands upstream.
+
+# The FAQ page, rendered from data/faq.yml.
+faq:
+  title: FAQ
+  description: Frequently asked questions about KAIT2EN.
+
 # The single documentation page. One Markdown file becomes one <section>;
 # `split: h2` turns each H2 of a file into its own section instead.
 documentation:
@@ -149,7 +229,7 @@ blog:
 
 # Old MkDocs URLs that already exist in the wild, kept alive as redirects.
 redirects:
-  "features/": "index.html#features"
+  "features/": "patches.html"
   "installation/": "documentation.html#overview"
   "post-install/audio-dsp/": "documentation.html#audio-dsp"
   "post-install/configuring-gpus/": "documentation.html#configuring-gpus"

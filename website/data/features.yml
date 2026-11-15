@@ -1,4 +1,4 @@
-# Single source of truth for the "Features & status" page and for the upstream
+# Single source of truth for the patches page and for the upstream
 # announcements in the #upstream-work Discord channel.
 #
 # Required: id, title, state, upstream, updated
@@ -19,6 +19,19 @@
 # are announced at all.
 
 items:
+
+  - id: apple-t2-bridge
+    title: "Upstreamable replacement for apple-bce and t2bce"
+    state: available
+    upstream: preparing
+    project: Linux kernel
+    subsystem: T2 / apple_t2_bridge
+    authors:
+      - deqrocks
+    updated: "2026-11-11"
+    notes: >-
+      Bridge controller, virtual USB host and audio for the T2, laid out
+      for mainline. Suspend and runtime PM work.
 
   - id: audio-dsp
     title: "Audio DSP"
@@ -93,7 +106,7 @@ items:
       Restores the keyboard backlight after the keyboard re-enumerates.
 
   - id: thunderbolt-device-links
-    title: "Thunderbolt device links"
+    title: "Device links"
     state: available
     upstream: merged
     version: v9
@@ -124,7 +137,7 @@ items:
       thunderbolt module, upstream it needs a PCI quirk for these ports.
 
   - id: thunderbolt-ice-lake-rtd3
-    title: "Ice Lake Thunderbolt runtime power off"
+    title: "Ice Lake runtime power off"
     state: available
     upstream: submitted
     version: v1
@@ -174,7 +187,7 @@ items:
       now gets its MTRRs back as it comes online. Based on Chen Yu's fix.
 
   - id: touchbar-runtime-pm-deadlock
-    title: "Touch Bar runtime PM in suspend and resume"
+    title: "Runtime PM in suspend and resume"
     state: available
     upstream: merged
     version: v1
@@ -217,7 +230,7 @@ items:
       PipeWire DSP sinks.
 
   - id: fn-double-press-layer-switch
-    title: "Fn double press switches the Touch Bar layer"
+    title: "Fn double press switches the layer"
     state: available
     upstream: merged
     version: v5
@@ -293,7 +306,7 @@ items:
     state: available
     upstream: downstream
     project: KAIT2EN Fedora
-    subsystem: t2hid
+    subsystem: HID / t2hid
     authors:
       - deqrocks
     link: post-install/butterfly-keyboard.md
@@ -501,7 +514,7 @@ items:
       rises from about 350 to 620 Mbit/s with beamforming off.
 
   - id: btbcm-acl-priority
-    title: "Bluetooth ACL priority on Broadcom controllers"
+    title: "ACL priority on Broadcom controllers"
     state: available
     upstream: submitted
     version: v2
@@ -518,7 +531,7 @@ items:
       vendor library does.
 
   - id: brcmfmac-ps-timeout
-    title: "Wi-Fi power save timeout"
+    title: "Power save timeout"
     state: available
     upstream: submitted
     version: v1
@@ -584,7 +597,7 @@ items:
       Reeves' BCM4388 series, v2 follows on top of it.
 
   - id: hci-bcm-le-scan
-    title: "Bluetooth LE scanning on Broadcom controllers"
+    title: "LE scanning on Broadcom controllers"
     state: available
     upstream: submitted
     version: v2
@@ -619,7 +632,7 @@ items:
       Closes t2linux/kernel#34 and T2-Debian-and-Ubuntu-Kernel#227.
 
   - id: brcmfmac-cold-resume
-    title: "Wi-Fi cold resume after S3"
+    title: "Cold resume after S3"
     state: available
     upstream: submitted
     version: v2
@@ -658,7 +671,7 @@ items:
       provides it.
 
   - id: bluetooth-bcm4377-cold-resume
-    title: "BCM4377 Bluetooth cold resume after S3"
+    title: "Cold resume after S3"
     state: available
     upstream: submitted
     version: v2
@@ -674,7 +687,7 @@ items:
       that each waited a second.
 
   - id: bluetooth-bcm4377-register-index
-    title: "BCM4377 Bluetooth probe with another controller present"
+    title: "Probe with another controller present"
     state: available
     upstream: submitted
     version: v2
@@ -709,7 +722,7 @@ items:
       right away.
 
   - id: brcmfmac-deep-sleep
-    title: "Wi-Fi deep sleep on BCM4364 and BCM4377"
+    title: "Deep sleep on BCM4364 and BCM4377"
     state: available
     upstream: submitted
     version: v2
@@ -727,7 +740,7 @@ items:
       associated, without ignoring the LTR of the Wi-Fi port.
 
   - id: bluetooth-bcm4377-aspm
-    title: "BCM4377 link power management"
+    title: "Link power management"
     state: available
     upstream: submitted
     version: v2

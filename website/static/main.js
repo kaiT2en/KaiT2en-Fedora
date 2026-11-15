@@ -1,4 +1,4 @@
-// DeQ Website - Shared JavaScript
+// KAIT2EN website - shared JavaScript
 
 // Mobile Navigation Modal
 function toggleMenu() {
@@ -72,21 +72,6 @@ function copyCode() {
     });
 }
 
-// Product Gallery Switcher
-function switchGalleryImage(thumb) {
-    const gallery = thumb.closest('.product-gallery');
-    if (!gallery) return;
-    const main = gallery.querySelector('.product-gallery-main');
-    const caption = gallery.querySelector('.product-gallery-caption');
-    main.src = thumb.src;
-    main.alt = thumb.alt;
-    if (caption && thumb.dataset.caption) {
-        caption.textContent = thumb.dataset.caption;
-    }
-    gallery.querySelectorAll('.product-gallery-thumb').forEach(t => t.classList.remove('active'));
-    thumb.classList.add('active');
-}
-
 // Collapsible sub-entries in the documentation navigation
 function toggleNavChildren(button, open) {
     const list = button.nextElementSibling;
@@ -143,23 +128,6 @@ document.addEventListener('DOMContentLoaded', function() {
     updateActiveLink();
 });
 
-// Trust Quotes Crossfade
-document.addEventListener('DOMContentLoaded', function() {
-    const quotes = document.querySelectorAll('.trust-quote');
-    if (!quotes.length) return;
-
-    let currentIndex = 0;
-    const interval = 5000;
-
-    function showNextQuote() {
-        quotes[currentIndex].classList.remove('active');
-        currentIndex = (currentIndex + 1) % quotes.length;
-        quotes[currentIndex].classList.add('active');
-    }
-
-    setInterval(showNextQuote, interval);
-});
-
 // Copy Button on documentation and blog code blocks
 function copyBlock(btn) {
     const wrap = btn.closest('.code-wrap');
@@ -188,50 +156,77 @@ function copyDonation(btn) {
     });
 }
 
-// Feature Board Filter. Without JavaScript every row stays visible and only
-// the chips are inert.
+// Project filter on the patches page. Without JavaScript every patch stays
+// visible and only the chips are inert.
 document.addEventListener('DOMContentLoaded', function () {
-    function setup(root) {
-        const chips = root.querySelectorAll('.board-chip');
-        const rows = root.querySelectorAll('.board-row');
-        const empty = root.querySelector('.board-empty');
+    const chips = document.querySelectorAll('.pt-chip');
+    if (!chips.length) return;
+    const items = document.querySelectorAll('.pt-item');
+    const groups = document.querySelectorAll('.pt-group');
+    const empty = document.querySelector('.pt-empty');
 
-        function matches(row, filter) {
-            if (filter === 'all') return true;
-            if (filter === 'help') return row.dataset.help === 'yes';
-            const parts = filter.split(':');
-            return row.dataset[parts[0]] === parts[1];
-        }
-
-        function apply(filter) {
+    chips.forEach(function (chip) {
+        chip.addEventListener('click', function () {
+            const project = chip.dataset.project;
+            chips.forEach(function (other) {
+                const active = other === chip;
+                other.classList.toggle('is-active', active);
+                other.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+            items.forEach(function (item) {
+                item.hidden = project !== 'all' && item.dataset.project !== project;
+            });
             let visible = 0;
-            rows.forEach(function (row) {
-                const show = matches(row, filter);
-                row.hidden = !show;
-                if (show) visible++;
+            groups.forEach(function (group) {
+                group.hidden = !group.querySelector('.pt-item:not([hidden])');
+                if (!group.hidden) visible++;
             });
             if (empty) empty.hidden = visible !== 0;
-        }
-
-        chips.forEach(function (chip) {
-            chip.addEventListener('click', function () {
-                chips.forEach(function (other) {
-                    const active = other === chip;
-                    other.classList.toggle('is-active', active);
-                    other.setAttribute('aria-pressed', active ? 'true' : 'false');
-                });
-                apply(chip.dataset.filter);
-            });
         });
-    }
-
-    document.querySelectorAll('.board').forEach(setup);
+    });
 });
 
-// Lightbox for images inside rendered Markdown
+// A link to a collapsed entry (a patch, a FAQ question) opens it.
+function openTarget() {
+    const target = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (target && target.tagName === 'DETAILS') target.open = true;
+}
+document.addEventListener('DOMContentLoaded', openTarget);
+window.addEventListener('hashchange', openTarget);
+
+// The MacBook in the landing page hero closes while the hero scrolls past.
 document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('.page-content img').forEach(function (img) {
-        img.classList.add('page-image');
-        img.addEventListener('click', function () { openLightbox(img); });
+    const hero = document.querySelector('.home-hero');
+    const stage = hero && hero.querySelector('.home-stage');
+    if (!stage || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    // Centre the stage in the viewport below the navbar.
+    const bar = document.querySelector('.navbar');
+    function place() {
+        const navbar = bar ? bar.offsetHeight : 0;
+        const top = Math.max(navbar + 24, (window.innerHeight + navbar - stage.offsetHeight) / 2);
+        hero.style.setProperty('--stage-top', Math.round(top) + 'px');
+    }
+
+    let queued = false;
+    function update() {
+        queued = false;
+        const top = parseFloat(hero.style.getPropertyValue('--stage-top')) || 0;
+        const range = hero.offsetHeight - top - stage.offsetHeight;
+        const done = range > 0 ? -hero.getBoundingClientRect().top / range : 0;
+        hero.style.setProperty('--lid', Math.min(1, Math.max(0, done)).toFixed(4));
+    }
+
+    window.addEventListener('scroll', function () {
+        if (!queued) {
+            queued = true;
+            requestAnimationFrame(update);
+        }
+    }, { passive: true });
+    window.addEventListener('resize', function () {
+        place();
+        update();
     });
+    place();
+    update();
 });

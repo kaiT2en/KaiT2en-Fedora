@@ -5,6 +5,7 @@ Everything the site is made of lives next to this file:
   site.yml     site configuration, section order and sidebar grouping
   docs/        documentation, rendered into one long documentation.html
   blog/        one Markdown file per post, YAML front matter on top
+  data/        features.yml, rendered into patches.html, and faq.yml
   pages/       prose blocks embedded into the landing page
   templates/   Jinja templates
   static/      stylesheet, script and images, copied verbatim
@@ -42,7 +43,7 @@ DOCS_DIR = WEBSITE / "docs"
 BLOG_DIR = WEBSITE / "blog"
 DEFAULT_OUTPUT = WEBSITE / "build"
 
-# The feature board renderer lives with the other CI scripts.
+# features.yml is loaded and validated by the CI scripts.
 sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 
 MD_EXTENSIONS = [
@@ -127,7 +128,7 @@ def read_config() -> dict[str, Any]:
         raise BuildError(f"{CONFIG_FILE}: invalid YAML: {exc}") from None
     if not isinstance(data, dict):
         raise BuildError(f"{CONFIG_FILE}: expected a mapping at the top level")
-    for key in ("site", "links", "nav", "hero", "index", "documentation", "blog"):
+    for key in ("site", "links", "nav", "hero", "features", "index", "patches", "faq", "documentation", "blog"):
         if key not in data:
             raise BuildError(f"{CONFIG_FILE}: missing required key '{key}'")
     return data
@@ -337,10 +338,7 @@ def load_posts(config: dict[str, Any]) -> list[Post]:
     return posts
 
 
-def build_index_sections(config: dict[str, Any], anchors: dict[str, str]) -> list[dict]:
-    from render_html import render as render_board
-    from schema import load_items
-
+def build_index_sections(config: dict[str, Any]) -> list[dict]:
     sections = []
     seen = {raw["id"] for raw in config["index"]["sections"]}
     for raw in config["index"]["sections"]:
@@ -352,20 +350,170 @@ def build_index_sections(config: dict[str, Any], anchors: dict[str, str]) -> lis
                 raise BuildError(f"site.yml: {section['file']} does not exist")
             _, text = split_front_matter(source)
             section["html"] = render_markdown(text, seen)
-        elif kind == "feature-board":
-            def resolve(link: str) -> str:
-                if link not in anchors:
-                    raise BuildError(
-                        f"website/data/features.yml: link 'docs/{link}' is not part of "
-                        "the documentation page listed in site.yml"
-                    )
-                return f"documentation.html#{anchors[link]}"
-
-            section["html"] = Markup(render_board(load_items(), resolve=resolve))
         elif kind not in ("install", "community", "donations"):
             raise BuildError(f"site.yml: unknown index section type '{kind}'")
         sections.append(section)
     return sections
+
+
+# Sections of the patches page, in page order, and the upstream states each holds.
+PATCH_GROUPS = (
+    ("under-review", "Under review", ("submitted", "preparing")),
+    ("merged", "Merged upstream", ("merged",)),
+    ("kait2en-only", "Shipped in KAIT2EN, upstream pending", ("downstream",)),
+    ("withdrawn", "Superseded or withdrawn", ("superseded", "revoked", "rejected", "stale")),
+)
+OWN_PROJECT = "KAIT2EN Fedora"
+
+
+def build_patches(anchors: dict[str, str]) -> dict[str, Any]:
+    """Group features.yml into the sections and counters of patches.html."""
+    from schema import UPSTREAM_LABELS, UpstreamDataError, load_items
+
+    try:
+        items = load_items()
+    except UpstreamDataError as exc:
+        raise BuildError(str(exc)) from None
+
+    def project_key(name: str) -> str:
+        return slugify(name, "-") or "other"
+
+    rows = []
+    for item in items:
+        link = item.get("link", "")
+        external = link.startswith("https://")
+        if link and not external:
+            if link not in anchors:
+                raise BuildError(
+                    f"website/data/features.yml: link 'docs/{link}' is not part of "
+                    "the documentation page listed in site.yml"
+                )
+            href, label = f"documentation.html#{anchors[link]}", "Documentation"
+        elif external:
+            host = link.split("/")[2]
+            href, label = link, f"{host} \u2197"
+        else:
+            href = label = ""
+        project = item.get("project", OWN_PROJECT)
+        meta = [project] + [", ".join(f"@{a}" for a in item.get("authors", []))]
+        rows.append({
+            "version": "",
+            "notes": "",
+            "help": "",
+            **item,
+            "subsystem": item.get("subsystem") or project,
+            "project_key": project_key(project),
+            "upstream_label": "KAIT2EN" if item["upstream"] == "downstream"
+            else UPSTREAM_LABELS[item["upstream"]],
+            "updated_label": datetime.date.fromisoformat(item["updated"]).strftime("%d %b %Y"),
+            "meta": " \u00b7 ".join(m for m in meta if m),
+            "href": href,
+            "external": external,
+            "link_label": label,
+        })
+    rows.sort(key=lambda r: (r["updated"], r["title"]), reverse=True)
+
+    groups = []
+    for group_id, title, states in PATCH_GROUPS:
+        members = [r for r in rows if r["upstream"] in states]
+        if members:
+            groups.append({"id": group_id, "title": title, "patches": members})
+
+    def count(*states: str) -> int:
+        return sum(1 for r in rows if r["upstream"] in states)
+
+    counters = [
+        {"key": "total", "label": "patches", "count": len(rows)},
+        {"key": "merged", "label": "merged", "count": count("merged")},
+        {"key": "submitted", "label": "under review", "count": count("submitted", "preparing")},
+        {"key": "downstream", "label": "KAIT2EN only", "count": count("downstream")},
+    ]
+    projects: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        name = r.get("project", OWN_PROJECT)
+        entry = projects.setdefault(r["project_key"], {"key": r["project_key"], "name": name, "count": 0})
+        entry["count"] += 1
+    return {
+        "rows": rows,
+        "groups": groups,
+        "counters": counters,
+        "projects": sorted(projects.values(), key=lambda p: (-p["count"], p["name"])),
+        "total": len(rows),
+    }
+
+
+FAQ_FILE = WEBSITE / "data" / "faq.yml"
+
+
+def build_faq() -> list[dict]:
+    """Questions of faq.html, answers rendered from Markdown."""
+    try:
+        data = yaml.safe_load(FAQ_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise BuildError(f"{FAQ_FILE} not found") from None
+    except yaml.YAMLError as exc:
+        raise BuildError(f"{FAQ_FILE}: invalid YAML: {exc}") from None
+
+    seen: set[str] = set()
+    questions = []
+    for index, item in enumerate((data or {}).get("questions") or []):
+        if not item.get("q") or not item.get("a"):
+            raise BuildError(f"data/faq.yml: questions[{index}] needs 'q' and 'a'")
+        questions.append({
+            "id": make_id(item["q"], seen),
+            "q": item["q"],
+            "a": wrap_code_blocks(render_markdown(item["a"], seen)),
+        })
+    if not questions:
+        raise BuildError("data/faq.yml: no questions")
+    return questions
+
+
+# Upstream states listed as fixes on the landing page, in this order.
+FIX_ORDER = ("merged", "submitted", "preparing", "downstream")
+
+
+def build_home(
+    config: dict[str, Any], anchors: dict[str, str], rows: list[dict]
+) -> tuple[list[dict], list[dict]]:
+    """Features from site.yml, and every other patch as a fix."""
+    ids = {row["id"] for row in rows}
+    covered: set[str] = set()
+    features = []
+    for raw in config["features"]:
+        feature = {
+            "name": raw["name"],
+            "text": " ".join(raw["text"].split()),
+            "href": "",
+        }
+        if raw.get("doc"):
+            if raw["doc"] not in anchors:
+                raise BuildError(
+                    f"site.yml: feature '{raw['name']}' links docs/{raw['doc']}, "
+                    "which is not part of the documentation page"
+                )
+            feature["href"] = f"documentation.html#{anchors[raw['doc']]}"
+        for item_id in raw.get("covers", []):
+            if item_id not in ids:
+                raise BuildError(
+                    f"site.yml: feature '{raw['name']}' covers '{item_id}', "
+                    "which is not an id in data/features.yml"
+                )
+            covered.add(item_id)
+        features.append(feature)
+
+    # Grouped by driver: kernel and KAIT2EN fixes by subsystem, fixes for other
+    # projects by project name after them. Within a driver by upstream state,
+    # newest first (rows already come newest first).
+    fixes = []
+    for r in rows:
+        if r["id"] in covered or r["upstream"] not in FIX_ORDER:
+            continue
+        project = r.get("project", OWN_PROJECT)
+        other = project not in ("Linux kernel", OWN_PROJECT)
+        fixes.append({**r, "label": project if other else r["subsystem"], "other": other})
+    fixes.sort(key=lambda r: (r["other"], r["label"].lower(), FIX_ORDER.index(r["upstream"])))
+    return features, fixes
 
 
 def group_sidebar(items: list[dict], key: str = "group") -> list[dict]:
@@ -424,7 +572,7 @@ def write_sitemap(
     # changed on every deploy. Posts carry a real date, so they get one.
     urls = [f"<url><loc>{base}/</loc></url>"]
     urls += [f"<url><loc>{base}/{page}</loc></url>"
-             for page in ("documentation.html", "blog.html")]
+             for page in ("patches.html", "faq.html", "documentation.html", "blog.html")]
     urls += [f"<url><loc>{base}/{post.url}</loc>"
              f"<lastmod>{post.date.isoformat()}</lastmod></url>" for post in posts]
 
@@ -519,7 +667,9 @@ def build(output: Path, site_url: str | None = None, noindex: bool = False) -> N
     env.filters["iso_date"] = lambda d: d.isoformat()
 
     doc_groups, anchors = build_documentation(config)
-    index_sections = build_index_sections(config, anchors)
+    index_sections = build_index_sections(config)
+    patches = build_patches(anchors)
+    features, fixes = build_home(config, anchors, patches.pop("rows"))
     posts = load_posts(config)
 
     if output.exists():
@@ -553,6 +703,8 @@ def build(output: Path, site_url: str | None = None, noindex: bool = False) -> N
         "index.html",
         "index.html",
         hero=config["hero"],
+        features=features,
+        fixes=fixes,
         sections=index_sections,
         sidebar_title=config["index"]["sidebar_title"],
         sidebar=group_sidebar(index_sections),
@@ -563,6 +715,8 @@ def build(output: Path, site_url: str | None = None, noindex: bool = False) -> N
         doc=config["documentation"],
         groups=doc_groups,
     )
+    write("patches.html", "patches.html", patches=config["patches"], **patches)
+    write("faq.html", "faq.html", faq=config["faq"], questions=build_faq())
     write("blog.html", "blog_index.html", blog=config["blog"])
     for index, post in enumerate(posts):
         write(
