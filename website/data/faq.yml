@@ -17,7 +17,8 @@ questions:
   - q: What is not recommended to do?
     a: |-
       Your T2 Mac is not a regular PC. We put big effort in optimizing
-      the proprietary drivers and power management.
+      the proprietary drivers and power management. There is nothing
+      left to be optimized.
       You should definitely not use any "power optimizers" like:
 
       - TLP
@@ -37,6 +38,25 @@ questions:
       MacOS. But you can simply install it on an external hard drive and
       wipe it from the internal drive. Or just go all-in and wipe it if
       you so wish.
+
+  - q: Are you competing with T2Linux.org?
+    a: >-
+      No. In fact we provide them with features and patches. We started
+      with their work as a base. There has been some friction, but we have
+      a good relation.
+
+  - q: Why do you dislike CachyOS and Omarchy although they support T2?
+    a: >-
+      Both distros desire popularity for funding. They don't care about 
+      sustainability by upstreaming the patches they collect. They don't
+      develop fixes on driver level. They are provided our patches through
+      the T2Linux Arch repository. They make millions based on work of 
+      others, who never see a penny.
+      Omarchy in particular doesn't even respect copyrights, licenses and
+      credits. That is against the Linux spirit.
+
+      We want T2 compatibility for all distros provided by the mainline
+      kernel. 
     
   - q: Are you guys seasoned Devs?
     a: >-
@@ -45,8 +65,14 @@ questions:
   - q: Is AI used in this project?
     a: >-
       Yes, it is. Mainly for userspace code and for maintaining the
-      website. Code supposed to go upstream is human-written.
+      website. Code supposed to run low level or go upstream is 
+      human-written.
       Otherwise this project wouldn't be possible due to lack of
       manpower.
 
-
+  - q: What is your plans for the future?
+    a: >-
+      Upstream, upstream, upstream. And then see what is left and can't
+      be upstreamed. Our goal is to only maintain and preserve userspace
+      tools that find no place in the kernel or are not picked up by
+      main distros. Until then it's quite a while and we will stay busy.
