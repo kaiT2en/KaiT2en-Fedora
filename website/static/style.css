@@ -1552,6 +1552,8 @@ h4:hover > .headerlink,
    main.js sets --lid from 0 (open) to 1 (closed) over that distance. */
 .home-hero {
     --lid: 0;
+    /* One pixel of the 860px wide MacBook drawing below, see .mbp. */
+    --u: calc(min(860px, 88vw, 125vh) / 860);
     /* Where the stage sits, and stays pinned. main.js centres it in the
        viewport below the navbar, this is the value without JavaScript. */
     --stage-top: 110px;
@@ -1559,8 +1561,10 @@ h4:hover > .headerlink,
     text-align: center;
 }
 
+/* Scrolling as far as the lid is tall closes it, so a small MacBook on a
+   phone closes with one swipe. */
 .home-runway {
-    height: 80vh;
+    height: calc(var(--u) * 580);
 }
 
 .home-stage {
@@ -1579,7 +1583,6 @@ h4:hover > .headerlink,
    and folds forward onto the deck. With the eye at hinge height the closed
    lid vanishes edge on, and the lid edge (.mbp-edge) swings up in its place. */
 .mbp {
-    --u: calc(min(860px, 88vw, 125vh) / 860);
     width: calc(var(--u) * 860);
     /* The lid renders at 2500/3080 of its box, the top margin takes up the
        empty band that leaves above it. */
