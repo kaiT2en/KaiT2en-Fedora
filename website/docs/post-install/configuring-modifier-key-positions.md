@@ -67,7 +67,7 @@ Reboot for the change to take effect.
 ## Swapping keys at the desktop level
 
 For GNOME users, it's possible to perform more flexible remapping using GNOME Tweaks, but this will apply to all keyboards, not just Apple ones.
-This is an alternative to the `t2hid` configuration above, and might result in swapping the keys back if applied together with it.
+This is an alternative to the `t2hid` configuration above, and might result in swapping the keys back if the same configuration is applied in both GNOME Tweaks and in `t2hid`.
 
 Install GNOME Tweaks (either from the Software app or with `sudo dnf install gnome-tweaks`) and open it.
 
