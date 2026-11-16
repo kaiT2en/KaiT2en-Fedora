@@ -743,3 +743,18 @@ items:
       Bluetooth chip because of a hardware erratum, which held the
       MacBookAir9,1 package at PC3. ASPM is now off only while the
       firmware boots. Acked by Sven Peter.
+
+  - id: card-reader-fix
+    title: "Card reader power management"
+    state: available
+    upstream: submitted
+    version: v1
+    project: Linux Kernel
+    subsystem: xHCI/USB
+    authors:
+      - byte
+    link: "https://lore.kernel.org/all/20261116231926.5891-1-atharvatiwarilinuxdev@gmail.com/"
+    updated: "2026-11-17"
+    notes: >-
+      We did not support cutting on/off power to the card reader
+      with this patch we add, and we get a slight decrease in power within suspend.
