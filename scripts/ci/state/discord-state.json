@@ -129,6 +129,10 @@
       "message_id": "1570056621458067526",
       "hash": "06e14e1a3e94cb530b2c1c4bc8d8da96598d6668e4375e6e0841ea7a2c7b7854"
     },
+    "card-reader-fix": {
+      "message_id": "1572031541599670292",
+      "hash": "38a4156e96c4692ccb6de957a53cc0db0934f1a63157373861c757223c79e06a"
+    },
     "brcmfmac-bcm4377-d3-ack": {
       "message_id": "1550620841786740856",
       "hash": "d1aa40106deee6e5967edd1389670e2fbb421b7969d59297b37253e5c013bc84"
