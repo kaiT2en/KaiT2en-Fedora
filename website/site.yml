@@ -212,6 +212,7 @@ documentation:
             - {file: post-install/applications/t2-kernel-builder.md}
         - {file: post-install/audio-dsp.md}
         - {file: post-install/butterfly-keyboard.md}
+        - {file: post-install/configuring-modifier-key-positions.md}
         - {file: post-install/configuring-gpus.md}
         - {file: post-install/hardware-video-decoding.md}
         - {file: post-install/hardware-video-encoding.md}
