@@ -107,7 +107,7 @@
     },
     "brcmfmac-bcm4364-antenna-sku": {
       "message_id": "1570117115447476376",
-      "hash": "089350ed6f7cdcfccc73627c102795bccff782901960c86c492238d53070e50f"
+      "hash": "27af88889ad3a91b3e136ebf3387838ed3c3c848ef23765d1eebc3d400f4d21b"
     },
     "bluetooth-bcm4377-cold-resume": {
       "message_id": "1568654941910736956",
