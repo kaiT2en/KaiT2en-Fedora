@@ -643,7 +643,7 @@ items:
   - id: brcmfmac-bcm4364-antenna-sku
     title: "BCM4364/3 firmware selection without antenna SKU"
     state: available
-    upstream: submitted
+    upstream: merged
     version: v1
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
