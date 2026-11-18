@@ -75,7 +75,7 @@
     },
     "brcmfmac-bcm4364-txbf": {
       "message_id": "1567559777305764021",
-      "hash": "38b675ccc517a7d55e4327ed878781fc70f8dea59a818003df541561e0b8bd58"
+      "hash": "488a9c6119c31d5b3260d9153d0df58e01cc7b1cccb96c0902f57f9b77d64411"
     },
     "btbcm-acl-priority": {
       "message_id": "1567559781986603140",
@@ -87,7 +87,7 @@
     },
     "brcmfmac-bcm4364-ap-fwauth": {
       "message_id": "1567559795186204756",
-      "hash": "707a293a1d5590525516cf475b6464b584e08d8ca84396f4fbb0cd768b973c0c"
+      "hash": "bbd8f47af85a3fe7d6da9144db7fd3374e7e061b210bd1fcdaf04c898f9a7ce8"
     },
     "brcmfmac-awdl": {
       "message_id": "1567559799921713182",
@@ -99,11 +99,19 @@
     },
     "brcmfmac-bcm4364-ndoe": {
       "message_id": "1567559807760597002",
-      "hash": "c6fcec64072a09a41d1aed3666ac106a0b9c59a5336edcafb81abdb6d6278179"
+      "hash": "ef997470b4c220094194044430516909802694d695786b274c75af32540f1400"
     },
     "brcmfmac-cold-resume": {
       "message_id": "1568654937867555029",
       "hash": "da7b8060167f875ad4d42f7d2cacea8da5a01e3c8f9db1be5974e46607f729dc"
+    },
+    "brcmfmac-d3-ack-reload": {
+      "message_id": "1567559811908903124",
+      "hash": "7d8ab97596f7b572243fa8d59d45abf99948de925da682ef6f424aa668634a4f"
+    },
+    "brcmfmac-bcm4377-d3-ack": {
+      "message_id": "1550620841786740856",
+      "hash": "3240bd68b38a635f67384e2ae2bea47cc2e3a00128449fb3312eef564df6bed5"
     },
     "brcmfmac-bcm4364-antenna-sku": {
       "message_id": "1570117115447476376",
@@ -132,14 +140,6 @@
     "card-reader-fix": {
       "message_id": "1572031541599670292",
       "hash": "38a4156e96c4692ccb6de957a53cc0db0934f1a63157373861c757223c79e06a"
-    },
-    "brcmfmac-bcm4377-d3-ack": {
-      "message_id": "1550620841786740856",
-      "hash": "d1aa40106deee6e5967edd1389670e2fbb421b7969d59297b37253e5c013bc84"
-    },
-    "brcmfmac-d3-ack-reload": {
-      "message_id": "1567559811908903124",
-      "hash": "e7addf73bc7bfb7ff1ea1a47d5e6f14537fe975a325aadd135e3e4dc48c8e36d"
     },
     "brcmfmac-fwcap-whole-words": {
       "message_id": "1567559789851050075",
