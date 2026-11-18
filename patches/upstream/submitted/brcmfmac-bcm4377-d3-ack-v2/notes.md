@@ -1,6 +1,6 @@
 # BCM4377 missing D3 ACK workaround v2
 
-- Status: submitted
+- Status: superseded, the mailbox over the control ring from Reeves 05 makes the BCM4377 ACK D3
 - Version: v2
 - Date: 2026-10-01
 - Base: wireless-next `1631d79ae57dce2c5f88ad278307028638a8b4d9`
@@ -39,3 +39,7 @@ Cc:
 - brcm80211@lists.linux.dev
 - brcm80211-dev-list.pdl@broadcom.com
 - linux-kernel@vger.kernel.org
+
+## Review
+
+- 2026-11-18: declared superseded in the reply to Arend on brcmfmac-d3-ack-reload-v1.

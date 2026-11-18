@@ -604,20 +604,23 @@ items:
       AirDrop shows up within a second.
 
   - id: brcmfmac-bcm4364-ndoe
-    title: "BCM4364 ND offload off"
+    title: "BCM4355 and BCM4364 ND offload off"
     state: available
     upstream: submitted
-    version: v1
+    version: v2
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261104151620.70671-1-dev@deq.rocks/"
-    updated: "2026-11-04"
+      - AdityaGarg8
+    link: "https://lore.kernel.org/all/20261118123933.74517-1-dev@deq.rocks/"
+    updated: "2026-11-18"
     notes: >-
-      With ND offload on, IPv6 downloads dropped to about 55 Mbit/s.
-      brcmfmac keeps ARP and ND offload off on this chip while awake.
-      Closes t2linux/kernel#34 and T2-Debian-and-Ubuntu-Kernel#227.
+      With ND offload on, downloads dropped to about 55 Mbit/s on the
+      BCM4364 and about 50 Mbit/s on the BCM4355 of the MacBookAir8,1.
+      brcmfmac keeps ARP and ND offload off on these chips on Apple
+      boards while awake, as macOS does. Closes t2linux/kernel#34 and
+      T2-Debian-and-Ubuntu-Kernel#227.
 
   - id: brcmfmac-cold-resume
     title: "Cold resume after S3"
@@ -639,6 +642,37 @@ items:
       BCM4377 D3 acknowledgement uses patch 5 of Michael Reeves' BCM4388
       series, carried until merged:
       https://lore.kernel.org/all/20260925-brcm4388-submit-v1-5-b5cbc2cde2fb@gmail.com/
+
+  - id: brcmfmac-d3-ack-reload
+    title: "Firmware reload after a missing D3 ACK"
+    state: available
+    upstream: superseded
+    version: v1
+    project: Linux kernel
+    subsystem: Wi-Fi / brcmfmac
+    authors:
+      - deqrocks
+    link: "https://lore.kernel.org/all/20261104151616.70623-1-dev@deq.rocks/"
+    updated: "2026-11-18"
+    notes: >-
+      Superseded by the cold resume series above. Patch 3 reloads the
+      firmware after a resume through platform firmware and patch 4
+      drops the tx status wait on flowring delete.
+
+  - id: brcmfmac-bcm4377-d3-ack
+    title: "BCM4377 missing D3 ACK workaround"
+    state: available
+    upstream: superseded
+    version: v2
+    project: Linux kernel
+    subsystem: Wi-Fi / brcmfmac
+    authors:
+      - deqrocks
+    link: "https://lore.kernel.org/all/20261001085308.1688049-1-dev@deq.rocks/"
+    updated: "2026-11-18"
+    notes: >-
+      No longer needed. With the mailbox over the control ring from
+      Michael Reeves' BCM4388 series the BCM4377 acknowledges D3.
 
   - id: brcmfmac-bcm4364-antenna-sku
     title: "BCM4364/3 firmware selection without antenna SKU"

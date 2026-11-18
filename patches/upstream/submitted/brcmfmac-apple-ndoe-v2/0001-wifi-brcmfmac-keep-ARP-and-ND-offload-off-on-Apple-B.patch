@@ -1,0 +1,110 @@
+From f4835cdbfdfb2102b0e3717ccf8daa40600eb370 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Wed, 18 Nov 2026 13:07:54 +0100
+Subject: [PATCH wireless v2] wifi: brcmfmac: keep ARP and ND offload off on
+ Apple BCM4355 and BCM4364
+
+brcmfmac enables the firmware's ARP and IPv6 ND offload (ndoe) whenever
+the interface is up and not promiscuous. On the Apple firmware for the
+BCM4355 and BCM4364, ndoe makes downloads collapse.
+
+On the BCM4364, IPv6 downloads topped out at 55 Mbit/s on a
+MacBookPro15,1 with the BCM4364/3 and on the MacBookPro16,1 with the
+later revision [1][2]. On the BCM4355 of the MacBookAir8,1, downloads
+fell to about 50 Mbit/s with the offload on and stayed at 300 to 400
+Mbit/s with it off, and the firmware logged errors several times a
+second [3]. The BCM4377 is not affected.
+
+macOS enables ARP and ND offload for associated sleep only and clears
+both on wake. ARP offload brings no benefit while awake, and without
+WoWL brcmfmac disconnects on suspend on these Macs, so the offloads are
+never used in sleep either. With ARP offload on, the firmware answers
+from its own host IP table, and the host does not notice when that
+table is stale. brcmfmac already turns both offloads off in promiscuous
+mode and while a soft AP runs.
+
+Keep both off on these chips when the board type is an Apple one,
+which runs the firmware the way macOS does while awake.
+
+[1] https://github.com/t2linux/kernel/issues/34
+[2] https://github.com/t2linux/T2-Debian-and-Ubuntu-Kernel/issues/227
+[3] https://github.com/t2linux/linux-t2-patches/pull/85
+
+Fixes: 52f22fb21764 ("brcmfmac: add neighbor discovery offload ip address table configuration")
+Cc: stable@vger.kernel.org
+Closes: https://github.com/t2linux/kernel/issues/34
+Closes: https://github.com/t2linux/T2-Debian-and-Ubuntu-Kernel/issues/227
+Link: https://github.com/t2linux/linux-t2-patches/pull/85
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
+Tested-by: Aditya Garg <aditya.garg@linux.dev>
+Co-developed-by: Aditya Garg <aditya.garg@linux.dev>
+Signed-off-by: Aditya Garg <aditya.garg@linux.dev>
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+Changes in v2:
+- Restrict the quirk to Apple boards with settings->board_type
+- Add the BCM4355 of the MacBookAir8,1 (Aditya)
+- Add Fixes and Cc stable, target wireless
+- Explain why ARP offload stays off as well
+- v1: https://lore.kernel.org/all/20261104151620.70671-1-dev@deq.rocks/
+
+ .../broadcom/brcm80211/brcmfmac/core.c        | 27 +++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c
+index 92ec269f43b2..00d608923380 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c
+@@ -13,6 +13,7 @@
+ #include <net/addrconf.h>
+ #include <net/ieee80211_radiotap.h>
+ #include <net/ipv6.h>
++#include <brcm_hw_ids.h>
+ #include <brcmu_utils.h>
+ #include <brcmu_wifi.h>
+ 
+@@ -93,6 +94,22 @@ struct brcmf_if *brcmf_get_ifp(struct brcmf_pub *drvr, int ifidx)
+ 	return ifp;
+ }
+ 
++static bool brcmf_is_apple_nd_offload_broken(struct brcmf_pub *drvr)
++{
++	const char *board_type = drvr->settings->board_type;
++
++	if (!board_type || !strstarts(board_type, "apple,"))
++		return false;
++
++	switch (drvr->bus_if->chip) {
++	case BRCM_CC_4355_CHIP_ID:
++	case BRCM_CC_4364_CHIP_ID:
++		return true;
++	default:
++		return false;
++	}
++}
++
+ void brcmf_configure_arp_nd_offload(struct brcmf_if *ifp, bool enable)
+ {
+ 	s32 err;
+@@ -103,6 +120,16 @@ void brcmf_configure_arp_nd_offload(struct brcmf_if *ifp, bool enable)
+ 		return;
+ 	}
+ 
++	/* With ND offload on while awake, the Apple firmware for the BCM4355
++	 * and BCM4364 makes IPv6 downloads drop to low rates. macOS runs ARP
++	 * and ND offload only in sleep, keep both off on these chips.
++	 */
++	if (enable && brcmf_is_apple_nd_offload_broken(ifp->drvr)) {
++		brcmf_dbg(TRACE, "Skip ARP/ND offload enable on Apple BCM%x\n",
++			  ifp->drvr->bus_if->chip);
++		enable = false;
++	}
++
+ 	if (enable)
+ 		mode = BRCMF_ARP_OL_AGENT | BRCMF_ARP_OL_PEER_AUTO_REPLY;
+ 	else
+
+base-commit: 763b13f622e2758726e8e3ecaef819db8fa0430a
+-- 
+2.56.0
+
