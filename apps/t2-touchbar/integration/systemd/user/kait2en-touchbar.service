@@ -2,6 +2,9 @@
 Description=T2 Touch Bar
 After=graphical-session.target
 PartOf=graphical-session.target
+# The unit is enabled globally, so it also starts in the gdm-greeter session,
+# which cannot open the Touch Bar devices and hits the start limit every boot.
+ConditionGroup=kait2en-touchbar
 StartLimitIntervalSec=30
 StartLimitBurst=5
 
