@@ -1,6 +1,6 @@
 # [PATCH] wifi: brcmfmac: disable TX beamforming on BCM4364
 
-- Status: submitted
+- Status: superseded by brcmfmac-apple-txbf-v2
 - Version: v1
 - Date: 2026-11-04
 - Base: wireless-next `991a73f4909`

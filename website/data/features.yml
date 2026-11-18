@@ -490,13 +490,13 @@ items:
     title: "BCM4364 TX beamforming off"
     state: available
     upstream: submitted
-    version: v1
+    version: v2
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261104151623.70695-1-dev@deq.rocks/"
-    updated: "2026-11-04"
+    link: "https://lore.kernel.org/all/20261118141020.92306-1-dev@deq.rocks/"
+    updated: "2026-11-18"
     notes: >-
       With TX beamforming the BCM4364 firmware sends one stream. Uplink
       rises from about 350 to 620 Mbit/s with beamforming off.
@@ -536,20 +536,20 @@ items:
       W.
 
   - id: brcmfmac-bcm4364-ap-fwauth
-    title: "BCM4364 hotspot authentication"
+    title: "BCM4364 and BCM4377 hotspot authentication"
     state: available
     upstream: submitted
-    version: v1
+    version: v2
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261104151629.70790-1-dev@deq.rocks/"
-    updated: "2026-11-04"
+    link: "https://lore.kernel.org/all/20261118141024.92354-1-dev@deq.rocks/"
+    updated: "2026-11-18"
     notes: >-
-      The BCM4364 firmware handshake for its access point stalls and
-      clients drop after about 8 s. brcmfmac leaves the handshake to
-      wpa_supplicant or hostapd.
+      The firmware handshake for its access point stalls on the BCM4364
+      and BCM4377, for WPA2 and WPA3, and clients drop after about 8 s.
+      brcmfmac leaves the handshake to wpa_supplicant or hostapd.
 
   - id: t2-airshare
     title: "T2 AirShare (AirDrop and Quick Share)"

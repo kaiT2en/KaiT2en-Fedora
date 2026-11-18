@@ -1,0 +1,72 @@
+From f675b476684c8ed64c36ff1e13c70325513b536e Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Wed, 18 Nov 2026 15:02:20 +0100
+Subject: [PATCH wireless-next v2] wifi: brcmfmac: leave the AP 4-way handshake
+ to the host on Apple chips
+
+The Apple firmware for the BCM4364 and BCM4377 lists "idauth" in its
+capabilities, so brcmfmac enables BRCMF_FEAT_FWAUTH and advertises
+NL80211_EXT_FEATURE_4WAY_HANDSHAKE_AP_PSK and, with "sae",
+NL80211_EXT_FEATURE_SAE_OFFLOAD_AP. hostapd and wpa_supplicant then leave
+the AP side of the handshake to the firmware, which doesn't complete.
+
+With a WPA2-PSK AP, brcmfmac sets the PMK in the firmware without error,
+the client associates, the firmware sends no EAPOL-Key frame and removes
+the station after about 8 s. Seen on the BCM4364 (MacBookPro15,1) and on
+the BCM4377 (MacBookAir9,1). With a WPA3-SAE AP and PMF required on the
+BCM4377, the client associates and is removed the same way without being
+authorized.
+
+Clear BRCMF_FEAT_FWAUTH on these chips when the board type is Apple, so
+the host runs the handshake. A WPA2-PSK AP then works. This also drops
+SAE_OFFLOAD_AP, which is not usable on this firmware. A WPA3-SAE AP does
+not work without the offload either, the client does not associate.
+
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
+Tested-by: Aditya Garg <aditya.garg@linux.dev>
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+Changes in v2:
+- Restrict the quirk to Apple boards with settings->board_type
+- Drop the BCM4355, due to lack of testers
+- Test the BCM4377 as well with SAE_OFFLOAD_AP
+- Target wireless-next
+- v1: https://lore.kernel.org/all/20261104151629.70790-1-dev@deq.rocks/
+
+The T2 Linux community runs this patch with its kernels, no regression
+was reported.
+
+ .../broadcom/brcm80211/brcmfmac/feature.c         | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
+index 27fa3a7941d9..54f61618b9a1 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
+@@ -423,6 +423,21 @@ void brcmf_feat_attach(struct brcmf_pub *drvr)
+ 					BIT(BRCMF_FEAT_WOWL_GTK);
+ 		}
+ 	}
++	/* The Apple firmware for these chips lists "idauth", but in AP mode
++	 * it never completes the 4-way handshake or SAE, and the station is
++	 * dropped. Leave the handshake to the host.
++	 */
++	if (drvr->settings->board_type &&
++	    strstarts(drvr->settings->board_type, "apple,")) {
++		switch (drvr->bus_if->chip) {
++		case BRCM_CC_4364_CHIP_ID:
++		case BRCM_CC_4377_CHIP_ID:
++			ifp->drvr->feat_flags &= ~BIT(BRCMF_FEAT_FWAUTH);
++			break;
++		default:
++			break;
++		}
++	}
+ 	/* MBSS does not work for all chips */
+ 	switch (drvr->bus_if->chip) {
+ 	case BRCM_CC_4330_CHIP_ID:
+
+base-commit: 5dbf2415ca9821a611d09308e3b29d2c37e7cd77
+-- 
+2.56.0
+

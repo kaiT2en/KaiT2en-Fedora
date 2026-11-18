@@ -1,4 +1,4 @@
-0001-wifi-brcmfmac-disable-TX-beamforming-on-BCM4364.patch
+0001-wifi-brcmfmac-turn-off-TX-beamforming-on-Apple-BCM4364.patch
 0002-Bluetooth-btbcm-raise-ACL-priority-on-Apple-Broadcom-controllers.patch
 0003-wifi-brcmfmac-use-a-200-ms-power-save-timeout-by-default.patch
 0004-wifi-brcmfmac-match-firmware-capabilities-as-whole-words.patch
@@ -11,7 +11,7 @@
 0011-wifi-brcmfmac-pass-AWDL-frames-and-role-changes-to-user-space.patch
 0012-Bluetooth-btbcm-clear-vendor-bits-in-LE-advertising-report-types.patch
 0013-Bluetooth-set-the-strict-duplicate-filter-quirk-on-Apple-Broadcom-controllers.patch
-0014-wifi-brcmfmac-keep-ARP-and-ND-offload-off-on-the-BCM4364-while-awake.patch
+0014-wifi-brcmfmac-keep-ARP-and-ND-offload-off-on-Apple-BCM4355-and-BCM4364.patch
 0015-wifi-brcmfmac-Improve-D3-substate-entering-timeout-handling.patch
 0016-wifi-brcmfmac-pcie-Report-the-detected-chip-ID-to-the-bus.patch
 0017-wifi-brcmfmac-Support-newer-PCIe-core-startup-and-interrupts.patch

@@ -1,6 +1,6 @@
 # [PATCH] wifi: brcmfmac: leave the AP 4-way handshake to the host on Apple chips
 
-- Status: submitted
+- Status: superseded by brcmfmac-apple-ap-fwauth-v2
 - Version: v1
 - Date: 2026-11-04
 - Base: wireless-next `991a73f4909`
