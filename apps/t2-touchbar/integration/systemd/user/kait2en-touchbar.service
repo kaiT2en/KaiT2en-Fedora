@@ -2,6 +2,12 @@
 Description=T2 Touch Bar
 After=graphical-session.target
 PartOf=graphical-session.target
+# GDM and users outside the group keep the native Touch Bar
+ConditionGroup=kait2en-touchbar
+# The panel unit switches the Touch Bar to the display first and back once
+# the daemon is gone. The sandbox below allows only one process per unit.
+Requires=kait2en-touchbar-panel.service
+After=kait2en-touchbar-panel.service
 StartLimitIntervalSec=30
 StartLimitBurst=5
 

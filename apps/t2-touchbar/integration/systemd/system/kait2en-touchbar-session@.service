@@ -1,0 +1,14 @@
+[Unit]
+Description=Switch the Apple T2 Touch Bar to the display for user %i
+# The instance is the UID. It only runs alongside that user's manager and
+# stops with it, so a logout always hands the panel back to the firmware row.
+Requisite=user@%i.service
+After=user@%i.service
+PartOf=user@%i.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/kait2en-touchbar --attach
+ExecStop=/usr/local/bin/kait2en-touchbar --detach
+TimeoutStartSec=60

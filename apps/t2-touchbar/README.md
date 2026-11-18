@@ -112,8 +112,14 @@ daemon and reboot:
 sudo systemctl --global disable kait2en-touchbar.service
 ```
 
-The attach service then leaves the firmware row in place at boot. Enable it
-again with `sudo systemctl --global enable kait2en-touchbar.service`.
+The panel then keeps the firmware row. Enable it again with
+`sudo systemctl --global enable kait2en-touchbar.service`.
+
+Until a member of `kait2en-touchbar` starts a graphical session, the TTY and
+GDM keep Apple's native Touch Bar with Esc. The user service then pulls in
+`kait2en-touchbar-panel.service`, which switches the panel to the display
+through `kait2en-touchbar-session@<UID>.service`. A polkit rule lets group
+members start and stop exactly that unit. Logging out switches it back.
 
 State is stored at `$XDG_STATE_HOME/kait2en-touchbar/state.toml`. Inspect or
 reset it with:

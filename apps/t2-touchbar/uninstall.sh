@@ -38,6 +38,7 @@ stop_services() {
 	# Sessions of other users run their own instance of the global unit.
 	pkill -x kait2en-touchbar || true
 	systemctl disable --now kait2en-touchbar-attach.service 2>/dev/null || true
+	systemctl stop 'kait2en-touchbar-session@*.service' 2>/dev/null || true
 }
 
 restore_firmware_row() {

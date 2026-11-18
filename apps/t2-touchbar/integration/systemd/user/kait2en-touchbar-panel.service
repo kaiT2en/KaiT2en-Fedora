@@ -1,0 +1,15 @@
+[Unit]
+Description=T2 Touch Bar display for this session
+# Pulled in by kait2en-touchbar.service. It stays outside the daemon's sandbox
+# because a sandboxed user unit can run only one process.
+ConditionGroup=kait2en-touchbar
+StopWhenUnneeded=yes
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Switch the panel from the firmware row to the display for this session and
+# back when it ends. The polkit rule allows exactly this system unit.
+ExecStart=/usr/bin/systemctl start --no-ask-password kait2en-touchbar-session@%U.service
+ExecStop=/usr/bin/systemctl stop --no-ask-password kait2en-touchbar-session@%U.service
+TimeoutStartSec=90
