@@ -5,6 +5,24 @@ set -Eeuo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 cd "$repo_root"
 
+forbid_fq() {
+	local needle=$1 file
+	shift
+	for file in "$@"; do
+		if grep -Fq -- "$needle" "$file"; then
+			printf 'Static check failed: "%s" must not appear in %s\n' "$needle" "$file" >&2
+			exit 1
+		fi
+	done
+}
+
+expect_fq() {
+	grep -Fq -- "$1" "$2" || {
+		printf 'Static check failed: expected "%s" in %s\n' "$1" "$2" >&2
+		exit 1
+	}
+}
+
 shell_files=(
 	auto-installer/build-in-container.sh
 	auto-installer/build-input-kmod.sh
@@ -81,111 +99,108 @@ $1 == "linux" && index($0, "${kait2en_common}") { entries++ }
 $1 == "initrd" && $2 == "${kait2en_initrd}" { overlays++ }
 END { exit !(entries >= 5 && entries == overlays) }
 ' auto-installer/grub.cfg.in
-grep -Fq 'plymouth.enable=0' auto-installer/grub.cfg.in
-grep -Fq 'nomodeset' auto-installer/grub.cfg.in
+expect_fq 'plymouth.enable=0' auto-installer/grub.cfg.in
+expect_fq 'nomodeset' auto-installer/grub.cfg.in
 if grep -Eq '^set kait2en_blacklist=.*apple_gmux' auto-installer/grub.cfg.in; then
 	exit 1
 fi
 ! grep -InE 'INPUT_COMPAT_PATCH|compat_patch|auto-installer/patches' \
 	auto-installer/runtime/kait2en-prepare
-grep -Fq '"$transition_source" "$target_kernel" "$work/rpm"' \
+expect_fq '"$transition_source" "$target_kernel" "$work/rpm"' \
 	auto-installer/runtime/kait2en-prepare
 # The transition modules only live in the initramfs, so they must be forced in.
-grep -Fq 'dracut --force --force-drivers' \
+expect_fq 'dracut --force --force-drivers' \
 	auto-installer/runtime/kait2en-prepare
-! grep -Fq -- '--add-drivers' auto-installer/runtime/kait2en-prepare
+forbid_fq '--add-drivers' auto-installer/runtime/kait2en-prepare
 
 # DKMS drops every kernel's build before rebuilding any of them, so a kernel
 # without headers has to be refused before anything is removed.
-grep -Fq 'require_kernel_headers' scripts/fedora/install-dkms-modules.sh
-grep -Fq 'require_kernel_headers()' scripts/fedora/lib.sh
-grep -Fq 't2-kernel-builder installation failed; continuing because it is optional' \
+expect_fq 'require_kernel_headers' scripts/fedora/install-dkms-modules.sh
+expect_fq 'require_kernel_headers()' scripts/fedora/lib.sh
+expect_fq 't2-kernel-builder installation failed; continuing because it is optional' \
 	scripts/fedora/install-apps.sh
-grep -Fq 'apps/t2-touchbar/install.sh' scripts/fedora/install-apps.sh
+expect_fq 'apps/t2-touchbar/install.sh' scripts/fedora/install-apps.sh
 # The Touch Bar daemon is optional and asked for before any step runs.
-grep -Fq 'KAIT2EN_INSTALL_TOUCHBAR' scripts/fedora/install-apps.sh
-grep -Fq 'ask_touchbar' scripts/fedora/install.sh
+expect_fq 'KAIT2EN_INSTALL_TOUCHBAR' scripts/fedora/install-apps.sh
+expect_fq 'ask_touchbar' scripts/fedora/install.sh
 # Only models with a Touch Bar are asked, and the first install must not
 # switch the panel before the session can open it.
-grep -Fq 'has_touch_bar' scripts/fedora/install.sh
-grep -Fq 'has_touch_bar' scripts/fedora/install-apps.sh
+expect_fq 'has_touch_bar' scripts/fedora/install.sh
+expect_fq 'has_touch_bar' scripts/fedora/install-apps.sh
 # KaiT2en Vornehm is optional, offered only with GNOME and installed as
 # the user who runs sudo.
-grep -Fq 'ask_vornehm' scripts/fedora/install.sh
-grep -Fq 'KAIT2EN_INSTALL_VORNEHM' scripts/fedora/install.sh
-grep -Fq 'as_vornehm_user bash "$SCRIPT_DIR/install-vornehm.sh"' scripts/fedora/install.sh
-grep -Fq 'systemctl disable kait2en-touchbar-attach.service' apps/t2-touchbar/install.sh
+expect_fq 'ask_vornehm' scripts/fedora/install.sh
+expect_fq 'KAIT2EN_INSTALL_VORNEHM' scripts/fedora/install.sh
+expect_fq 'as_vornehm_user bash "$SCRIPT_DIR/install-vornehm.sh"' scripts/fedora/install.sh
+expect_fq 'systemctl disable kait2en-touchbar-attach.service' apps/t2-touchbar/install.sh
 # ISOs up to v0.1.12 delegate to the old installer path.
-grep -Fq 'auto-installer/runtime' packaging/installer/runtime/kait2en-install
-grep -Fq '"$BIN" --detach' apps/t2-touchbar/uninstall.sh
-grep -Fq 'build_cargo_project "$APP_DIR"' apps/t2-touchbar/install.sh
-grep -Fq 'env CARGO_TARGET_DIR="$CARGO_TARGET_DIR" make -C "$path" build' scripts/fedora/lib.sh
-grep -Fq 'device_group_is_live' apps/t2-touchbar/install.sh
-grep -Fq 'kait2en-touchbar --attach' \
+expect_fq 'auto-installer/runtime' packaging/installer/runtime/kait2en-install
+expect_fq '"$BIN" --detach' apps/t2-touchbar/uninstall.sh
+expect_fq 'build_cargo_project "$APP_DIR"' apps/t2-touchbar/install.sh
+expect_fq 'env CARGO_TARGET_DIR="$CARGO_TARGET_DIR" make -C "$path" build' scripts/fedora/lib.sh
+expect_fq 'device_group_is_live' apps/t2-touchbar/install.sh
+expect_fq 'kait2en-touchbar --attach' \
 	apps/t2-touchbar/integration/systemd/system/kait2en-touchbar-attach.service
-grep -Fq 't2-kernel-builder bundle is incomplete' \
+expect_fq 't2-kernel-builder bundle is incomplete' \
 	apps/t2-kernel-builder/install.sh
 # A wrong origin URL must be repaired; dying leaves the user with no way out.
-grep -Fq 'repair_origin_url' auto-installer/runtime/kait2en-install
-grep -Fq 'repair_origin_url' auto-installer/runtime/kait2en-prepare
-! grep -Fq 'unexpected origin URL' \
+expect_fq 'repair_origin_url' auto-installer/runtime/kait2en-install
+expect_fq 'repair_origin_url' auto-installer/runtime/kait2en-prepare
+forbid_fq 'unexpected origin URL' \
 	auto-installer/runtime/kait2en-install \
 	auto-installer/runtime/kait2en-prepare
-grep -Fq '["dkms", "autoinstall", "-k", release]' \
+expect_fq '["dkms", "autoinstall", "-k", release]' \
 	apps/t2-kernel-builder/t2-kernel-builder-cleanup
-grep -Fq "DKMS_OVERRIDE.write_text('post_transaction=\"\"\\n'" \
+expect_fq "DKMS_OVERRIDE.write_text('post_transaction=\"\"\\n'" \
 	apps/t2-kernel-builder/t2-kernel-builder-cleanup
-grep -Fq 'rebuilt initramfs is missing required module' \
+expect_fq 'rebuilt initramfs is missing required module' \
 	apps/t2-kernel-builder/t2-kernel-builder-cleanup
 for module in acpi_tad applesmc macsmc_core macsmc_acpi macsmc_hwmon \
 		macsmc_light macsmc_accel leds_macsmc macsmc_wdt rtc_macsmc \
 		macsmc_power hid_apple hid_appletb_bl hid_appletb_kbd hid_magicmouse \
 		appletbdrm apple_mfi_fastcharge apple_gmux apple-t2-bridge \
 		apple-t2-vhci-hcd t2hid; do
-	grep -Fq "\"$module\"" apps/t2-kernel-builder/t2-kernel-builder-cleanup
+	expect_fq "\"$module\"" apps/t2-kernel-builder/t2-kernel-builder-cleanup
 done
-grep -Fq 'installation rolled back' \
+expect_fq 'installation rolled back' \
 	apps/t2-kernel-builder/t2-kernel-builder-cleanup
-grep -Fq 'Cancelling installation and rolling back' \
+expect_fq 'Path(f"/boot/initramfs-{release}.img").is_file()' \
 	apps/t2-kernel-builder/t2-kernel-builder.py
-grep -Fq 'Path(f"/boot/initramfs-{release}.img").is_file()' \
-	apps/t2-kernel-builder/t2-kernel-builder.py
-! grep -Fq '["dracut", "--force"' \
+forbid_fq '["dracut", "--force"' \
 	apps/t2-kernel-builder/t2-kernel-builder-cleanup
 for symbol in MFD_MACSMC_CORE MACSMC_ACPI SENSORS_MACSMC_HWMON \
 		MACSMC_LIGHT MACSMC_ACCEL LEDS_MACSMC MACSMC_WDT \
 		RTC_DRV_MACSMC MACSMC_POWER; do
-	grep -Fq "$symbol" apps/t2-kernel-builder/engine/build.sh
+	expect_fq "$symbol" apps/t2-kernel-builder/engine/build.sh
 done
-grep -Fq 'required T2 kernel module was rejected by Kconfig' \
+expect_fq 'required T2 kernel module was rejected by Kconfig' \
 	apps/t2-kernel-builder/engine/build.sh
-grep -Fq -- '--enable IIO' apps/t2-kernel-builder/engine/build.sh
-grep -Fq "grep -Eq '^\\+config[[:space:]]+MACSMC_ACPI" \
+expect_fq '--enable IIO' apps/t2-kernel-builder/engine/build.sh
+expect_fq "grep -Eq '^\\+config[[:space:]]+MACSMC_ACPI" \
 	apps/t2-kernel-builder/engine/build.sh
-grep -Fq 'if ((HAS_MACSMC_PATCHES)); then' \
+expect_fq 'if ((HAS_MACSMC_PATCHES)); then' \
 	apps/t2-kernel-builder/engine/build.sh
-grep -Fq 'if ((HAS_AMD_DGPU)); then' \
+expect_fq 'if ((HAS_AMD_DGPU)); then' \
 	apps/t2-kernel-builder/engine/build.sh
-grep -Fq 'T2_REQUIRED_MODULES+=("${MACSMC_REQUIRED_MODULES[@]}")' \
+expect_fq 'T2_REQUIRED_MODULES+=("${MACSMC_REQUIRED_MODULES[@]}")' \
 	apps/t2-kernel-builder/engine/build.sh
-grep -Fq 'T2_REQUIRED_MODULES+=("${AMD_DGPU_REQUIRED_MODULES[@]}")' \
+expect_fq 'T2_REQUIRED_MODULES+=("${AMD_DGPU_REQUIRED_MODULES[@]}")' \
 	apps/t2-kernel-builder/engine/build.sh
-grep -Fq '/etc/modprobe.d/kait2en-silent-blacklist.conf' \
+expect_fq '/etc/modprobe.d/kait2en-silent-blacklist.conf' \
 	scripts/fedora/install-kernel-args.sh
-grep -Fq 'ln -sfn kait2en-multicall /usr/local/bin/edit-grub' scripts/fedora/install.sh
-grep -Fq 'ln -sfn kait2en-multicall /usr/local/bin/update-grub' scripts/fedora/install.sh
-grep -Fq 'ln -sfn kait2en-multicall /usr/local/bin/boot-macos' scripts/fedora/install.sh
-grep -Fq 'ln -sfn kait2en-multicall /usr/local/bin/update-modules' scripts/fedora/install.sh
-grep -Fq 'ln -sfn kait2en-multicall /usr/local/bin/update-apps' scripts/fedora/install.sh
-grep -Fq 'exec sudo nano /etc/default/grub' scripts/fedora/kait2en-multicall
-grep -Fq 'exec sudo grub2-mkconfig -o /boot/grub2/grub.cfg' \
+expect_fq 'ln -sfn kait2en-multicall /usr/local/bin/edit-grub' scripts/fedora/install.sh
+expect_fq 'ln -sfn kait2en-multicall /usr/local/bin/update-grub' scripts/fedora/install.sh
+expect_fq 'ln -sfn kait2en-multicall /usr/local/bin/boot-macos' scripts/fedora/install.sh
+expect_fq 'ln -sfn kait2en-multicall /usr/local/bin/update-modules' scripts/fedora/install.sh
+expect_fq 'ln -sfn kait2en-multicall /usr/local/bin/update-apps' scripts/fedora/install.sh
+expect_fq 'exec sudo grub2-mkconfig -o /boot/grub2/grub.cfg' \
 	scripts/fedora/kait2en-multicall
-grep -Fq "printf 'install %s /bin/true" scripts/fedora/install-kernel-args.sh
-grep -Fq '"etc", "xdg", "autostart"' \
+expect_fq "printf 'install %s /bin/true" scripts/fedora/install-kernel-args.sh
+expect_fq '"etc", "xdg", "autostart"' \
 	auto-installer/anaconda-addon/com_kait2en_input/service/installation.py
 ! grep -InE 'find_regular_user|home\.lstrip|os\.chown' \
 	auto-installer/anaconda-addon/com_kait2en_input/service/installation.py
-grep -Fq 'KAIT2EN_AUTOSTART_FILE:-/etc/xdg/autostart/kait2en-install.desktop' \
+expect_fq 'KAIT2EN_AUTOSTART_FILE:-/etc/xdg/autostart/kait2en-install.desktop' \
 	auto-installer/runtime/kait2en-prepare
 ! grep -InE '\$HOME/\.config/autostart' \
 	auto-installer/runtime/kait2en-install
@@ -195,87 +210,80 @@ if grep -rInE --exclude-dir=target 'kait2en-first-boot|KAIT2EN_FIRST_BOOT' \
 fi
 # The live Wi-Fi helpers must ride along in the input initramfs and must stay
 # inside /run, which never reaches the installed system.
-grep -Fq 'usr/lib/kait2en/kait2en-live-wifi' auto-installer/build-in-container.sh
-grep -Fq 'usr/lib/kait2en/kait2en-live-wifi.service' \
+expect_fq 'usr/lib/kait2en/kait2en-live-wifi' auto-installer/build-in-container.sh
+expect_fq 'usr/lib/kait2en/kait2en-live-wifi.service' \
 	auto-installer/build-in-container.sh
-grep -Fq 'usr/lib/kait2en/install-wifi-firmware.sh' \
+expect_fq 'usr/lib/kait2en/install-wifi-firmware.sh' \
 	auto-installer/build-in-container.sh
-grep -Fq 'usr/lib/kait2en/kait2en-live-diagnostics' \
+expect_fq 'usr/lib/kait2en/kait2en-live-diagnostics' \
 	auto-installer/build-in-container.sh
-grep -Fq 'runtime_units=/run/systemd/system' \
+expect_fq 'runtime_units=/run/systemd/system' \
 	auto-installer/initramfs/90-kait2en-updates.sh
-grep -Fq 'ExecStart=/run/kait2en/kait2en-live-wifi' \
+expect_fq 'ExecStart=/run/kait2en/kait2en-live-wifi' \
 	auto-installer/runtime/kait2en-live-wifi.service
 ! grep -rInE --exclude-dir=target 'kait2en-live-wifi' \
 	auto-installer/anaconda-addon
 
-grep -Fq 'usr/lib/kait2en/kait2en-rescue' auto-installer/build-in-container.sh
-grep -Fq 'kait2en-rescue' auto-installer/initramfs/90-kait2en-updates.sh
-grep -Fq '/sysroot/usr/bin/kait2en-rescue' \
+expect_fq 'usr/lib/kait2en/kait2en-rescue' auto-installer/build-in-container.sh
+expect_fq 'kait2en-rescue' auto-installer/initramfs/90-kait2en-updates.sh
+expect_fq '/sysroot/usr/bin/kait2en-rescue' \
 	auto-installer/initramfs/90-kait2en-updates.sh
-grep -Fq 'apfs' auto-installer/runtime/kait2en-rescue
-grep -Fq 'set-default-index' auto-installer/runtime/kait2en-rescue
-! grep -Fq -- '--set-default ' auto-installer/runtime/kait2en-rescue
+expect_fq 'apfs' auto-installer/runtime/kait2en-rescue
+expect_fq 'set-default-index' auto-installer/runtime/kait2en-rescue
+forbid_fq '--set-default ' auto-installer/runtime/kait2en-rescue
 ! grep -rInE --exclude-dir=target 'kait2en-rescue' \
 	auto-installer/anaconda-addon
 
 # Bluetooth firmware is loaded from disk by BCM4377 alone. Every entry point has
 # to check for that PCI function, and the UART .hcd path must stay out of here.
-grep -Fq '0x5fa0' auto-installer/runtime/install-bt-firmware.sh
-grep -Fq '0x5fa0' auto-installer/runtime/kait2en-live-bluetooth
-grep -Fq '0x5fa0' \
+expect_fq '0x5fa0' auto-installer/runtime/install-bt-firmware.sh
+expect_fq '0x5fa0' auto-installer/runtime/kait2en-live-bluetooth
+expect_fq '0x5fa0' \
 	auto-installer/anaconda-addon/com_kait2en_input/service/installation.py
-grep -Fq 'BCM4377' scripts/macos/prepare-fedora-installer.sh
+expect_fq 'BCM4377' scripts/macos/prepare-fedora-installer.sh
 ! grep -rInE --exclude-dir=target '\.hcd' auto-installer scripts/macos
-grep -Fq 'usr/lib/kait2en/install-bt-firmware.sh' \
+expect_fq 'usr/lib/kait2en/install-bt-firmware.sh' \
 	auto-installer/build-in-container.sh
-grep -Fq 'usr/lib/kait2en/kait2en-live-bluetooth' \
+expect_fq 'usr/lib/kait2en/kait2en-live-bluetooth' \
 	auto-installer/build-in-container.sh
-grep -Fq 'usr/lib/kait2en/kait2en-live-bluetooth.service' \
+expect_fq 'usr/lib/kait2en/kait2en-live-bluetooth.service' \
 	auto-installer/build-in-container.sh
-grep -Fq 'ExecStart=/run/kait2en/kait2en-live-bluetooth' \
+expect_fq 'ExecStart=/run/kait2en/kait2en-live-bluetooth' \
 	auto-installer/runtime/kait2en-live-bluetooth.service
 ! grep -rInE --exclude-dir=target 'kait2en-live-bluetooth' \
 	auto-installer/anaconda-addon
 
-grep -Fq 'Do not close this window!' auto-installer/runtime/kait2en-install
-grep -Fq 'Ensure that you are connected to Wi-Fi before continuing.' \
-	auto-installer/runtime/kait2en-install
-grep -Fq 'Press any key to continue.' auto-installer/runtime/kait2en-install
-
 # macOS Bash 3.2 treats an expanded empty array as unbound under `set -u`.
-grep -Fq 'ORIGINAL_ARGC=$#' scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'if ((ORIGINAL_ARGC == 0)); then' scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'plist_value "$disk" WholeDisk' scripts/macos/prepare-fedora-installer.sh
-! grep -Fq 'plist_value "$disk" Whole ' scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'The ISO was verified OK.' scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'Next steps:' scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'Select the orange EFI Boot entry for this USB drive.' \
+expect_fq 'ORIGINAL_ARGC=$#' scripts/macos/prepare-fedora-installer.sh
+expect_fq 'if ((ORIGINAL_ARGC == 0)); then' scripts/macos/prepare-fedora-installer.sh
+expect_fq 'plist_value "$disk" WholeDisk' scripts/macos/prepare-fedora-installer.sh
+forbid_fq 'plist_value "$disk" Whole ' scripts/macos/prepare-fedora-installer.sh
+expect_fq 'Select the orange EFI Boot entry for this USB drive.' \
 	scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'The KaiT2en installation will continue automatically in a terminal.' \
+expect_fq 'The KaiT2en installation will continue automatically in a terminal.' \
 	scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'Good: Secure Boot has been disabled.' \
+expect_fq 'Good: Secure Boot has been disabled.' \
 	scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'Set Secure Boot to No Security.' \
+expect_fq 'Set Secure Boot to No Security.' \
 	scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'Allow booting from external or removable media.' \
+expect_fq 'Allow booting from external or removable media.' \
 	scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'reconnect the USB drive and retry with --reuse-media' \
+expect_fq 'reconnect the USB drive and retry with --reuse-media' \
 	scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'source "$SCRIPT_DIR/download-fedora-iso.sh"' \
+expect_fq 'source "$SCRIPT_DIR/download-fedora-iso.sh"' \
 	scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'scripts/macos/download-fedora-iso.sh' \
+expect_fq 'scripts/macos/download-fedora-iso.sh' \
 	auto-installer/build-in-container.sh
-grep -Fq 'FEDORA_METALINK=' auto-installer/targets/fedora-45.conf
-grep -Fq 'FEDORA_ARCHIVE_BASEURL=' auto-installer/targets/fedora-45.conf
+expect_fq 'FEDORA_METALINK=' auto-installer/targets/fedora-45.conf
+expect_fq 'FEDORA_ARCHIVE_BASEURL=' auto-installer/targets/fedora-45.conf
 ! grep -rIn 'FEDORA_BASEURL\|dl.fedoraproject.org/pub/fedora/linux/releases' \
 	auto-installer/targets scripts/fedora auto-installer/build-in-container.sh
-! grep -Fq 'Keep no second driver disk connected' scripts/macos/prepare-fedora-installer.sh
-! grep -Fq 'before the intentional EFI customization' scripts/macos/prepare-fedora-installer.sh
-grep -Fq 'shasum -a 256 -c' auto-installer/macos-release-bootstrap.sh.in
-grep -Fq 'KAIT2EN_TTY:-/dev/tty' auto-installer/macos-release-bootstrap.sh.in
-grep -Fq 'uses: actions/upload-artifact@v6' .github/workflows/installer.yml
-grep -Fq 'uses: actions/download-artifact@v7' .github/workflows/installer.yml
+forbid_fq 'Keep no second driver disk connected' scripts/macos/prepare-fedora-installer.sh
+forbid_fq 'before the intentional EFI customization' scripts/macos/prepare-fedora-installer.sh
+expect_fq 'shasum -a 256 -c' auto-installer/macos-release-bootstrap.sh.in
+expect_fq 'KAIT2EN_TTY:-/dev/tty' auto-installer/macos-release-bootstrap.sh.in
+expect_fq 'uses: actions/upload-artifact@v6' .github/workflows/installer.yml
+expect_fq 'uses: actions/download-artifact@v7' .github/workflows/installer.yml
 ! grep -InE 'uses: actions/(checkout|upload-artifact|download-artifact)@v4' \
 	.github/workflows/installer.yml
 
