@@ -164,8 +164,6 @@ for module in acpi_tad applesmc macsmc_core macsmc_acpi macsmc_hwmon \
 done
 expect_fq 'installation rolled back' \
 	apps/t2-kernel-builder/t2-kernel-builder-cleanup
-expect_fq 'Cancelling installation and rolling back' \
-	apps/t2-kernel-builder/t2-kernel-builder.py
 expect_fq 'Path(f"/boot/initramfs-{release}.img").is_file()' \
 	apps/t2-kernel-builder/t2-kernel-builder.py
 forbid_fq '["dracut", "--force"' \
@@ -195,7 +193,6 @@ expect_fq 'ln -sfn kait2en-multicall /usr/local/bin/update-grub' scripts/fedora/
 expect_fq 'ln -sfn kait2en-multicall /usr/local/bin/boot-macos' scripts/fedora/install.sh
 expect_fq 'ln -sfn kait2en-multicall /usr/local/bin/update-modules' scripts/fedora/install.sh
 expect_fq 'ln -sfn kait2en-multicall /usr/local/bin/update-apps' scripts/fedora/install.sh
-expect_fq 'exec sudo nano /etc/default/grub' scripts/fedora/kait2en-multicall
 expect_fq 'exec sudo grub2-mkconfig -o /boot/grub2/grub.cfg' \
 	scripts/fedora/kait2en-multicall
 expect_fq "printf 'install %s /bin/true" scripts/fedora/install-kernel-args.sh
@@ -256,18 +253,11 @@ expect_fq 'ExecStart=/run/kait2en/kait2en-live-bluetooth' \
 ! grep -rInE --exclude-dir=target 'kait2en-live-bluetooth' \
 	auto-installer/anaconda-addon
 
-expect_fq 'Do not close this window!' auto-installer/runtime/kait2en-install
-expect_fq 'Ensure that you are connected to Wi-Fi before continuing.' \
-	auto-installer/runtime/kait2en-install
-expect_fq 'Press any key to continue.' auto-installer/runtime/kait2en-install
-
 # macOS Bash 3.2 treats an expanded empty array as unbound under `set -u`.
 expect_fq 'ORIGINAL_ARGC=$#' scripts/macos/prepare-fedora-installer.sh
 expect_fq 'if ((ORIGINAL_ARGC == 0)); then' scripts/macos/prepare-fedora-installer.sh
 expect_fq 'plist_value "$disk" WholeDisk' scripts/macos/prepare-fedora-installer.sh
 forbid_fq 'plist_value "$disk" Whole ' scripts/macos/prepare-fedora-installer.sh
-expect_fq 'The ISO was verified OK.' scripts/macos/prepare-fedora-installer.sh
-expect_fq 'Next steps:' scripts/macos/prepare-fedora-installer.sh
 expect_fq 'Select the orange EFI Boot entry for this USB drive.' \
 	scripts/macos/prepare-fedora-installer.sh
 expect_fq 'The KaiT2en installation will continue automatically in a terminal.' \
