@@ -114,7 +114,7 @@ grep -Fq 'has_touch_bar' scripts/fedora/install-apps.sh
 grep -Fq 'ask_vornehm' scripts/fedora/install.sh
 grep -Fq 'KAIT2EN_INSTALL_VORNEHM' scripts/fedora/install.sh
 grep -Fq 'as_vornehm_user bash "$SCRIPT_DIR/install-vornehm.sh"' scripts/fedora/install.sh
-grep -Fq 'device_access_ready' apps/t2-touchbar/install.sh
+grep -Fq 'systemctl disable kait2en-touchbar-attach.service' apps/t2-touchbar/install.sh
 # ISOs up to v0.1.12 delegate to the old installer path.
 grep -Fq 'auto-installer/runtime' packaging/installer/runtime/kait2en-install
 grep -Fq '"$BIN" --detach' apps/t2-touchbar/uninstall.sh
