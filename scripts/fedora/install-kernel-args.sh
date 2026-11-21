@@ -42,12 +42,9 @@ repair_empty_grub_cmdline() {
 	info "restored GRUB_CMDLINE_LINUX from the installed kernel command line"
 }
 
-# Arguments older installs set that current ones leave out. With the runtime
-# wireless patches the BCM4377 and BCM4364 pass S3 with asynchronous suspend
-# and resume. The Thunderbolt runtime PM needs the PCIe port services, so
-# pcie_ports=compat goes as well.
+# Arguments older installs set that current ones leave out. The Thunderbolt
+# runtime PM needs the PCIe port services, so pcie_ports=compat goes as well.
 REMOVE_ARGS=(
-	"pm_async=off"
 	"brcmfmac.p2pon=0"
 	"pcie_ports=compat"
 )
@@ -57,6 +54,7 @@ ADD_ARGS=(
 	"i915.enable_guc=2"
 	"intel_iommu=on"
 	"iommu=pt"
+	"pm_async=off"
 	"pcie_aspm=force"
 	"pcie_aspm.policy=powersave"
 	"pci=noaer"

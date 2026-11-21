@@ -197,6 +197,7 @@ amdgpu.aspm=1
 i915.enable_guc=2
 intel_iommu=on
 iommu=pt
+pm_async=off
 pcie_aspm=force
 pcie_aspm.policy=powersave
 pci=noaer
