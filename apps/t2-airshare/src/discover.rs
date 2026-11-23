@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Finding phones to send to. Android only announces its Quick Share mDNS
 //! service after it saw a matching BLE advertisement, so discovery sends
 //! one through BlueZ while it browses.

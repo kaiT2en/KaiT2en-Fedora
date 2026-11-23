@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 //! Personal keys for the free space of the special row, read from
 //! `$XDG_CONFIG_HOME/kait2en-touchbar/keys.toml`. The file lives in the home

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 4f1sh3r <git@syn-flut.de>
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 """Detect, validate, and stage T2 Mac ACPI fixes for KaiT2en on Fedora.
 
 The script reads the running machine's ACPI tables and current-boot kernel

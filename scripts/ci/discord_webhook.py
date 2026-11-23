@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 4f1sh3r <git@syn-flut.de>
 """Post and edit Discord messages through an incoming webhook.
 
 Shared by the sync scripts in this directory. Each of them renders its own

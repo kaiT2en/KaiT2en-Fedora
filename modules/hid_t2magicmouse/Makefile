@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 obj-m += hid_t2magicmouse.o
 
 KDIR ?= /lib/modules/$(shell uname -r)/build

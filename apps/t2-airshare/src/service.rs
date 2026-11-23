@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Background receiver for the systemd user service: visible in the shared
 //! WLAN and over Bluetooth, trusted devices are accepted right away, everyone else is asked
 //! through a notification. AirDrop transfers arrive through the t2-drop

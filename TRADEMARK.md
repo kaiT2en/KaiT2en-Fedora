@@ -25,6 +25,11 @@ project and where its work comes from.
 A fork is welcome under the code licenses, but it must carry its own name and
 must not present itself as KAIT2EN.
 
+The logo files and brand artwork are also not licensed for copying: they are
+© André Eikmeyer, all rights reserved, and a fork must remove or replace them.
+[LICENSING.md](LICENSING.md) lists the files and the additional terms under
+GPL-3.0 section 7(c) and 7(e).
+
 ## Not granted
 
 The KAIT2EN project does not grant use of its name, logo or any endorsement to

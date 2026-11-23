@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 4f1sh3r <git@syn-flut.de>
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 set -Eeuo pipefail
 
@@ -141,6 +144,10 @@ bash "$SOURCE_ROOT/scripts/tests/transition-rpm.sh" "$RPM_PATH" "$ISO_KERNEL_REL
 
 mkdir -p "$LAYOUT/scripts/macos"
 install -m 0644 "$SOURCE_ROOT/LICENSE" "$LAYOUT/LICENSE"
+install -m 0644 "$SOURCE_ROOT/LICENSING.md" "$LAYOUT/LICENSING.md"
+install -D -m 0644 -t "$LAYOUT/LICENSES" \
+	"$SOURCE_ROOT/LICENSES/GPL-2.0.txt" \
+	"$SOURCE_ROOT/LICENSES/GPL-3.0-or-later.txt"
 install -m 0644 \
 	"$SOURCE_ROOT/auto-installer/README.md" \
 	"$LAYOUT/README.md"
@@ -205,6 +212,8 @@ mkdir -p \
 	"$TRANSITION_SOURCE/modules" \
 	"$TRANSITION_SOURCE/auto-installer"
 install -m 0644 "$SOURCE_ROOT/LICENSE" "$TRANSITION_SOURCE/"
+install -D -m 0644 -t "$TRANSITION_SOURCE/LICENSES" \
+	"$SOURCE_ROOT/LICENSES/GPL-2.0.txt"
 printf '%s\n' "$SOURCE_DATE_EPOCH" >"$TRANSITION_SOURCE/source-date-epoch"
 for module in apple-t2-bridge t2touchbar hid_t2magicmouse t2_precision_trackpad t2_trackpad_actuator; do
 	cp -a "$SOURCE_ROOT/modules/$module" "$TRANSITION_SOURCE/modules/"
@@ -313,6 +322,8 @@ gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 	grep -Fx 'usr/share/kait2en-installer/kait2en-launch-terminal' >/dev/null
 gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 	grep -Fx 'usr/share/kait2en-installer/transition-source/auto-installer/build-input-kmod.sh' >/dev/null
+gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
+	grep -Fx 'usr/share/kait2en-installer/transition-source/LICENSES/GPL-2.0.txt' >/dev/null
 gzip -dc "$UPDATES_IMAGE" | cpio -it --quiet |
 	grep -Fx 'usr/share/kait2en-installer/transition-source/modules/apple-t2-bridge/drivers/platform/x86/apple/t2-bridge.c' >/dev/null
 for module in t2_precision_trackpad t2_trackpad_actuator; do

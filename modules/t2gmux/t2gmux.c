@@ -6,6 +6,7 @@
  *  Copyright (C) 2010-2012 Andreas Heider <andreas@meetr.de>
  *  Copyright (C) 2015 Lukas Wunner <lukas@wunner.de>
  *  Copyright (C) 2023 Orlando Chamberlain <orlandoch.dev@gmail.com>
+ *  Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org> (KAIT2EN changes)
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt

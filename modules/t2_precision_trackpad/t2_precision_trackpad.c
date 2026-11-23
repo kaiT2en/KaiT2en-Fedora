@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
+ * Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
+ *
  * Driver for Apple T2 MacBook internal trackpads, matching the
  * behaviour of macOS as closely as possible. Aiming for precise pointer
  * behaviour as known from MacOS. We bought a Bentley, not Ford, right?

@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 #
 # Out-of-tree build of the Apple T2 bridge stack. The directory layout
 # matches the kernel tree, so the sources map 1:1 onto upstream patches.

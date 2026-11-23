@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
+ * Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
+ *
  * Apple T2 Secure Enclave Processor PCI transport.
  *
  * Reaches the SEP mailbox on device 106b:1802 and, with register_ool=1,

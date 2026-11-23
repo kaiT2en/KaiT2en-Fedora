@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 // Members of kait2en-touchbar may start and stop the root unit that switches
 // the Touch Bar between Apple's firmware row and the display. Their user
 // service does that when the graphical session starts and ends.

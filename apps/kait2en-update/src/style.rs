@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! KaiT2en app style: palette, cards and margins.
 //!
 //! Self contained on purpose. The app looks right with or without the

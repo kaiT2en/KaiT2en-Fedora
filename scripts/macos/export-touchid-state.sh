@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 # Keep this script compatible with the Bash 3.2 shipped by macOS.
 # Run this from macOS. It copies the Touch ID Catacomb and the AppleKeyStore

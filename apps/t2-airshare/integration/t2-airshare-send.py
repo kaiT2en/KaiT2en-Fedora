@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 """Nautilus context menu entry "Send with T2 AirShare" for selected files."""
 
 from gi.repository import GLib, GObject, Nautilus

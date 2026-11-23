@@ -53,7 +53,8 @@ user audio services and live card names as they are.
 ## Copyright
 
 Copyright (C) 2026 André Eikmeyer, KAIT2EN. GPL-3.0-or-later with the
-attribution term of `LICENSING.md`.
+additional terms of `LICENSING.md` (attribution, section 7(b), and origin,
+section 7(c)).
 
 ## Thanks
 

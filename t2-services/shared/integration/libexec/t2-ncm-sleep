@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 # Runs feature sleep/resume hooks. The T2 NCM link now survives suspend on
 # its own (apple-t2-vhci-hcd reset-resumes it after system sleep), so this no
 # longer needs to unbind/rebind cdc_ncm or wait for the link to come back.

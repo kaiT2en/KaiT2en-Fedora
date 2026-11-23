@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! org.gnome.Mutter.DisplayConfig: gamma LUT of the built-in panel.
 
 use std::collections::HashMap;

@@ -1,0 +1,22 @@
+Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
+Contributions by other authors stay theirs, see AUTHORS and the git history.
+
+Licensed under the GNU General Public License, version 3 or later
+(GPL-3.0-or-later). The full text is in the repository at
+LICENSES/GPL-3.0-or-later.txt.
+
+Additional term under section 7(b) of the GPL: if you convey this work or a
+work based on it, you must preserve the author attribution above and reproduce
+it in the Appropriate Legal Notices displayed by works that contain it.
+
+Additional term under section 7(c) of the GPL, for the material whose
+copyright is held by André Eikmeyer or 4f1sh3r: you must not misrepresent the
+origin of this material. A modified version must be marked in reasonable ways as
+different from the original: it must not be presented as KAIT2EN or as the
+original work, and its Appropriate Legal Notices and the README or equivalent
+documentation conveyed with it must state that it is based on KAIT2EN
+(https://github.com/kaiT2en/KaiT2en-Fedora). See LICENSING.md.
+
+The t2-ave and t2-sidecar kernel modules in t2-ave/kernel/ are GPL-2.0, see
+their headers and LICENSES/GPL-2.0.txt. Vendored code in
+t2-journal/libs/macos-unifiedlogs/ keeps its Apache-2.0 license.

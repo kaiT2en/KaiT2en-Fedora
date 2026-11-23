@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! t2drop: send files to Apple devices over AWDL from T2 Macs running
 //! Linux. `t2drop daemon` is the system bus service org.t2drop, which owns
 //! AWDL through the kait2en brcmfmac patch. `t2drop list` and `t2drop send`

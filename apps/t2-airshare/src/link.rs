@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! The transport both directions share: length prefixed frames over TCP or
 //! Bluetooth RFCOMM, the encrypted channel after UKEY2, and the payload layer for the Nearby
 //! Sharing frames.

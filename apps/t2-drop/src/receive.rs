@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Receiving side of AirDrop: an HTTPS server on the AWDL link local
 //! address that answers /Discover, asks the user on /Ask and unpacks the
 //! files of /Upload.

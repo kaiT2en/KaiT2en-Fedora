@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 //! Media players over MPRIS: seeking in the active player (desktops treat
 //! the rewind and fast forward keys inconsistently), track changes and

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Ambient light sensor of the T2 (USB HID 05ac:8262), read through hidraw.
 //!
 //! Input report 1, 18 bytes, little endian:

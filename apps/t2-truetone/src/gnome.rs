@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! GNOME Night Light writes the same gamma LUT. While t2-truetone controls the
 //! white point, Night Light is turned off. Its previous value is kept and
 //! restored when t2-truetone gives control back. Automatic brightness keeps

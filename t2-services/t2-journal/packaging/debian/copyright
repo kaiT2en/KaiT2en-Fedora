@@ -4,10 +4,13 @@ Source: https://github.com/kaiT2en/KaiT2en-Fedora
 
 Files: *
 Copyright: 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
+           2026 KaiT2en contributors, see AUTHORS and the git history
 License: GPL-3+
-Comment: The GPL-3.0-or-later components carry an additional attribution term
- under GPL-3 section 7(b): the author attribution must be preserved when the
- work is conveyed. See LICENSING.md in the source.
+Comment: The GPL-3.0-or-later components carry additional terms under GPL-3
+ section 7(b), the author attribution must be preserved when the work is
+ conveyed, and section 7(c), the origin of the material by André Eikmeyer and
+ 4f1sh3r must not be misrepresented and modified versions must state that
+ they are based on KAIT2EN. See LICENSING.md in the source.
 
 Files: t2-services/t2-journal/libs/macos-unifiedlogs/*
 Copyright: Mandiant and upstream contributors

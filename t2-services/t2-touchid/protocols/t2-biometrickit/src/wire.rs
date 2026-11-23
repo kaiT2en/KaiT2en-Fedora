@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 //! BridgeXPC framing: a small header followed by a binary plist. This is the
 //! transport BiometricKit speaks, and it is not the HTTP/2 RemoteXPC used for

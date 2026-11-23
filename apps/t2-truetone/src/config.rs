@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! User settings in $XDG_CONFIG_HOME/t2-truetone/config.toml, written by the
 //! GUI and reloaded by the daemon when the file changes.
 

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Sending side (client) of a Quick Share transfer: connection request,
 //! UKEY2 as client, paired key exchange, the introduction, the receiver's
 //! answer, then the files in chunks.

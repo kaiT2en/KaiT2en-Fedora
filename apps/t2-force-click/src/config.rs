@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 use std::{env, fs, path::{Path, PathBuf}};
 
 const CONFIG_VERSION: u8 = 1;

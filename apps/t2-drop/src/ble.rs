@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! The Bluetooth LE advertisement that makes Apple devices start their
 //! AirDrop server: Apple manufacturer data of type 0x05 (AirDrop) with
 //! version 1 and empty contact hashes, which receivers in "Everyone" mode

@@ -1,4 +1,6 @@
 #!/usr/bin/python3 -I
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 """Switch the Sidecar virtual display on and off.
 
   t2-sidecar on [WIDTHxHEIGHT[@HZ]]   default the mode used last, else 1920x1200@60

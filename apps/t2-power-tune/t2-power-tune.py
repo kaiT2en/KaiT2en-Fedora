@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 import json, os, subprocess, threading
 import gi
 gi.require_version("Gtk","4.0"); gi.require_version("Adw","1")

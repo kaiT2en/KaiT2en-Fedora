@@ -1,5 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 #
 # Temporarily hand the T2 actuator HID interface from t2hid to
 # t2_trackpad_actuator, then restore it unconditionally after DURATION

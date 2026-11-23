@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 [Desktop Entry]
 Name=T2 Power Explorer
 Comment=Inspect kernel device topology and runtime power state

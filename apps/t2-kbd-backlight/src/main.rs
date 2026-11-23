@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 //! Turns the keyboard backlight off after a while without keyboard, trackpad
 //! or Touch Bar input, and back on with the next input.

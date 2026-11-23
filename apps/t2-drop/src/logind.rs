@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! systemd-logind: the sleep inhibitor that lets the service take AWDL
 //! down before suspend, and the session state of the agent's user.
 

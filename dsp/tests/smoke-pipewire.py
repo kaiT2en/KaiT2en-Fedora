@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 """Load every DSP graph in a private PipeWire daemon with no hardware monitor.
 
 Requires installed runtime plugins and PipeWire tools. Never connects to the

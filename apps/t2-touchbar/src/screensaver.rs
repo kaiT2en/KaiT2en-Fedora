@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 //! Whether the desktop has locked or blanked the screen. GNOME and KDE both
 //! report it as `ActiveChanged` on their screensaver interface.

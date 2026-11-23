@@ -10,6 +10,8 @@
  *  Copyright (c) 2019 Paul Pawlowski <paul@mrarm.io>
  *  Copyright (c) 2023 Orlando Chamberlain <orlandoch.dev@gmail.com>
  *  Copyright (c) 2024 Aditya Garg <gargaditya08@live.com>
+ *  Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org> (KAIT2EN changes)
+ *  Copyright (C) 2026 4f1sh3r <git@syn-flut.de> (KAIT2EN changes)
  */
 
 /*

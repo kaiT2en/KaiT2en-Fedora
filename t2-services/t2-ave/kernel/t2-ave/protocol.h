@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/* Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org> */
 #ifndef T2_AVE_PROTOCOL_H
 #define T2_AVE_PROTOCOL_H
 

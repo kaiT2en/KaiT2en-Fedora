@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
  * Copyright (C) 2026 Atharva Tiwari <atharvatiwarilinuxdev@gmail.com>
+ * Copyright (C) 2026 4f1sh3r <git@syn-flut.de> (KAIT2EN changes)
  * 
  */
 

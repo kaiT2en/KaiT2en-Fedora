@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 //! Current volume and display brightness for the swipe feedback. The daemon
 //! only sends keys. The desktop applies them, so these are read back.

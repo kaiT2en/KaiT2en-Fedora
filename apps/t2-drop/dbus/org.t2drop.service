@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 [D-BUS Service]
 Name=org.t2drop
 Exec=/bin/false

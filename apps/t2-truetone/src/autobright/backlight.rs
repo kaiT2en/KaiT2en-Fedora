@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! The built-in panel backlight through mutter.
 //!
 //! gnome-shell takes every backlight change it did not make itself into its

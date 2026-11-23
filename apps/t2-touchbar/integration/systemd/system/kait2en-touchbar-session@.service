@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 [Unit]
 Description=Switch the Apple T2 Touch Bar to the display for user %i
 # The instance is the UID. It only runs alongside that user's manager and

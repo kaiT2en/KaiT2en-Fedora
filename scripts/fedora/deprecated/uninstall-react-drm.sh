@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 #
 # Removes everything react-drm installed for the invoking user: its service,
 # udev rules, GNOME extension and copied project files. System packages and

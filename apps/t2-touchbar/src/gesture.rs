@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 /// Horizontal multi-finger swipe, quantized into fixed-size steps.
 #[derive(Clone, Copy, Debug)]

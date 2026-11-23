@@ -6,7 +6,8 @@ Files: *
 Copyright: 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
            2026 KaiT2en contributors
 License: GPL-3+
-Comment: Preserve author attribution under GPL-3 section 7(b).
+Comment: Preserve author attribution under GPL-3 section 7(b). Under section
+ 7(c), modified versions must state that they are based on KAIT2EN.
  See LICENSING.md and the per-profile README.md notices.
  Runtime model selection builds on sharpenedblade's contribution in PR #63.
  No third-party DSP plugins are bundled. Plugins remain separate dependencies.

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 4f1sh3r <git@syn-flut.de>
 %global _build_id_links none
 %global debug_package %{nil}
 
@@ -5,7 +7,7 @@ Name:           kmod-kait2en-input
 Version:        0.1
 Release:        2%{?dist}
 Summary:        Temporary T2 Mac input drivers for the Fedora installer kernel
-License:        GPL-2.0-only OR GPL-2.0-or-later
+License:        GPL-2.0-only AND GPL-2.0-or-later
 URL:            https://github.com/kait2en/KaiT2en-Fedora
 Source0:        kait2en-input-%{version}.tar.gz
 

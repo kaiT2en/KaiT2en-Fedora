@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
+/* Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org> */
 #ifndef T2SEP_UAPI_H
 #define T2SEP_UAPI_H
 

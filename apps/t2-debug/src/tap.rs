@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //
 // This decoder is a derivative work: the opcode VM and message rendering are
 // ported from pymobiledevice3's `ActivityTraceTap`

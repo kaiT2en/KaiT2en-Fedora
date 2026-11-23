@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! T2 Debug core: talk to the Apple T2's Instruments `dtservicehub` over the
 //! CDC-NCM link and decode its diagnostic channels — a process "top"
 //! (sysmontap) and the live os_log stream (activitytracetap). Read/observe

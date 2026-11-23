@@ -1,4 +1,6 @@
 #!/usr/bin/python3 -I
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 """Hold a GNOME virtual monitor for Sidecar streaming.
 
 Mutter's org.gnome.Mutter.ScreenCast.RecordVirtual creates the monitor. With

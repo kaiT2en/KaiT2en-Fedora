@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! UKEY2 handshake for both roles and the D2D secure channel on top of it.
 //!
 //! Key derivation and message layout follow NearDrop PROTOCOL.md and are

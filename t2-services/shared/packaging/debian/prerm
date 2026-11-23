@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 if [ "$1" = remove ]; then
     if [ -r /usr/libexec/t2-services/package-actions ]; then
         . /usr/libexec/t2-services/package-actions

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! AirDrop receivers through the t2-drop service (org.t2drop on the system
 //! bus). t2-airshare only talks to it over D-Bus, the AWDL and AirDrop code
 //! lives in t2-drop.

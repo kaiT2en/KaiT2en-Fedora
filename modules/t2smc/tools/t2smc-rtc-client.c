@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 /* Periodically exercise the t2smc RTC/CLKL path. */
 
 #define _POSIX_C_SOURCE 200809L

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Gauging mitigation like BatteryGaugingAccuracyManager in powerd (macOS
 //! 15.4.1). A permanent charge limit keeps the gauge from learning Qmax and
 //! DOD0. powerd lifts the limit for a full charge when DOD0 did not change

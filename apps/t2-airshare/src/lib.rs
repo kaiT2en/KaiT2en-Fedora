@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! T2 AirShare: Quick Share (Nearby Share) and AirDrop for Linux on T2
 //! Macs. Quick Share runs here, AirDrop through the separate t2-drop
 //! service over D-Bus.

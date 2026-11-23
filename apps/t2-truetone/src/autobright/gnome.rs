@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Keeps GNOME's own brightness automatics out of the way while the service
 //! runs, and gives the user's settings back when it stops.
 //!

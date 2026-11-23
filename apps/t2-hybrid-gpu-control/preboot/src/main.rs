@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Restores the integrated boot GPU before Linux starts.
 //!
 //! macOS rewrites gpu-power-prefs on every boot, so the next Linux boot comes

@@ -5,6 +5,8 @@
  * Copyright (c) 2017-2018 Ronald Tschalär
  * Copyright (c) 2022-2023 Kerem Karabay <kekrby@gmail.com>
  * Copyright (c) 2024-2025 Aditya Garg <gargaditya08@live.com>
+ * Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org> (KAIT2EN changes)
+ * Copyright (C) 2026 4f1sh3r <git@syn-flut.de> (KAIT2EN changes)
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt

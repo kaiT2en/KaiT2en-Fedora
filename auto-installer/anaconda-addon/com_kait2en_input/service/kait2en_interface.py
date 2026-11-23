@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from dasbus.server.interface import dbus_interface
 
 from pyanaconda.modules.common.base import KickstartModuleInterface

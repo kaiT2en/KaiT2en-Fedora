@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Quick Share over Bluetooth, for phones that are not in the same WLAN.
 //! Android finds the receiver through a BLE advertisement header, reads the
 //! full advertisement with the name, the Bluetooth address and the L2CAP

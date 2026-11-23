@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 # The installer builds every Rust project into one shared target directory.
 # Cargo reuses a compiled crate only when all lockfiles pin the same version,
 # so a semver-compatible version drift between projects compiles it twice.

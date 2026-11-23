@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! t2-truetone: settings and live state for the T2 TrueTone session daemon.
 
 use std::cell::RefCell;

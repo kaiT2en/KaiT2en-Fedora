@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! One long-lived dtservicehub connection, driven by commands from the UI.
 //!
 //! A single background thread owns one connection and switches between the

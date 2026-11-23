@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
+ * Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
+ *
  * CPU resume ordering quirk for Apple T2 Macs
  *
  * Apple firmware selects a different suspend path when _OSI("Darwin") is

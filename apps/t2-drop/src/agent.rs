@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! `t2drop receive`: an org.t2drop.Agent1 on the terminal. It makes this
 //! device visible to AirDrop senders, at once or with --ble once a sender
 //! nearby advertises over Bluetooth LE. It asks on the terminal or accepts

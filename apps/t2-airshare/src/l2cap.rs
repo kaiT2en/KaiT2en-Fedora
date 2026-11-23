@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Quick Share over a BLE L2CAP connection oriented channel, the way an
 //! Android sender tries before Bluetooth Classic. The PSM goes into the BLE
 //! advertisement header and the GATT advertisement. A connection starts

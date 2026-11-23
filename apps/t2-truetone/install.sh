@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 # Installs T2 TrueTone. A first installation leaves it off, the user turns it
 # on in the app. Updates keep the user's configuration and service state.
 # It replaces the former t2-autobrightness service and keeps its users on

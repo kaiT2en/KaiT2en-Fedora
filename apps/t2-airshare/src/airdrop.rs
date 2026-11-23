@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! AirDrop receiving through the t2-drop service (org.t2drop on the system
 //! bus). The service registers this process as its agent: t2-drop finds
 //! the AirDrop senders nearby and runs the transfer, asks here whether to

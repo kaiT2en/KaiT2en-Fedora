@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! t2truetone: session daemon and command line.
 //!
 //!   t2truetone daemon   run the adaptation loop (started by the user unit)

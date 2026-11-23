@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 4f1sh3r <git@syn-flut.de>
 """Announce the blog posts from website/blog/ in Discord.
 
 One webhook message per published post; the message id is remembered in

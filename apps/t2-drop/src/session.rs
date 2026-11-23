@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! One AWDL session: brings AWDL up, keeps it running, finds the AirDrop
 //! receivers around and sends files to them on request. The own AirDrop
 //! server always runs, the service is advertised while `receiving` is set.

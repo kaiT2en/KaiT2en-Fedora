@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Sending side of AirDrop as macOS 15.4.1 receives it, over HTTPS on the
 //! receiver's AWDL link local address.
 //!

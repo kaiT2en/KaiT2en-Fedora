@@ -1,5 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 #
 # Temporarily hand the one T2 HID mouse interface from hid_t2magicmouse to
 # t2_precision_trackpad, then restore it unconditionally after DURATION seconds

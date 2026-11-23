@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 //! Finger contact on the trackpad. libinput reports a touchpad only once the
 //! finger moves, its evdev node already reports the contact itself.

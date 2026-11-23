@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 import datetime, json, os, re, subprocess, sys, tempfile
 
 SERVICE = "/etc/systemd/system/kait2en-power-tune.service"

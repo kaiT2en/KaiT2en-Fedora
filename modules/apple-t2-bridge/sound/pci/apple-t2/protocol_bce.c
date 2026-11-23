@@ -4,6 +4,7 @@
  *
  * Copyright (C) Paul Pawlowski <paul@mrarm.io>
  * Copyright (C) André Eikmeyer <andre.eikmeyer@kait2en.org>
+ * Copyright (C) 2026 Andreas Winther <git.tumble747@simplelogin.com> (KAIT2EN changes)
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt

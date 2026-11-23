@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! The AWDL vendor commands and events of brcmfmac (Broadcom OUI) over
 //! nl80211, kait2en wireless patches 0010 and 0011. The commands go to the
 //! primary interface, AWDL_START and AWDL_STOP answer with an event.

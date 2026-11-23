@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 [Nemo Action]
 Name=Send with T2 AirShare
 Comment=Send the selected files to an Android phone or an Apple device

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! AWDL through the firmware of the T2 Macs: the TLVs of the AWDL frames as
 //! in macOS 15.4.1, election by following the master the peers announce,
 //! and the AirDrop peers found in their action frames. The brcmfmac AWDL

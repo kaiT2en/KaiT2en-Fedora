@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 CARGO ?= cargo
 INSTALL ?= install
 PREFIX ?= /usr/local
@@ -36,6 +38,7 @@ install: check-build
 	$(INSTALL) -m 0644 integration/systemd/system/kait2en-touchbar-session@.service $(SYSTEM_UNIT_DIR)/kait2en-touchbar-session@.service
 	$(INSTALL) -D -m 0644 integration/polkit/50-kait2en-touchbar.rules $(POLKIT_RULE)
 	$(INSTALL) -m 0644 integration/udev/99-zz-kait2en-touchbar.rules $(UDEV_DIR)/99-zz-kait2en-touchbar.rules
+	$(INSTALL) -m 0644 LICENSE $(LICENSE_DIR)/LICENSE
 	$(INSTALL) -m 0644 THIRD-PARTY-NOTICES.md $(LICENSE_DIR)/THIRD-PARTY-NOTICES.md
 	@test -e $(CONFIG_DIR)/touchbar.toml || $(INSTALL) -m 0644 config/touchbar.toml $(CONFIG_DIR)/touchbar.toml
 	rm -f $(DESTDIR)$(PREFIX)/lib/modprobe.d/kait2en-touchbar.conf

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! t2debug: headless CLI over the T2's Instruments dtservicehub. Same engine as
 //! the GUI (t2-debug), no gtk. Handy over SSH. Read/observe only.
 

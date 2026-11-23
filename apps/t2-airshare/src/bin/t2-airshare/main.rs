@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Settings window: receiving on or off, the download folder, the trusted
 //! devices and sending files. Received transfers are handled by the
 //! `t2airshare daemon` user service and its notifications. Started with files,

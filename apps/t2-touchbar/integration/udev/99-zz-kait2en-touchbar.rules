@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 # Keep the non-desktop display and its touch digitizer away from the compositor;
 # kait2en-touchbar opens this private seat directly.
 SUBSYSTEM=="drm", KERNEL=="card*", DRIVERS=="t2bdrm|appletbdrm|adp", TAG-="master-of-seat", ENV{ID_SEAT}="seat-touchbar", GROUP="kait2en-touchbar", MODE="0660"

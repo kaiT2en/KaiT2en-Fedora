@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 #
 # Reverts a T2 Linux Fedora installation to vanilla Fedora + KAIT2EN.
 # Removes the sharpenedblade/t2linux COPR, the t2linux support packages

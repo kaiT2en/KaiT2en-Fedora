@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 [Unit]
 Description=T2 Drop, AirDrop to Apple devices over AWDL
 Documentation=https://github.com/kaiT2en/KaiT2en-Fedora

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! T2 TrueTone: ambient white point adaptation, evening mode and automatic
 //! brightness for the built-in panel of T2 MacBooks under GNOME.
 

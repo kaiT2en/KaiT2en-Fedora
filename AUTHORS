@@ -5,8 +5,15 @@ André Eikmeyer <andre.eikmeyer@kait2en.org>
 Contributors
 
 4f1sh3r <git@syn-flut.de>
+clanoftheducks
+Aditya Garg
+Th0masL
+Joni Orponen
+Turann_
 
-The GPL-3.0-or-later userspace is copyright André Eikmeyer, 4f1sh3r holds
-the copyright of his contributions to t2-fan-control and t2-smc-control.
-Other components credit their own authors in their files and directories,
-the git history has the full list of contributors.
+The GPL-3.0-or-later userspace is mostly copyright André Eikmeyer. 4f1sh3r
+holds the copyright of his contributions, in particular large parts of the
+auto-installer, the macOS, test, CI and Fedora scripts, and his contributions
+to t2-fan-control and t2-smc-control. Every contributor keeps the copyright of
+their own contributions. Other components credit their own authors in their
+files and directories, the git history has the full list of contributors.

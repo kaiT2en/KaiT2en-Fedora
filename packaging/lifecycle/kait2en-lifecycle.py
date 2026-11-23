@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 """Owned migration and removal, shared as source but installed independently.
 
 --root is an offline test/staging root. It never invokes host system services.

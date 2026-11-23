@@ -4,6 +4,8 @@
  *
  *   Copyright (c) 2010 Michael Poole <mdpoole@troilus.org>
  *   Copyright (c) 2010 Chase Douglas <chase.douglas@canonical.com>
+ *   Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org> (KAIT2EN changes)
+ *   Copyright (C) 2026 4f1sh3r <git@syn-flut.de> (KAIT2EN changes)
  *
  * T2 internal-trackpad path: legacy implementation with model geometry,
  * nearest-position slots, and raw firmware buttons; no filtered

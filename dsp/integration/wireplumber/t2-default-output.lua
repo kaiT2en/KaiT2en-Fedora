@@ -1,4 +1,5 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
+-- Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 --
 -- Prefer the jack-backed T2 headphone sink over the T2 speaker DSP sink.
 -- Both nodes remain ordinary WirePlumber targets; changing the selected

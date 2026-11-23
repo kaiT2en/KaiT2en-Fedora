@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 config T2_AVE
 	tristate "Apple T2 audio video encoder support"
 	depends on APPLE_T2_BRIDGE

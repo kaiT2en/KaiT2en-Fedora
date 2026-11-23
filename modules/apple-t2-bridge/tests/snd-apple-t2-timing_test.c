@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 /* cc -std=c11 -Wall -Wextra -Werror tests/snd-apple-t2-timing_test.c -o timing-test */
 #include <assert.h>
 #include <stdio.h>

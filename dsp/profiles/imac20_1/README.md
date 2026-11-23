@@ -10,5 +10,6 @@ Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 Licensed under the GNU General Public License, version 3 or later
 (GPL-3.0-or-later, full text in `LICENSES/GPL-3.0-or-later.txt`), with the
-attribution term of `LICENSING.md`: keep the copyright notices when you
-redistribute or derive from these files.
+additional terms of `LICENSING.md`: keep the copyright notices when you
+redistribute or derive from these files (section 7(b)), and mark modified
+versions as based on KAIT2EN (section 7(c)).

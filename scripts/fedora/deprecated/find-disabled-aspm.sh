@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 # Lists PCIe devices that lack ASPM capability, have ASPM disabled,
 # or lack/disable L1 PM Substates.
 # Run with sudo for full lspci details.

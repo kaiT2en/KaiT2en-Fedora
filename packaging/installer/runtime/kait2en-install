@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Installers on ISOs up to v0.1.12 delegate to this old path. Forward them to
 # the current installer instead of letting the outdated ISO copy run.
 exec bash "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../auto-installer/runtime" && pwd -P)/kait2en-install" "$@"

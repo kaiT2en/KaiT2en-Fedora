@@ -4,6 +4,7 @@
  *
  * Copyright (c) 2017-2018 Ronald Tschalär
  * Copyright (c) 2022-2023 Kerem Karabay <kekrby@gmail.com>
+ * Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org> (KAIT2EN changes)
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt

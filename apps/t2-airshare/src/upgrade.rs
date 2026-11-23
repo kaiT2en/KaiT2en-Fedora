@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Bandwidth upgrade of a transfer that started over Bluetooth. As in
 //! google/nearby (commit 203b6e1) connections/implementation/bwu_manager.cc
 //! the receiver starts it: it opens a Wi-Fi hotspot and sends its

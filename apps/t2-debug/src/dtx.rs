@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! DTX message framing for Apple's Instruments dtservicehub service.
 //!
 //! dtservicehub speaks the plain-TCP "DTXMessage" protocol (no RemoteXPC

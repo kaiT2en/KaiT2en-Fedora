@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! The brightness model macOS uses on T2 Intel Macs.
 //!
 //! Brightness is linear: the fraction of the panel's maximum luminance. The

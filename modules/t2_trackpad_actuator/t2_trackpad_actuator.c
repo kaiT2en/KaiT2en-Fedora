@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
+ * Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
+ *
  * Apple T2 trackpad Taptic Engine actuator driver.
  *
  * The T2 internal trackpad exposes its haptic actuator as a separate HID

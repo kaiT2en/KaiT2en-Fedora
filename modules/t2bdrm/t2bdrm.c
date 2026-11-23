@@ -3,6 +3,8 @@
  * Apple Touch Bar DRM Driver
  *
  * Copyright (c) 2023 Kerem Karabay <kekrby@gmail.com>
+ * Copyright (C) 2026 4f1sh3r <git@syn-flut.de> (KAIT2EN changes)
+ * Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org> (KAIT2EN changes)
  */
 
 #include <linux/align.h>

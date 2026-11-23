@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! User settings in `~/.config/t2-airshare/config.toml`, shared by the service
 //! and the settings window. The service reads them for every transfer, so
 //! changes apply without a restart. Settings of T2 Share, the former name,

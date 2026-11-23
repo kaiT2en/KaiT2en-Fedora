@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! The Bluetooth management interface of the kernel, for the LE scan
 //! timing of discovery. The kernel scans 11.25 ms out of every 11.25 ms
 //! while discovering, fine for a short device search but not for looking

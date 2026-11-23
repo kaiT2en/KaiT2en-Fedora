@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 # T2 AirShare was called T2 Share. Removes the files installed under the old
 # name and moves every user's activation of t2-share.service over to
 # t2-airshare.service, a running user manager switches right away. The

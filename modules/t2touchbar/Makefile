@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 KDIR ?= /lib/modules/$(shell uname -r)/build
 KVER ?= $(shell uname -r)
 MODDEST ?= /lib/modules/$(KVER)/updates

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! gnome-shell's brightness manager, which owns the slider in GNOME 50 and 51.
 //!
 //! The service keeps the shell's automatic target off, so the shell adopts the

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 4f1sh3r <git@syn-flut.de>
 """Render a blog post as a Discord message.
 
 Plain content with the embed suppressed by the sync: the channel is a readable

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! t2-debug: a gtk4-libadwaita front end for the T2's Instruments dtservicehub.
 //! Tab 1 is a per-process "top" (sysmontap) with deviceinfo selector buttons;
 //! tab 2 is the decoded live os_log stream (activitytracetap) with a regex

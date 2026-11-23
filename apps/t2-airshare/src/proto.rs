@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Generated protobuf types, nested like their protobuf packages so the
 //! cross-package paths prost emits resolve.
 

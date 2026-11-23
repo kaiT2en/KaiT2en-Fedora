@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 [Unit]
 Description=Apply the AMDGPU power-saving profile
 After=systemd-modules-load.service

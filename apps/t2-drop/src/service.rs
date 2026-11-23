@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! The system bus service org.t2drop. It owns AWDL, which needs
 //! CAP_NET_ADMIN, while desktop programs and the t2drop command line only
 //! ask it to look for receivers, to send files and to receive files.

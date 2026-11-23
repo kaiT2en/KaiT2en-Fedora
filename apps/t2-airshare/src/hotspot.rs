@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Client of the root helper t2-quickshare-hotspot: a Wi-Fi hotspot for the
 //! bandwidth upgrade of a Quick Share transfer that started over
 //! Bluetooth. The helper stops the hotspot when this connection to the

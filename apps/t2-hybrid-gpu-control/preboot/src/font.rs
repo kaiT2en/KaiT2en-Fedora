@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! 5x8 bitmap glyphs for the preboot messages, one row per byte,
 //! the leftmost pixel in bit 4. Unknown characters render blank.
 

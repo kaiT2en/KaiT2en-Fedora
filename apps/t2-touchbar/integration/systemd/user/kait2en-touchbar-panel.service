@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 [Unit]
 Description=T2 Touch Bar display for this session
 # Pulled in by kait2en-touchbar.service. It stays outside the daemon's sandbox

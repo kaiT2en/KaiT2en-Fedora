@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 # Runs the KaiT2en installer for kait2en-update through pkexec.
 # It accepts only names listed in scripts/fedora/update-map.
 set -Eeuo pipefail

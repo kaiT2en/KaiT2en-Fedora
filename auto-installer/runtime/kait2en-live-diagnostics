@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 4f1sh3r <git@syn-flut.de>
 
 # Collect everything needed to debug KaiT2en Wi-Fi and Bluetooth in the Fedora
 # live session and write it to a single archive. Runs from the USB stick itself,

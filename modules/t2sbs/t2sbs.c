@@ -5,6 +5,7 @@
  *  Copyright (c) 2007 Alexey Starikovskiy <astarikovskiy@suse.de>
  *  Copyright (c) 2005-2007 Vladimir Lebedev <vladimir.p.lebedev@intel.com>
  *  Copyright (c) 2005 Rich Townsend <rhdt@bartol.udel.edu>
+ *  Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org> (KAIT2EN changes)
  *
  *  Copy of drivers/acpi/sbs.c from Linux 7.2.9 until the fixes below
  *  are upstream. The gauge updates FullChargeCapacity and CycleCount at run

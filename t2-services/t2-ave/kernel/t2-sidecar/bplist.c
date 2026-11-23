@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 #include "bplist.h"
 
 #include <linux/errno.h>

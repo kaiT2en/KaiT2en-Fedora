@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
+# Copyright (C) 2026 4f1sh3r <git@syn-flut.de>
+# Copyright (C) 2026 iurjscsi1101500 <80307553+iurjscsi1101500@users.noreply.github.com>
 # Single source of truth for the patches page and for the upstream
 # announcements in the #upstream-work Discord channel.
 #

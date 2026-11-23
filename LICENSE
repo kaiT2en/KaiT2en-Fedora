@@ -1,8 +1,16 @@
-Copyright (C) 2026 KaiT2en contributors
+Copyright (C) 2026 André Eikmeyer and the KaiT2en contributors, see AUTHORS
 
 Licensed under the GNU General Public License, version 3 or later
 (GPL-3.0-or-later). The full text is in the repository at
 LICENSES/GPL-3.0-or-later.txt.
 
-Kernel modules below modules/ are GPL-2.0, see their headers. Components with
-their own license keep it, see LICENSING.md.
+Additional terms under section 7(b) (attribution) and section 7(c) (origin)
+of the GPL apply, see LICENSING.md.
+
+Kernel modules below modules/ and t2-services/t2-ave/kernel/ are GPL-2.0, see
+their headers and LICENSES/GPL-2.0.txt. Components with their own license keep
+it, see LICENSING.md.
+
+The KAIT2EN name, logo and brand assets are not covered by these licenses.
+They are (C) 2026 André Eikmeyer, all rights reserved, see LICENSING.md and
+TRADEMARK.md.

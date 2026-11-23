@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 
 //! The play cue on the dark bar: a light running clockwise around a play
 //! triangle. The next edge appears until the triangle closes, then the

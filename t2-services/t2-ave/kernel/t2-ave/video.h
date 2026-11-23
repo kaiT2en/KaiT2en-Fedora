@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef T2_AVE_VIDEO_H
 #define T2_AVE_VIDEO_H
 

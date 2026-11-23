@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Bluetooth power through BlueZ, for the hint in the send window. Phones
 //! and Apple devices only start Quick Share and AirDrop after a Bluetooth
 //! LE request, so sending needs Bluetooth on. As on macOS it is switched

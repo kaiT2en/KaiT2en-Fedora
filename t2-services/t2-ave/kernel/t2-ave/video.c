@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 #define pr_fmt(fmt) "apple-ave: " fmt
 
 #include "encoder.h"

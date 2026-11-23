@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 4f1sh3r <git@syn-flut.de>
 
 # Install Apple's PCIe Bluetooth firmware for BCM4377 Macs. Only BCM4377
 # (14e4:5fa0) uses this path; the older combo chips drive Bluetooth over UART and

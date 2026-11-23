@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Receiving side (server) of a Quick Share transfer over TCP or Bluetooth
 //! RFCOMM: connection request, UKEY2, paired key exchange, the introduction
 //! with the user's consent, then payload chunks. A transfer that starts

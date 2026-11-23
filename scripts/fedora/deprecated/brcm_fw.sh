@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 # Adapted from the KaiT2en guide. Special thanks to Deqrocks and the KaiT2en contributors.
 # EFI partition transfer method credit goes to the T2 Linux guide.
 set -euo pipefail

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 4f1sh3r <git@syn-flut.de>
 
 set -Eeuo pipefail
 
@@ -43,7 +45,7 @@ source_stage="$work/kait2en-input-0.1"
 mkdir -p "$rpm_root"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} \
 	"$source_stage/modules" "$OUTPUT_DIR"
 
-install -m 0644 "$SOURCE_ROOT/LICENSE" "$source_stage/LICENSE"
+install -m 0644 "$SOURCE_ROOT/LICENSES/GPL-2.0.txt" "$source_stage/LICENSE"
 for module in apple-t2-bridge t2touchbar hid_t2magicmouse t2_precision_trackpad t2_trackpad_actuator; do
 	cp -a "$SOURCE_ROOT/modules/$module" "$source_stage/modules/$module"
 done

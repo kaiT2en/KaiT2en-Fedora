@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 4f1sh3r <git@syn-flut.de>
 [Unit]
 Description=Install Apple Wi-Fi firmware in the KaiT2en live session
 Documentation=https://github.com/kaiT2en/KaiT2en-Fedora

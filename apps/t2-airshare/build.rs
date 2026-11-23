@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Compiles the Nearby protobuf definitions in `proto/` with protox, so no
 //! protoc is needed at build time.
 

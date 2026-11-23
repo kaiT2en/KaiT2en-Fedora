@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 4f1sh3r <git@syn-flut.de>
 
 # Repair an installed KaiT2en system from the live session. Finds the Fedora
 # installation on the internal disk, unlocks it if it is encrypted, mounts it

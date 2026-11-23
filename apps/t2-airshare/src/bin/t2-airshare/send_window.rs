@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Send window: looks for phones over Quick Share, and for Apple devices
 //! over AirDrop through the t2-drop service when it is installed. A device
 //! found over both shows up once, AirDrop preselected. Sends the chosen

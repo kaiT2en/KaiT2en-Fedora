@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2023 WhatAmISupposedToPutHere
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //
 // The DRM setup is derived from tiny-dfr's MIT-licensed display backend:
 // https://github.com/AsahiLinux/tiny-dfr

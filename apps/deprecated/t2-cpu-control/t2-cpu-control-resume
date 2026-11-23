@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 [[ ${1:-} == post ]] || exit 0
 /usr/local/libexec/t2-cpu-control-helper apply-saved

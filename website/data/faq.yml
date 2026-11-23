@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 # Questions on faq.html, in this order. Each question has `q` (plain text) and
 # `a` (Markdown). Write `a: >-` for plain text and `a: |-` for answers with a
 # list, `>-` folds all lines into one and the list items run together.

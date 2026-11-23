@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>
 //! Root helper of T2 AirShare for Quick Share, org.t2airshare.QuickShareHotspot
 //! on the system bus.
 //! A phone that sends over Bluetooth moves the transfer to a Wi-Fi hotspot

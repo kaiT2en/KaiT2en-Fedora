@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 if [ -d /run/systemd/system ]; then
     if ! systemctl daemon-reload; then
         echo '[t2-services] error: systemd reload after removal failed' >&2
