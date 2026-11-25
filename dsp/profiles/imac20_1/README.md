@@ -1,9 +1,9 @@
 # KAIT2EN audio DSP profile imac20_1 (iMac20,1)
 
 Speaker DSP for the internal speakers of the iMac20,1: `graph.json` is the
-PipeWire filter-chain graph. There are no crosstalk cancellation FIRs
-because macOS runs no XTC on this model. The XTC box is commented out in its
-speaker graph. Installed by the
+PipeWire filter-chain graph, `mic.json` is the microphone graph. There are
+no crosstalk cancellation FIRs because macOS runs no XTC on this model. The
+XTC box is commented out in its speaker graph. Installed by the
 `t2-dsp` package and `scripts/fedora/install-dsp.sh`.
 
 Copyright (C) 2026 André Eikmeyer <andre.eikmeyer@kait2en.org>

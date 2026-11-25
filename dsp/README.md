@@ -44,8 +44,8 @@ migration and licenses.
 | MacBookPro16,2 | `16_2` | yes |
 | MacBookPro16,3 | `16_3` | yes |
 | MacBookPro16,4 | `16_4` | yes |
-| iMac20,1 | `imac20_1` | no |
-| iMacPro1,1 | `imacpro1_1` | no |
+| iMac20,1 | `imac20_1` | yes |
+| iMacPro1,1 | `imacpro1_1` | yes |
 
 Reboot after installation. Package scripts and `install-dsp.sh` leave running
 user audio services and live card names as they are.

@@ -1,0 +1,167 @@
+{
+    "node.description": "Mac imacpro1,1 DSP Mic",
+    "media.name": "Mac imacpro1,1 DSP Mic",
+    "filter.graph": {
+        "nodes": [
+            {
+                "type": "builtin",
+                "label": "copy",
+                "name": "m0"
+            },
+            {
+                "type": "builtin",
+                "label": "copy",
+                "name": "m1"
+            },
+            {
+                "type": "builtin",
+                "label": "copy",
+                "name": "m2"
+            },
+            {
+                "type": "builtin",
+                "label": "copy",
+                "name": "m3"
+            },
+            {
+                "type": "builtin",
+                "label": "bq_raw",
+                "name": "hp",
+                "config": {
+                    "coefficients": [
+                        {
+                            "rate": 44100,
+                            "b0": 0.9919727398025887,
+                            "b1": -1.9839454796051774,
+                            "b2": 0.9919727398025887,
+                            "a0": 1.0,
+                            "a1": -1.9838810416608386,
+                            "a2": 0.9840099175495167
+                        },
+                        {
+                            "rate": 48000,
+                            "b0": 0.9926225427561189,
+                            "b1": -1.9852450855122379,
+                            "b2": 0.9926225427561189,
+                            "a0": 1.0,
+                            "a1": -1.9851906578962613,
+                            "a2": 0.9852995131282146
+                        }
+                    ]
+                }
+            },
+            {
+                "type": "builtin",
+                "label": "bq_raw",
+                "name": "out",
+                "config": {
+                    "coefficients": [
+                        {
+                            "rate": 44100,
+                            "b0": 99.5267938446232,
+                            "b1": 0.0,
+                            "b2": 0.0,
+                            "a0": 1.0,
+                            "a1": 0.0,
+                            "a2": 0.0
+                        },
+                        {
+                            "rate": 48000,
+                            "b0": 99.5267938446232,
+                            "b1": 0.0,
+                            "b2": 0.0,
+                            "a0": 1.0,
+                            "a1": 0.0,
+                            "a2": 0.0
+                        }
+                    ]
+                }
+            },
+            {
+                "type": "builtin",
+                "label": "mixer",
+                "name": "bf",
+                "control": {
+                    "Gain 1": 0.25,
+                    "Gain 2": 0.25,
+                    "Gain 3": 0.25,
+                    "Gain 4": 0.25
+                }
+            }
+        ],
+        "links": [
+            {
+                "output": "bf:Out",
+                "input": "hp:In"
+            },
+            {
+                "output": "hp:Out",
+                "input": "out:In"
+            },
+            {
+                "output": "m0:Out",
+                "input": "bf:In 1"
+            },
+            {
+                "output": "m1:Out",
+                "input": "bf:In 2"
+            },
+            {
+                "output": "m2:Out",
+                "input": "bf:In 3"
+            },
+            {
+                "output": "m3:Out",
+                "input": "bf:In 4"
+            }
+        ],
+        "inputs": [
+            "m0:In",
+            "m1:In",
+            "m2:In",
+            "m3:In"
+        ],
+        "outputs": [
+            "out:Out"
+        ]
+    },
+    "capture.props": {
+        "node.name": "effect_input.t2-imacpro11-mic",
+        "audio.position": [
+            "AUX0",
+            "AUX1",
+            "AUX2",
+            "AUX3"
+        ],
+        "audio.channels": "4",
+        "stream.dont-remix": "true",
+        "target.object": "alsa_input.pci-0000_04_00.3.BuiltinMic",
+        "node.passive": "true",
+        "node.pause-on-idle": "true",
+        "node.virtual": "false",
+        "state.default-volume": 1.0,
+        "audio.allowed-rates": [
+            44100,
+            48000
+        ]
+    },
+    "playback.props": {
+        "node.name": "audio_effect.t2-imacpro11-mic",
+        "node.description": "Mac imacpro1,1 DSP Mic",
+        "media.name": "Mac imacpro1,1 DSP Mic",
+        "media.class": "Audio/Source",
+        "node.pause-on-idle": "true",
+        "audio.position": [
+            "MONO"
+        ],
+        "audio.channels": "1",
+        "node.virtual": "false",
+        "priority.session": 850,
+        "state.default-volume": 1.0,
+        "audio.allowed-rates": [
+            44100,
+            48000
+        ],
+        "device.icon-name": "audio-input-microphone"
+    }
+}
