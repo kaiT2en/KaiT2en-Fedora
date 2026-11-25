@@ -359,12 +359,26 @@ fn cpio_files(mut data: &[u8]) -> Result<Vec<File>> {
         }
         if mode & 0o170000 == 0o100000 {
             match safe_path(&name) {
+                Some(path) if is_apple_double(&path, content) => {
+                    debug!("AirDrop upload: skipping the AppleDouble file {path:?}");
+                }
                 Some(path) => files.push(File { name: path, data: content.to_vec() }),
                 None => warn!("AirDrop upload: skipping {name:?}"),
             }
         }
         data = &data[data_end.next_multiple_of(align).min(data.len())..];
     }
+}
+
+/// Magic number at the start of an AppleDouble file.
+const APPLE_DOUBLE_MAGIC: [u8; 4] = [0x00, 0x05, 0x16, 0x07];
+
+/// macOS puts the extended attributes of a file, such as its quarantine
+/// flag and Finder info, into an AppleDouble file "._<name>" next to it.
+/// Linux has no use for them.
+fn is_apple_double(path: &str, data: &[u8]) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    name.starts_with("._") && data.starts_with(&APPLE_DOUBLE_MAGIC)
 }
 
 /// A relative path without "." and ".." components, None if unsafe.
@@ -413,6 +427,15 @@ mod tests {
         body.extend((5u32 | 0x8000_0000).to_be_bytes());
         body.extend(b"world");
         assert_eq!(dvzip(&body).unwrap(), b"hello world");
+    }
+
+    #[test]
+    fn skips_apple_double_files() {
+        let attrs = [0x00, 0x05, 0x16, 0x07, 0x00, 0x02, 0x00, 0x00];
+        assert!(is_apple_double("._x.png", &attrs));
+        assert!(is_apple_double("dir/._x.png", &attrs));
+        assert!(!is_apple_double("x.png", &attrs));
+        assert!(!is_apple_double("._notes.txt", b"plain text"));
     }
 
     #[test]
