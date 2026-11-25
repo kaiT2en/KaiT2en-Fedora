@@ -91,7 +91,7 @@
     },
     "brcmfmac-awdl": {
       "message_id": "1567559799921713182",
-      "hash": "b41e682ae416bcf3b7e49915b038873b68fa2eb6600fa042b9f1e6a509c78454"
+      "hash": "bd18cb268c5ab92d660d373e5ad4ce4605a165a27e80b6a949f5867ebae3b4a5"
     },
     "hci-bcm-le-scan": {
       "message_id": "1567559803453313107",
@@ -99,7 +99,7 @@
     },
     "brcmfmac-bcm4364-ndoe": {
       "message_id": "1567559807760597002",
-      "hash": "ef997470b4c220094194044430516909802694d695786b274c75af32540f1400"
+      "hash": "df107ff48a5b262a0e3b49d1b5eed26f2080fe71e42295e63b50dca6fe9adf99"
     },
     "brcmfmac-cold-resume": {
       "message_id": "1568654937867555029",
