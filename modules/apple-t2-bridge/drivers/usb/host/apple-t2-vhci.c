@@ -271,6 +271,7 @@ static int bce_vhci_hub_control(struct usb_hcd *hcd, u16 type_req, u16 wValue,
 	struct usb_port_status *ps;
 	u32 port_status;
 	bool reset_resume;
+	bool change_pending;
 
 	if (type_req == GetHubDescriptor &&
 	    wLength >= sizeof(struct usb_hub_descriptor)) {
@@ -305,13 +306,24 @@ static int bce_vhci_hub_control(struct usb_hcd *hcd, u16 type_req, u16 wValue,
 		if (vhci->port_power_mask & BIT(wIndex))
 			ps->wPortStatus |= USB_PORT_STAT_POWER;
 
+		change_pending =
+			wIndex && wIndex < ARRAY_SIZE(vhci->port_to_device) &&
+			test_and_clear_bit(wIndex - 1,
+					   &vhci->port_change_pending);
+
 		if (!(bce_vhci_port_mask & BIT(wIndex)))
 			return 0;
 
 		status = bce_vhci_cmd_port_status(&vhci->cq, (u8)wIndex, 0,
 						  &port_status);
-		if (status)
+		if (status) {
+			if (change_pending)
+				set_bit(wIndex - 1, &vhci->port_change_pending);
 			return status;
+		}
+		if (change_pending &&
+		    (port_status & BCE_VHCI_PORT_STATUS_C_CONNECTION))
+			set_bit(wIndex - 1, &vhci->port_change_pending);
 
 		/*
 		 * bridgeOS does not re-arm a preserved device's bulk OUT read credits
@@ -651,7 +663,12 @@ static int bce_vhci_bus_suspend(struct usb_hcd *hcd)
 	struct bce_vhci *vhci = bce_vhci_from_hcd(hcd);
 
 	pr_info("bus_suspend entry\n");
-	vhci->port_change_pending = 0;
+
+	if (hcd->self.root_hub->do_remote_wakeup &&
+	    READ_ONCE(vhci->port_change_pending)) {
+		pr_info("bus_suspend refused, port change pending\n");
+		return -EBUSY;
+	}
 	WRITE_ONCE(vhci->system_suspending, true);
 	status = bce_vhci_suspend_quiesce(hcd);
 	if (status)
@@ -1045,15 +1062,30 @@ static const char *bce_vhci_port_state_change_label(u64 p2)
 	return (p2 & 0x4) ? "connected" : "disconnected";
 }
 
+static void bce_vhci_notify_port_change(struct usb_hcd *hcd)
+{
+	if (HCD_RH_RUNNING(hcd))
+		usb_hcd_poll_rh_status(hcd);
+	else
+		usb_hcd_resume_root_hub(hcd);
+}
+
 static void bce_vhci_handle_system_event(struct bce_vhci_event_queue *q,
 					 struct bce_vhci_message *msg)
 {
+	struct usb_hcd *hcd;
+
 	if (msg->cmd & 0x8000) {
 		bce_vhci_command_queue_deliver_completion(&q->vhci->cq, msg);
 	} else if (msg->cmd == BCE_VHCI_EV_PORT_STATUS_CHANGE &&
 		   msg->param1 > 0 &&
 		   msg->param1 < ARRAY_SIZE(q->vhci->port_to_device)) {
 		set_bit(msg->param1 - 1, &q->vhci->port_change_pending);
+		/* Pairs with the RH_RUNNING clear in hcd_bus_suspend(). */
+		smp_mb__after_atomic();
+		hcd = READ_ONCE(q->vhci->hcd);
+		if (hcd)
+			bce_vhci_notify_port_change(hcd);
 		pr_debug(
 			"port state change event: port=%u state=%s status=%x p2=%llx\n",
 			msg->param1,
