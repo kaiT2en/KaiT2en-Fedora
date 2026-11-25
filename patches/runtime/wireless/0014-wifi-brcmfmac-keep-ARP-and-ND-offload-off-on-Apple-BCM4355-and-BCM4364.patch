@@ -29,6 +29,7 @@ which runs the firmware the way macOS does while awake.
 
 Fixes: 52f22fb21764 ("brcmfmac: add neighbor discovery offload ip address table configuration")
 Cc: stable@vger.kernel.org
+Reported-by: Blaž Zupan <blaz@inlimbo.org>
 Closes: https://github.com/t2linux/kernel/issues/34
 Closes: https://github.com/t2linux/T2-Debian-and-Ubuntu-Kernel/issues/227
 Link: https://github.com/t2linux/linux-t2-patches/pull/85
@@ -36,6 +37,7 @@ Tested-by: Yossef Osman <Yossef.Osman@proton.me>
 Tested-by: Aditya Garg <aditya.garg@linux.dev>
 Co-developed-by: Aditya Garg <aditya.garg@linux.dev>
 Signed-off-by: Aditya Garg <aditya.garg@linux.dev>
+Acked-by: Arend van Spriel <arend.vanspriel@broadcom.com>
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/core.c
@@ -78,8 +80,8 @@ index d64d24c..fc00d88 100644
  	}
  
 +	/* With ND offload on while awake, the Apple firmware for the BCM4355
-+	 * and BCM4364 makes IPv6 downloads drop to low rates. macOS runs ARP
-+	 * and ND offload only in sleep, keep both off on these chips.
++	 * and BCM4364 makes downloads drop to low rates. macOS runs ARP and
++	 * ND offload only in sleep, keep both off on these chips.
 +	 */
 +	if (enable && brcmf_is_apple_nd_offload_broken(ifp->drvr)) {
 +		brcmf_dbg(TRACE, "Skip ARP/ND offload enable on Apple BCM%x\n",

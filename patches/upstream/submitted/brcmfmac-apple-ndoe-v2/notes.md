@@ -1,6 +1,6 @@
 # [PATCH wireless v2] wifi: brcmfmac: keep ARP and ND offload off on Apple BCM4355 and BCM4364
 
-- Status: submitted
+- Status: superseded by brcmfmac-apple-ndoe-v3
 - Version: v2
 - Date: 2026-11-18
 - Base: wireless main `763b13f622e2`

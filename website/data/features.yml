@@ -611,14 +611,14 @@ items:
     title: "BCM4355 and BCM4364 ND offload off"
     state: available
     upstream: submitted
-    version: v2
+    version: v3
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
       - AdityaGarg8
-    link: "https://lore.kernel.org/all/20261118123933.74517-1-dev@deq.rocks/"
-    updated: "2026-11-18"
+    link: "https://lore.kernel.org/all/20261125152711.110005-1-dev@deq.rocks/"
+    updated: "2026-11-25"
     notes: >-
       With ND offload on, downloads dropped to about 55 Mbit/s on the
       BCM4364 and about 50 Mbit/s on the BCM4355 of the MacBookAir8,1.

@@ -8,6 +8,7 @@
 - In-Reply-To: `<20261104151623.70695-1-dev@deq.rocks>`
 - Link: https://lore.kernel.org/all/20261118141020.92306-1-dev@deq.rocks/
 - Previous: brcmfmac-bcm4364-txbf-v1
+- Acked-by: Arend van Spriel, 2026-11-24
 
 ## Recipients
 

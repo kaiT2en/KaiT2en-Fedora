@@ -8,6 +8,7 @@
 - In-Reply-To: `<20261104151629.70790-1-dev@deq.rocks>`
 - Link: https://lore.kernel.org/all/20261118141024.92354-1-dev@deq.rocks/
 - Previous: brcmfmac-apple-ap-fwauth-v1
+- Acked-by: Arend van Spriel, 2026-11-24
 
 ## Recipients
 
