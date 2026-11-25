@@ -40,11 +40,11 @@ const CMD_AWDL_SET_SYNC: u32 = 5;
 const CMD_AWDL_PEER_ADD: u32 = 6;
 const CMD_AWDL_PEER_DEL: u32 = 7;
 
-/// enum brcmf_vndr_evts
-const EVT_AWDL_STARTED: u32 = 0;
-const EVT_AWDL_STOPPED: u32 = 1;
-const EVT_AWDL_FRAME: u32 = 2;
-const EVT_AWDL_ROLE: u32 = 3;
+/// enum brcmf_vndr_evts, which starts with an unused UNSPEC entry
+const EVT_AWDL_STARTED: u32 = 1;
+const EVT_AWDL_STOPPED: u32 = 2;
+const EVT_AWDL_FRAME: u32 = 3;
+const EVT_AWDL_ROLE: u32 = 4;
 
 /// enum brcmf_awdl_attrs
 const ATTR_ADDR: u16 = 1;

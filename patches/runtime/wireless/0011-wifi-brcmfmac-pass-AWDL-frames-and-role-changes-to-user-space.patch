@@ -1,39 +1,28 @@
 From: Andre Eikmeyer <dev@deq.rocks>
-Subject: [PATCH] wifi: brcmfmac: pass AWDL frames and role changes to user
- space
+Subject: [PATCH] wifi: brcmfmac: pass AWDL frames and role changes to user space
 
 User space runs the AWDL election and peer discovery from the AWDL
-action frames other devices send. The firmware reports them with two
-events on the AWDL interface, ACTION_FRAME_RX and AWDL_EVENT (98). A
-header is in front of the frame. Its first 16 bits, high byte first,
-are its version: 1 is struct brcmf_rx_mgmt_data with 16 bytes, 2 has 24
-bytes. Both events come with either version. AWDL_EVENT carries a frame
-only with some of its status values. AWDL_ROLE (97) reports the AWDL
-role of the firmware in its status, 0 slave, 1 master not taking part
-in the election and 2 master.
+action frames of other devices. The firmware reports them on the AWDL
+interface with ACTION_FRAME_RX and AWDL_EVENT, behind a header of
+version 1 (16 bytes) or 2 (24 bytes), and its AWDL role with AWDL_ROLE.
 
-Register the two AWDL events when the firmware supports AWDL, so the
-event mask includes them. Pass every AWDL action frame (vendor specific
-category, OUI 00:17:f2, type 8) of the two events and the role changes
-to user space as the vendor events AWDL_FRAME and AWDL_ROLE. Other
-events of the AWDL interface are dropped as before.
+AWDL_AW, AWDL_ROLE, AWDL_EVENT, AWDL_STATS and SDB_STATE are event codes
+of the Apple firmware. Add them as abstract event codes, mapped and
+registered by the WCC vendor module like the CYW module does for its
+events.
 
+Pass the AWDL action frames and role changes to user space as the
+vendor events AWDL_FRAME and AWDL_ROLE.
+
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
+Tested-by: Aditya Garg <aditya.garg@linux.dev>
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
- .../broadcom/brcm80211/brcmfmac/awdl.c        | 122 +++++++++++++++++-
- .../broadcom/brcm80211/brcmfmac/awdl.h        |   4 +
- .../broadcom/brcm80211/brcmfmac/cfg80211.c    |   1 +
- .../broadcom/brcm80211/brcmfmac/fweh.c        |   8 +-
- .../broadcom/brcm80211/brcmfmac/fweh.h        |   5 +
- .../broadcom/brcm80211/brcmfmac/vendor.c      |   8 ++
- .../broadcom/brcm80211/brcmfmac/vendor.h      |  12 ++
- 7 files changed, 151 insertions(+), 9 deletions(-)
-
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-index 45eab93..b817d34 100644
+index a3db05f..aed199b 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-@@ -639,17 +639,125 @@ static void brcmf_awdl_settle_work(struct wiphy *wiphy,
+@@ -711,17 +711,113 @@ static void brcmf_awdl_settle_work(struct wiphy *wiphy,
  		       sizeof(dwell_off));
  }
  
@@ -89,9 +78,12 @@ index 45eab93..b817d34 100644
 +	case BRCMF_E_AWDL_ROLE:
 +		skb = brcmf_awdl_event_alloc(drvr, BRCMF_VNDR_EVTS_AWDL_ROLE,
 +					     NLMSG_DEFAULT_SIZE);
-+		if (!skb)
++		if (!skb) {
++			bphy_err(drvr, "AWDL role event dropped\n");
 +			return -ENOMEM;
++		}
 +		if (nla_put_u32(skb, BRCMF_AWDL_ATTR_ROLE, e->status)) {
++			bphy_err(drvr, "AWDL role event too large\n");
 +			kfree_skb(skb);
 +			return -EMSGSIZE;
 +		}
@@ -119,36 +111,21 @@ index 45eab93..b817d34 100644
 +
 +	skb = brcmf_awdl_event_alloc(drvr, BRCMF_VNDR_EVTS_AWDL_FRAME,
 +				     e->datalen);
-+	if (!skb)
++	if (!skb) {
++		bphy_err(drvr, "AWDL frame from %pM dropped\n", e->addr);
 +		return -ENOMEM;
++	}
 +	if (nla_put(skb, BRCMF_AWDL_ATTR_ADDR, ETH_ALEN, e->addr) ||
 +	    nla_put(skb, BRCMF_AWDL_ATTR_FRAME, e->datalen - hdr,
 +		    (u8 *)data + hdr)) {
++		bphy_err(drvr, "AWDL frame from %pM too large\n", e->addr);
 +		kfree_skb(skb);
 +		return -EMSGSIZE;
 +	}
 +	cfg80211_vendor_event(skb, GFP_KERNEL);
 +	return 0;
 +}
-+
-+/*
-+ * Registers the firmware events that only the AWDL interface reports, so the
-+ * event mask includes them. The firmware runs AWDL with all of them enabled.
-+ */
-+void brcmf_awdl_register_events(struct brcmf_pub *drvr)
-+{
-+	static const enum brcmf_fweh_event_code events[] = {
-+		BRCMF_E_AWDL_AW, BRCMF_E_AWDL_ROLE, BRCMF_E_AWDL_EVENT,
-+		BRCMF_E_AWDL_STATS, BRCMF_E_SDB_STATE,
-+	};
-+	struct brcmf_if *pri = brcmf_get_ifp(drvr, 0);
-+	int i;
-+
-+	if (!pri || !brcmf_feat_is_enabled(pri, BRCMF_FEAT_AWDL))
-+		return;
-+	for (i = 0; i < ARRAY_SIZE(events); i++)
-+		brcmf_fweh_register(drvr, events[i], brcmf_awdl_fweh_event);
-+}
++BRCMF_EXPORT_SYMBOL_GPL(brcmf_awdl_fweh_event);
 +
  static void brcmf_awdl_send_result(struct brcmf_pub *drvr, int event,
  				   int status, struct net_device *ndev)
@@ -165,7 +142,7 @@ index 45eab93..b817d34 100644
  	if (!skb)
  		return;
  	if (nla_put_s32(skb, BRCMF_AWDL_ATTR_STATUS, status) ||
-@@ -732,6 +840,8 @@ const struct nla_policy brcmf_awdl_vndr_policy[BRCMF_AWDL_ATTR_MAX + 1] = {
+@@ -808,6 +904,8 @@ const struct nla_policy brcmf_awdl_vndr_policy[BRCMF_AWDL_ATTR_MAX + 1] = {
  	[BRCMF_AWDL_ATTR_IFINDEX] = { .type = NLA_REJECT },
  	[BRCMF_AWDL_ATTR_PEER_IES] = { .type = NLA_BINARY,
  				       .len = BRCMF_AWDL_PEER_IES_MAX },
@@ -175,7 +152,7 @@ index 45eab93..b817d34 100644
  
  /* The device of a vendor command and its parsed attributes */
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
-index 6303022..06c932a 100644
+index d8bc90b..47dab40 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
 @@ -18,6 +18,7 @@ struct brcmf_pub;
@@ -186,28 +163,15 @@ index 6303022..06c932a 100644
  
  enum brcmf_awdl_op {
  	BRCMF_AWDL_OP_NONE,
-@@ -87,6 +88,9 @@ int brcmf_awdl_add(struct brcmf_pub *drvr, const u8 *mac,
+@@ -91,6 +92,8 @@ int brcmf_awdl_add(struct brcmf_pub *drvr, const u8 *mac,
  		   struct net_device **ndev);
  int brcmf_awdl_del(struct brcmf_pub *drvr);
  void brcmf_awdl_suspend(struct brcmf_pub *drvr);
-+void brcmf_awdl_register_events(struct brcmf_pub *drvr);
 +int brcmf_awdl_fweh_event(struct brcmf_if *ifp,
 +			  const struct brcmf_event_msg *e, void *data);
  bool brcmf_awdl_if_added(struct brcmf_pub *drvr, struct brcmf_if *ifp);
  bool brcmf_awdl_if_removed(struct brcmf_pub *drvr, struct brcmf_if *ifp);
  int brcmf_awdl_encap(struct brcmf_if *ifp, struct sk_buff *skb);
-diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
-index 3a98f90..2dd302c 100644
---- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
-+++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
-@@ -6835,6 +6835,7 @@ static s32 wl_init_priv(struct brcmf_cfg80211_info *cfg)
- 	if (err)
- 		return err;
- 	brcmf_register_event_handlers(cfg);
-+	brcmf_awdl_register_events(cfg->pub);
- 	mutex_init(&cfg->usr_sync);
- 	brcmf_init_escan(cfg);
- 	brcmf_init_conf(cfg->conf);
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.c
 index 8c09802..bd4bf20 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.c
@@ -230,27 +194,28 @@ index 8c09802..bd4bf20 100644
  		err = brcmf_fweh_call_event_handler(drvr, ifp, event->code,
  						    &emsg, event->data);
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.h
-index e327dd5..f8dee73 100644
+index e327dd5..16fa0c2 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/fweh.h
-@@ -94,7 +94,12 @@ struct brcmf_cfg80211_info;
- 	BRCMF_ENUM_DEF(FIFO_CREDIT_MAP, 74) \
- 	BRCMF_ENUM_DEF(ACTION_FRAME_RX, 75) \
- 	BRCMF_ENUM_DEF(TDLS_PEER_EVENT, 92) \
-+	BRCMF_ENUM_DEF(AWDL_AW, 96) \
-+	BRCMF_ENUM_DEF(AWDL_ROLE, 97) \
-+	BRCMF_ENUM_DEF(AWDL_EVENT, 98) \
- 	BRCMF_ENUM_DEF(BCMC_CREDIT_SUPPORT, 127) \
-+	BRCMF_ENUM_DEF(AWDL_STATS, 150) \
-+	BRCMF_ENUM_DEF(SDB_STATE, 152) \
+@@ -98,7 +98,12 @@ struct brcmf_cfg80211_info;
  	BRCMF_ABSTRACT_ENUM_DEF(EXT_AUTH_REQ, 0) \
  	BRCMF_ABSTRACT_ENUM_DEF(EXT_AUTH_FRAME_RX, 1) \
  	BRCMF_ABSTRACT_ENUM_DEF(MGMT_FRAME_TXSTATUS, 2) \
+-	BRCMF_ABSTRACT_ENUM_DEF(MGMT_FRAME_OFFCHAN_DONE, 3)
++	BRCMF_ABSTRACT_ENUM_DEF(MGMT_FRAME_OFFCHAN_DONE, 3) \
++	BRCMF_ABSTRACT_ENUM_DEF(AWDL_AW, 4) \
++	BRCMF_ABSTRACT_ENUM_DEF(AWDL_ROLE, 5) \
++	BRCMF_ABSTRACT_ENUM_DEF(AWDL_EVENT, 6) \
++	BRCMF_ABSTRACT_ENUM_DEF(AWDL_STATS, 7) \
++	BRCMF_ABSTRACT_ENUM_DEF(SDB_STATE, 8)
+ 
+ #define BRCMF_ENUM_DEF(id, val) \
+ 	BRCMF_E_##id = (val),
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c
-index 5e7de07..aae9cd7 100644
+index 34215aa..c4a8b68 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c
-@@ -193,4 +193,12 @@ const struct nl80211_vendor_cmd_info brcmf_vendor_events[] = {
+@@ -197,4 +197,12 @@ const struct nl80211_vendor_cmd_info brcmf_vendor_events[] = {
  		.vendor_id = BROADCOM_OUI,
  		.subcmd = BRCMF_VNDR_EVTS_AWDL_STOPPED
  	},
@@ -264,13 +229,13 @@ index 5e7de07..aae9cd7 100644
 +	},
  };
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
-index ce7f7c4..9600937 100644
+index 63e5996..889d1c4 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
-@@ -54,6 +54,11 @@ enum brcmf_vndr_cmds {
-  * @BRCMF_VNDR_EVTS_AWDL_STOPPED: the AWDL interface was removed, after
-  *	%BRCMF_VNDR_CMDS_AWDL_STOP or before system sleep, with
-  *	%BRCMF_AWDL_ATTR_STATUS.
+@@ -57,6 +57,11 @@ enum brcmf_vndr_cmds {
+  *	%BRCMF_AWDL_ATTR_STATUS. After %BRCMF_VNDR_CMDS_AWDL_STOP and before
+  *	system sleep the status is 0 or the error of the removal. When the
+  *	firmware removed the interface on its own it is -%ENOLINK.
 + * @BRCMF_VNDR_EVTS_AWDL_FRAME: AWDL action frame received from
 + *	%BRCMF_AWDL_ATTR_ADDR, the frame body from the category on in
 + *	%BRCMF_AWDL_ATTR_FRAME.
@@ -279,8 +244,8 @@ index ce7f7c4..9600937 100644
   * @BRCMF_VNDR_EVTS_LAST: number of vendor events.
   *
   * The value of an event is its index in the vendor events and its vendor
-@@ -62,6 +67,8 @@ enum brcmf_vndr_cmds {
- enum brcmf_vndr_evts {
+@@ -66,6 +71,8 @@ enum brcmf_vndr_evts {
+ 	BRCMF_VNDR_EVTS_UNSPEC,
  	BRCMF_VNDR_EVTS_AWDL_STARTED,
  	BRCMF_VNDR_EVTS_AWDL_STOPPED,
 +	BRCMF_VNDR_EVTS_AWDL_FRAME,
@@ -288,17 +253,17 @@ index ce7f7c4..9600937 100644
  	BRCMF_VNDR_EVTS_LAST
  };
  
-@@ -80,6 +87,9 @@ enum brcmf_vndr_evts {
+@@ -85,6 +92,9 @@ enum brcmf_vndr_evts {
   * @BRCMF_AWDL_ATTR_IFINDEX: interface index of the AWDL interface (u32).
   * @BRCMF_AWDL_ATTR_PEER_IES: HT and VHT capabilities elements of a peer,
   *	built from the AWDL TLVs it sends, as macOS passes them.
 + * @BRCMF_AWDL_ATTR_FRAME: received action frame body.
 + * @BRCMF_AWDL_ATTR_ROLE: AWDL role of the firmware (u32), 0 slave, 1 master
 + *	not taking part in the election, 2 master.
+  * @__BRCMF_AWDL_ATTR_AFTER_LAST: internal use.
   * @BRCMF_AWDL_ATTR_MAX: highest attribute.
   */
- enum brcmf_awdl_attrs {
-@@ -94,6 +104,8 @@ enum brcmf_awdl_attrs {
+@@ -100,6 +110,8 @@ enum brcmf_awdl_attrs {
  	BRCMF_AWDL_ATTR_STATUS,
  	BRCMF_AWDL_ATTR_IFINDEX,
  	BRCMF_AWDL_ATTR_PEER_IES,
@@ -307,3 +272,70 @@ index ce7f7c4..9600937 100644
  
  	__BRCMF_AWDL_ATTR_AFTER_LAST,
  	BRCMF_AWDL_ATTR_MAX = __BRCMF_AWDL_ATTR_AFTER_LAST - 1
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/wcc/core.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/wcc/core.c
+index e14b553..0a14f31 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/wcc/core.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/wcc/core.c
+@@ -8,11 +8,30 @@
+ #include <bus.h>
+ #include <fwvid.h>
+ #include <cfg80211.h>
++#include <feature.h>
++#include <fweh.h>
+ 
+ #include "vops.h"
+ 
++/* Firmware events of the Apple firmware for its AWDL interface */
++#define BRCMF_WCC_E_AWDL_AW		96
++#define BRCMF_WCC_E_AWDL_ROLE		97
++#define BRCMF_WCC_E_AWDL_EVENT		98
++#define BRCMF_WCC_E_AWDL_STATS		150
++#define BRCMF_WCC_E_SDB_STATE		152
+ #define BRCMF_WCC_E_LAST		213
+ 
++static const struct brcmf_fweh_event_map brcmf_wcc_event_map = {
++	.items = {
++		{ BRCMF_E_AWDL_AW, BRCMF_WCC_E_AWDL_AW },
++		{ BRCMF_E_AWDL_ROLE, BRCMF_WCC_E_AWDL_ROLE },
++		{ BRCMF_E_AWDL_EVENT, BRCMF_WCC_E_AWDL_EVENT },
++		{ BRCMF_E_AWDL_STATS, BRCMF_WCC_E_AWDL_STATS },
++		{ BRCMF_E_SDB_STATE, BRCMF_WCC_E_SDB_STATE },
++	},
++	.n_items = 5
++};
++
+ static int brcmf_wcc_set_sae_pwd(struct brcmf_if *ifp,
+ 				 struct cfg80211_crypto_settings *crypto)
+ {
+@@ -29,11 +48,31 @@ static int brcmf_wcc_alloc_fweh_info(struct brcmf_pub *drvr)
+ 		return -ENOMEM;
+ 
+ 	fweh->num_event_codes = BRCMF_WCC_E_LAST;
++	fweh->event_map = &brcmf_wcc_event_map;
+ 	drvr->fweh = fweh;
+ 	return 0;
+ }
+ 
++/*
++ * The AWDL interface reports these events, they go to user space. The
++ * firmware runs AWDL with all of them enabled in the event mask.
++ */
++static void brcmf_wcc_register_event_handlers(struct brcmf_pub *drvr)
++{
++	static const enum brcmf_fweh_event_code events[] = {
++		BRCMF_E_AWDL_AW, BRCMF_E_AWDL_ROLE, BRCMF_E_AWDL_EVENT,
++		BRCMF_E_AWDL_STATS, BRCMF_E_SDB_STATE,
++	};
++	int i;
++
++	if (!(drvr->feat_flags & BIT(BRCMF_FEAT_AWDL)))
++		return;
++	for (i = 0; i < ARRAY_SIZE(events); i++)
++		brcmf_fweh_register(drvr, events[i], brcmf_awdl_fweh_event);
++}
++
+ const struct brcmf_fwvid_ops brcmf_wcc_ops = {
+ 	.set_sae_password = brcmf_wcc_set_sae_pwd,
+ 	.alloc_fweh_info = brcmf_wcc_alloc_fweh_info,
++	.register_event_handlers = brcmf_wcc_register_event_handlers,
+ };

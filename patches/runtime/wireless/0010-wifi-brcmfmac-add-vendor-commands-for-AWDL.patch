@@ -1,54 +1,39 @@
 From: Andre Eikmeyer <dev@deq.rocks>
 Subject: [PATCH] wifi: brcmfmac: add vendor commands for AWDL
 
-AWDL election, peer discovery and services run in user space. The
-firmware sends and receives the AWDL frames and the data once the host
-has set its AWDL parameters. Add vendor commands of the Broadcom OUI on
-the primary interface for that:
+AWDL election, peer discovery and services run in user space, the
+firmware carries the AWDL frames and data. Add vendor commands of the
+Broadcom OUI on the primary interface, described in vendor.h:
 
-- AWDL_START creates the AWDL interface with the given MAC address and
-  starts AWDL with the given TLVs. AWDL_STOP stops it and removes the
-  interface. Both need RTNL to register and unregister the network
-  device, which vendor commands do not hold. They run in a work item
-  and report their result with the vendor events AWDL_STARTED and
-  AWDL_STOPPED.
-- AWDL_SET_FRAMES replaces the TLVs the firmware sends, the TLVs of
-  awdl_payload and awdl_oob_af_auto. The driver adds the headers.
-- AWDL_SET_SYNC sets the master to synchronize to, with its metric and
-  the distance to it. Without a master the device is its own master.
-- AWDL_PEER_ADD and AWDL_PEER_DEL add and remove a peer data frames go
-  to. AWDL_PEER_ADD takes the HT and VHT capabilities elements of the
-  peer, which macOS builds from the AWDL TLVs of the peer and passes in
-  awdl_peer_op.
+- AWDL_START and AWDL_STOP create and remove the AWDL interface. They
+  need RTNL, so they run in a work item and report their result with
+  the vendor events AWDL_STARTED and AWDL_STOPPED.
+- AWDL_SET_FRAMES and AWDL_SET_SYNC set the TLVs the firmware sends and
+  the master to synchronize to.
+- AWDL_PEER_ADD and AWDL_PEER_DEL add and remove the peers data frames
+  go to.
 
-The other firmware parameters of AWDL are set by the driver in the
-order the firmware expects them, with the values the firmware takes
-from the host it was made for. The BCM4364 gets slot_bss without SDB,
-its firmware traps with the SDB form while the station is on 5 GHz.
-Some parameters change 500 ms and 5 s after the start.
+The driver sets the other AWDL parameters in the order and with the
+values macOS 15.4.1 sets on a MacBookAir 9,1. awdl_opmode fails while
+the firmware does not know a new master yet, so every refresh sends the
+frames and the synchronization state, and SET_FRAMES and SET_SYNC
+report only the errors of their own part. The BCM4364 firmware traps
+with the SDB form of slot_bss while the station is on 5 GHz, the new
+quirk AWDL_NO_SDB selects the other form.
 
-The AWDL interface is removed before system sleep with an AWDL_STOPPED
-event.
-
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
+Tested-by: Aditya Garg <aditya.garg@linux.dev>
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
- .../broadcom/brcm80211/brcmfmac/awdl.c        | 586 +++++++++++++++++-
- .../broadcom/brcm80211/brcmfmac/awdl.h        |  53 ++
- .../broadcom/brcm80211/brcmfmac/cfg80211.c    |   5 +-
- .../broadcom/brcm80211/brcmfmac/vendor.c      |  78 +++
- .../broadcom/brcm80211/brcmfmac/vendor.h      |  86 +++
- 5 files changed, 804 insertions(+), 4 deletions(-)
-
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-index 052cd33..45eab93 100644
+index 607cc8d..a3db05f 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-@@ -27,13 +27,18 @@
+@@ -27,13 +27,17 @@
  #include <linux/rtnetlink.h>
  #include <linux/skbuff.h>
  #include <linux/unaligned.h>
 +#include <net/netlink.h>
-+#include <brcm_hw_ids.h>
  
  #include "core.h"
  #include "debug.h"
@@ -62,14 +47,17 @@ index 052cd33..45eab93 100644
  #include "awdl.h"
  
  /* The firmware interface index of the AWDL interface */
-@@ -53,10 +58,123 @@ static const u8 brcmf_awdl_bssid[ETH_ALEN] = {
+@@ -53,10 +57,126 @@ static const u8 brcmf_awdl_bssid[ETH_ALEN] = {
  	0x00, 0x25, 0x00, 0xff, 0x94, 0x73,
  };
  
 +/*
-+ * Firmware parameters the host sets for AWDL. The values are the ones the
-+ * firmware takes from the host it was made for. Their fields are not known
-+ * beyond what the comments say.
++ * Firmware parameters the host sets for AWDL. The tables below and the
++ * offsets patched into them, in awdl_election_tree, awdl_opmode, slot_bss
++ * and awdl_peer_op, are copied from an iovar trace of macOS 15.4.1 on a
++ * MacBookAir9,1. They are not documented otherwise, their fields are not
++ * known beyond what the comments say. They are used with the firmware
++ * 9.30.514.0.32.5.94 of the BCM4364 and 16.20.380.0.3.6.130 of the BCM4377.
 + */
 +#define BRCMF_AWDL_CONFIG_START		0x83
 +#define BRCMF_AWDL_CONFIG_SETTLED	0x73
@@ -188,7 +176,30 @@ index 052cd33..45eab93 100644
  }
  
  /*
-@@ -248,6 +366,8 @@ int brcmf_awdl_del(struct brcmf_pub *drvr)
+@@ -64,6 +184,8 @@ void brcmf_awdl_attach(struct brcmf_pub *drvr)
+  * the interface if it is the AWDL interface being created.
+  */
+ static void brcmf_awdl_drop_if(struct brcmf_pub *drvr, struct brcmf_if *ifp);
++static void brcmf_awdl_send_result(struct brcmf_pub *drvr, int event,
++				   int status, struct net_device *ndev);
+ 
+ bool brcmf_awdl_if_added(struct brcmf_pub *drvr, struct brcmf_if *ifp)
+ {
+@@ -116,9 +238,12 @@ bool brcmf_awdl_if_removed(struct brcmf_pub *drvr, struct brcmf_if *ifp)
+ 			awdl->ifp = NULL;
+ 	}
+ 	spin_unlock(&awdl->lock);
+-	if (!requested)
++	if (!requested) {
+ 		brcmf_proto_configure_addr_mode(drvr, ifp->ifidx,
+ 						ADDR_INDIRECT);
++		brcmf_awdl_send_result(drvr, BRCMF_VNDR_EVTS_AWDL_STOPPED,
++				       -ENOLINK, NULL);
++	}
+ 	return requested;
+ }
+ 
+@@ -268,6 +393,8 @@ int brcmf_awdl_del(struct brcmf_pub *drvr)
  	if (!ifp)
  		return -ENOENT;
  
@@ -197,27 +208,28 @@ index 052cd33..45eab93 100644
  	netif_tx_disable(ifp->ndev);
  	/* Deletes the flowrings of all peers */
  	brcmf_proto_configure_addr_mode(drvr, ifp->ifidx, ADDR_INDIRECT);
-@@ -335,6 +455,461 @@ int brcmf_awdl_decap(struct sk_buff *skb)
+@@ -359,6 +486,510 @@ int brcmf_awdl_decap(struct sk_buff *skb)
  	return 0;
  }
  
-+/* Sets a firmware parameter of the AWDL interface, errors are only logged */
-+static void brcmf_awdl_set(struct brcmf_if *ifp, const char *name,
-+			   const void *data, u32 len)
++/* Sets a firmware parameter of the AWDL interface */
++static int brcmf_awdl_set(struct brcmf_if *ifp, const char *name,
++			  const void *data, u32 len)
 +{
 +	int err;
 +
 +	err = brcmf_fil_iovar_data_set(ifp, name, data, len);
 +	if (err)
-+		brcmf_dbg(INFO, "AWDL %s: %d\n", name, err);
++		bphy_err(ifp->drvr, "AWDL %s failed: %d\n", name, err);
++	return err;
 +}
 +
-+static void brcmf_awdl_set_u32(struct brcmf_if *ifp, const char *name,
-+			       u32 val)
++static int brcmf_awdl_set_u32(struct brcmf_if *ifp, const char *name,
++			      u32 val)
 +{
 +	__le32 data = cpu_to_le32(val);
 +
-+	brcmf_awdl_set(ifp, name, &data, sizeof(data));
++	return brcmf_awdl_set(ifp, name, &data, sizeof(data));
 +}
 +
 +static void brcmf_awdl_free_frames(struct brcmf_awdl *awdl)
@@ -259,13 +271,13 @@ index 052cd33..45eab93 100644
 +	return 0;
 +}
 +
-+static void brcmf_awdl_set_payload(struct brcmf_awdl *awdl)
++static int brcmf_awdl_set_payload(struct brcmf_awdl *awdl)
 +{
-+	brcmf_awdl_set(awdl->ifp, "awdl_payload", awdl->payload,
-+		       awdl->payload_len);
++	return brcmf_awdl_set(awdl->ifp, "awdl_payload", awdl->payload,
++			      awdl->payload_len);
 +}
 +
-+static void brcmf_awdl_set_opmode(struct brcmf_awdl *awdl)
++static int brcmf_awdl_set_opmode(struct brcmf_awdl *awdl)
 +{
 +	u8 buf[sizeof(brcmf_awdl_opmode)];
 +
@@ -277,10 +289,10 @@ index 052cd33..45eab93 100644
 +		buf[BRCMF_AWDL_OPMODE_ROLE] = BRCMF_AWDL_OPMODE_ROLE_MASTER;
 +		ether_addr_copy(buf + BRCMF_AWDL_OPMODE_ADDR, awdl->mac);
 +	}
-+	brcmf_awdl_set(awdl->ifp, "awdl_opmode", buf, sizeof(buf));
++	return brcmf_awdl_set(awdl->ifp, "awdl_opmode", buf, sizeof(buf));
 +}
 +
-+static void brcmf_awdl_set_election(struct brcmf_awdl *awdl)
++static int brcmf_awdl_set_election(struct brcmf_awdl *awdl)
 +{
 +	u8 buf[sizeof(brcmf_awdl_election_tree)];
 +
@@ -293,20 +305,19 @@ index 052cd33..45eab93 100644
 +	} else {
 +		ether_addr_copy(buf + BRCMF_AWDL_ELECTION_ADDR, awdl->mac);
 +	}
-+	brcmf_awdl_set(awdl->ifp, "awdl_election_tree", buf, sizeof(buf));
++	return brcmf_awdl_set(awdl->ifp, "awdl_election_tree", buf,
++			      sizeof(buf));
 +}
 +
-+static void brcmf_awdl_set_slots(struct brcmf_pub *drvr)
++static int brcmf_awdl_set_slots(struct brcmf_pub *drvr)
 +{
 +	u8 buf[sizeof(brcmf_awdl_slot_bss)];
 +	u8 *s0, *s1;
 +	int i;
 +
 +	memcpy(buf, brcmf_awdl_slot_bss, sizeof(buf));
-+	/* The BCM4364 firmware traps with the SDB form while the station is
-+	 * on 5 GHz
-+	 */
-+	if (drvr->bus_if->chip == BRCM_CC_4364_CHIP_ID) {
++	if (brcmf_feat_is_quirk_enabled(drvr->awdl.ifp,
++					BRCMF_FEAT_QUIRK_AWDL_NO_SDB)) {
 +		buf[BRCMF_AWDL_SLOT_SDB] = BRCMF_AWDL_SLOT_SDB_OFF;
 +		for (i = 0; i < BRCMF_AWDL_SLOTS; i++) {
 +			s0 = buf + BRCMF_AWDL_SLOT_SLICE0 + 2 * i;
@@ -316,48 +327,89 @@ index 052cd33..45eab93 100644
 +			memset(s1, 0, 2);
 +		}
 +	}
-+	brcmf_awdl_set(drvr->awdl.ifp, "slot_bss", buf, sizeof(buf));
++	return brcmf_awdl_set(drvr->awdl.ifp, "slot_bss", buf, sizeof(buf));
 +}
 +
-+/* Sends the frames and the synchronization state again */
-+static void brcmf_awdl_refresh(struct brcmf_awdl *awdl)
++/*
++ * The firmware takes the frames and then the synchronization state, each
++ * refresh sends both. A vendor command returns the errors of the part it
++ * changes, the errors of the other part are only logged.
++ *
++ * brcmf_awdl_refresh_frames() sends the frames and returns the first error.
++ */
++static int brcmf_awdl_refresh_frames(struct brcmf_awdl *awdl)
 +{
-+	brcmf_awdl_set(awdl->ifp, "awdl_oob_af_auto", awdl->oob,
-+		       awdl->oob_len);
-+	brcmf_awdl_set_payload(awdl);
-+	brcmf_awdl_set(awdl->ifp, "awdl_sync_params", brcmf_awdl_sync_params,
-+		       sizeof(brcmf_awdl_sync_params));
-+	brcmf_awdl_set_opmode(awdl);
-+	brcmf_awdl_set_election(awdl);
-+	brcmf_awdl_set(awdl->ifp, "awdl_sync_params", brcmf_awdl_sync_params,
-+		       sizeof(brcmf_awdl_sync_params));
++	int err, ret;
++
++	ret = brcmf_awdl_set(awdl->ifp, "awdl_oob_af_auto", awdl->oob,
++			     awdl->oob_len);
++	err = brcmf_awdl_set_payload(awdl);
++	return ret ?: err;
 +}
 +
-+/* Starts AWDL on the AWDL interface, the firmware expects this order */
-+static void brcmf_awdl_enable(struct brcmf_pub *drvr)
++/*
++ * Sends the synchronization state, returns the first error. awdl_opmode
++ * fails while the firmware does not know the new master yet, the next
++ * refresh sends it again.
++ */
++static int brcmf_awdl_refresh_sync(struct brcmf_awdl *awdl)
++{
++	int err, ret;
++
++	ret = brcmf_awdl_set(awdl->ifp, "awdl_sync_params",
++			     brcmf_awdl_sync_params,
++			     sizeof(brcmf_awdl_sync_params));
++	err = brcmf_awdl_set_opmode(awdl);
++	ret = ret ?: err;
++	err = brcmf_awdl_set_election(awdl);
++	ret = ret ?: err;
++	err = brcmf_awdl_set(awdl->ifp, "awdl_sync_params",
++			     brcmf_awdl_sync_params,
++			     sizeof(brcmf_awdl_sync_params));
++	return ret ?: err;
++}
++
++/*
++ * Starts AWDL on the AWDL interface, the firmware expects this order. AWDL
++ * does not run without awdl_config, slot_bss and awdl, a failure of one of
++ * them fails the start. The other parameters are retried by the next
++ * refresh.
++ */
++static int brcmf_awdl_enable(struct brcmf_pub *drvr)
 +{
 +	struct brcmf_awdl *awdl = &drvr->awdl;
 +	struct brcmf_if *ifp = awdl->ifp;
++	int err;
 +
 +	brcmf_awdl_set_payload(awdl);
 +	brcmf_awdl_set_u32(ifp, "awdl_aftxmode", 0);
 +	brcmf_awdl_set(ifp, "awdl_sync_params", brcmf_awdl_sync_params,
 +		       sizeof(brcmf_awdl_sync_params));
 +	brcmf_awdl_set_u32(ifp, "awdl_osoc_chan", 0);
-+	brcmf_awdl_set_u32(ifp, "awdl_config", BRCMF_AWDL_CONFIG_START);
++	err = brcmf_awdl_set_u32(ifp, "awdl_config", BRCMF_AWDL_CONFIG_START);
++	if (err)
++		return err;
 +	brcmf_awdl_set(ifp, "awdl_psf_dwell", brcmf_awdl_psf_dwell,
 +		       sizeof(brcmf_awdl_psf_dwell));
-+	brcmf_awdl_set_slots(drvr);
++	err = brcmf_awdl_set_slots(drvr);
++	if (err)
++		return err;
 +	brcmf_awdl_set_payload(awdl);
 +	brcmf_awdl_set_election(awdl);
-+	brcmf_awdl_set_u32(ifp, "awdl", 1);
++	err = brcmf_awdl_set_u32(ifp, "awdl", 1);
++	if (err)
++		return err;
 +	brcmf_awdl_set_u32(ifp, "awdl_presencemode", BRCMF_AWDL_PRESENCEMODE);
-+	brcmf_awdl_set_slots(drvr);
-+	brcmf_awdl_refresh(awdl);
++	err = brcmf_awdl_set_slots(drvr);
++	if (err)
++		return err;
++	brcmf_awdl_refresh_frames(awdl);
++	brcmf_awdl_refresh_sync(awdl);
 +	wiphy_delayed_work_queue(drvr->wiphy, &awdl->aftx_work,
 +				 BRCMF_AWDL_AFTX_DELAY);
 +	wiphy_delayed_work_queue(drvr->wiphy, &awdl->settle_work,
 +				 BRCMF_AWDL_SETTLE_DELAY);
++	return 0;
 +}
 +
 +static void brcmf_awdl_aftx_work(struct wiphy *wiphy, struct wiphy_work *work)
@@ -429,7 +481,11 @@ index 052cd33..45eab93 100644
 +		err = brcmf_awdl_add(drvr, awdl->start_mac, &ndev);
 +		if (!err) {
 +			awdl->has_master = false;
-+			brcmf_awdl_enable(drvr);
++			err = brcmf_awdl_enable(drvr);
++			if (err) {
++				brcmf_awdl_del(drvr);
++				ndev = NULL;
++			}
 +		}
 +		brcmf_awdl_send_result(drvr, BRCMF_VNDR_EVTS_AWDL_STARTED, err,
 +				       ndev);
@@ -546,7 +602,10 @@ index 052cd33..45eab93 100644
 +	awdl = &drvr->awdl;
 +	if (awdl->detached)
 +		return -ENODEV;
-+	if (!awdl->ifp && awdl->op != BRCMF_AWDL_OP_START)
++	/* A queued START is answered with AWDL_STARTED first */
++	if (awdl->op != BRCMF_AWDL_OP_NONE)
++		return -EBUSY;
++	if (!awdl->ifp)
 +		return -ENOENT;
 +
 +	spin_lock(&awdl->lock);
@@ -575,8 +634,9 @@ index 052cd33..45eab93 100644
 +				      tb[BRCMF_AWDL_ATTR_OOB]);
 +	if (err)
 +		return err;
-+	brcmf_awdl_refresh(&drvr->awdl);
-+	return 0;
++	err = brcmf_awdl_refresh_frames(&drvr->awdl);
++	brcmf_awdl_refresh_sync(&drvr->awdl);
++	return err;
 +}
 +
 +int brcmf_awdl_vndr_set_sync(struct wiphy *wiphy, struct wireless_dev *wdev,
@@ -607,8 +667,8 @@ index 052cd33..45eab93 100644
 +	} else {
 +		awdl->has_master = false;
 +	}
-+	brcmf_awdl_refresh(awdl);
-+	return 0;
++	brcmf_awdl_refresh_frames(awdl);
++	return brcmf_awdl_refresh_sync(awdl);
 +}
 +
 +static int brcmf_awdl_peer_op(struct wiphy *wiphy, const void *data, int len,
@@ -659,7 +719,7 @@ index 052cd33..45eab93 100644
  /* Called before the interfaces of the device are removed */
  void brcmf_awdl_detach(struct brcmf_pub *drvr)
  {
-@@ -342,10 +917,17 @@ void brcmf_awdl_detach(struct brcmf_pub *drvr)
+@@ -366,10 +997,17 @@ void brcmf_awdl_detach(struct brcmf_pub *drvr)
  
  	rtnl_lock();
  	wiphy_lock(drvr->wiphy);
@@ -678,7 +738,7 @@ index 052cd33..45eab93 100644
 +	cancel_work_sync(&awdl->ctrl_work);
  }
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
-index 3edc0e9..6303022 100644
+index d41a79e..d8bc90b 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
 @@ -10,12 +10,21 @@
@@ -703,7 +763,7 @@ index 3edc0e9..6303022 100644
  /**
   * struct brcmf_awdl - AWDL interface of a device.
   *
-@@ -28,6 +37,22 @@ struct sk_buff;
+@@ -31,6 +40,22 @@ struct sk_buff;
   * @detached: the device goes away, no new AWDL interface is created.
   * @ifp: the AWDL interface, NULL when there is none.
   * @tx_seq: sequence number of the next data frame sent.
@@ -726,7 +786,7 @@ index 3edc0e9..6303022 100644
   */
  struct brcmf_awdl {
  	spinlock_t lock; /* AWDL state against the event worker */
-@@ -38,6 +63,19 @@ struct brcmf_awdl {
+@@ -42,6 +67,19 @@ struct brcmf_awdl {
  	bool detached;
  	struct brcmf_if *ifp;
  	u16 tx_seq;
@@ -746,7 +806,7 @@ index 3edc0e9..6303022 100644
  };
  
  /* Length of the LLC/SNAP and AWDL data header of AWDL data frames */
-@@ -48,9 +86,24 @@ void brcmf_awdl_detach(struct brcmf_pub *drvr);
+@@ -52,9 +90,24 @@ void brcmf_awdl_detach(struct brcmf_pub *drvr);
  int brcmf_awdl_add(struct brcmf_pub *drvr, const u8 *mac,
  		   struct net_device **ndev);
  int brcmf_awdl_del(struct brcmf_pub *drvr);
@@ -772,10 +832,10 @@ index 3edc0e9..6303022 100644
 +
  #endif /* BRCMFMAC_AWDL_H */
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
-index f7f14df..3a98f90 100644
+index a13b1dc..66a52b1 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
-@@ -4240,8 +4240,7 @@ static s32 brcmf_cfg80211_suspend(struct wiphy *wiphy,
+@@ -4251,8 +4251,7 @@ static s32 brcmf_cfg80211_suspend(struct wiphy *wiphy,
  	/* The AWDL interface does not survive sleep, the firmware still
  	 * takes commands here. User space creates it again after resume.
  	 */
@@ -785,7 +845,7 @@ index f7f14df..3a98f90 100644
  
  	/* if the primary net_device is not READY there is nothing
  	 * we can do but pray resume goes smoothly.
-@@ -7687,6 +7686,8 @@ static int brcmf_setup_wiphy(struct wiphy *wiphy, struct brcmf_if *ifp)
+@@ -7708,6 +7707,8 @@ static int brcmf_setup_wiphy(struct wiphy *wiphy, struct brcmf_if *ifp)
  	/* vendor commands/events support */
  	wiphy->vendor_commands = brcmf_vendor_cmds;
  	wiphy->n_vendor_commands = BRCMF_VNDR_CMDS_LAST - 1;
@@ -794,8 +854,44 @@ index f7f14df..3a98f90 100644
  
  	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_WOWL))
  		brcmf_wiphy_wowl_params(wiphy, ifp);
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
+index dc0b2ce..ecc1c34 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.c
+@@ -408,6 +408,12 @@ void brcmf_feat_attach(struct brcmf_pub *drvr)
+ 	case BRCM_CC_4329_CHIP_ID:
+ 		drvr->chip_quirks |= BIT(BRCMF_FEAT_QUIRK_NEED_MPC);
+ 		break;
++	case BRCM_CC_4364_CHIP_ID:
++		/* The firmware traps with the SDB form of slot_bss while the
++		 * station is on 5 GHz
++		 */
++		drvr->chip_quirks |= BIT(BRCMF_FEAT_QUIRK_AWDL_NO_SDB);
++		break;
+ 	default:
+ 		/* no quirks */
+ 		break;
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
+index 3927240..552bdfb 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/feature.h
+@@ -67,10 +67,13 @@
+  *
+  * AUTO_AUTH: workaround needed for automatic authentication type.
+  * NEED_MPC: driver needs to disable MPC during scanning operation.
++ * AWDL_NO_SDB: AWDL takes the slot_bss form without SDB, all channels in
++ *	slice 0.
+  */
+ #define BRCMF_QUIRK_LIST \
+ 	BRCMF_QUIRK_DEF(AUTO_AUTH) \
+-	BRCMF_QUIRK_DEF(NEED_MPC)
++	BRCMF_QUIRK_DEF(NEED_MPC) \
++	BRCMF_QUIRK_DEF(AWDL_NO_SDB)
+ 
+ #define BRCMF_FEAT_DEF(_f) \
+ 	BRCMF_FEAT_ ## _f,
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c
-index d07e7c7..5e7de07 100644
+index d07e7c7..34215aa 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.c
 @@ -15,6 +15,7 @@
@@ -806,7 +902,7 @@ index d07e7c7..5e7de07 100644
  
  static int brcmf_cfg80211_vndr_cmds_dcmd_handler(struct wiphy *wiphy,
  						 struct wireless_dev *wdev,
-@@ -115,4 +116,81 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
+@@ -115,4 +116,85 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
  		.policy = VENDOR_CMD_RAW_DATA,
  		.doit = brcmf_cfg80211_vndr_cmds_dcmd_handler
  	},
@@ -879,6 +975,10 @@ index d07e7c7..5e7de07 100644
 +};
 +
 +const struct nl80211_vendor_cmd_info brcmf_vendor_events[] = {
++	[BRCMF_VNDR_EVTS_UNSPEC] = {
++		.vendor_id = BROADCOM_OUI,
++		.subcmd = BRCMF_VNDR_EVTS_UNSPEC
++	},
 +	[BRCMF_VNDR_EVTS_AWDL_STARTED] = {
 +		.vendor_id = BROADCOM_OUI,
 +		.subcmd = BRCMF_VNDR_EVTS_AWDL_STARTED
@@ -889,16 +989,17 @@ index d07e7c7..5e7de07 100644
 +	},
  };
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
-index 418f33e..ce7f7c4 100644
+index 418f33e..63e5996 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
-@@ -8,12 +8,97 @@
+@@ -8,12 +8,103 @@
  
  #define BROADCOM_OUI	0x001018
  
 +/**
 + * enum brcmf_vndr_cmds - vendor commands of the Broadcom OUI
 + *
++ * @BRCMF_VNDR_CMDS_UNSPEC: not used.
 + * @BRCMF_VNDR_CMDS_DCMD: firmware command, see struct brcmf_vndr_dcmd_hdr.
 + * @BRCMF_VNDR_CMDS_AWDL_START: create the AWDL interface with
 + *	%BRCMF_AWDL_ATTR_ADDR and start AWDL with the TLVs of
@@ -937,17 +1038,20 @@ index 418f33e..ce7f7c4 100644
 +/**
 + * enum brcmf_vndr_evts - vendor events of the Broadcom OUI
 + *
++ * @BRCMF_VNDR_EVTS_UNSPEC: not used.
 + * @BRCMF_VNDR_EVTS_AWDL_STARTED: result of %BRCMF_VNDR_CMDS_AWDL_START with
 + *	%BRCMF_AWDL_ATTR_STATUS and, on success, %BRCMF_AWDL_ATTR_IFINDEX.
-+ * @BRCMF_VNDR_EVTS_AWDL_STOPPED: the AWDL interface was removed, after
-+ *	%BRCMF_VNDR_CMDS_AWDL_STOP or before system sleep, with
-+ *	%BRCMF_AWDL_ATTR_STATUS.
++ * @BRCMF_VNDR_EVTS_AWDL_STOPPED: the AWDL interface was removed, with
++ *	%BRCMF_AWDL_ATTR_STATUS. After %BRCMF_VNDR_CMDS_AWDL_STOP and before
++ *	system sleep the status is 0 or the error of the removal. When the
++ *	firmware removed the interface on its own it is -%ENOLINK.
 + * @BRCMF_VNDR_EVTS_LAST: number of vendor events.
 + *
 + * The value of an event is its index in the vendor events and its vendor
 + * subcommand.
 + */
 +enum brcmf_vndr_evts {
++	BRCMF_VNDR_EVTS_UNSPEC,
 +	BRCMF_VNDR_EVTS_AWDL_STARTED,
 +	BRCMF_VNDR_EVTS_AWDL_STOPPED,
 +	BRCMF_VNDR_EVTS_LAST
@@ -956,6 +1060,7 @@ index 418f33e..ce7f7c4 100644
 +/**
 + * enum brcmf_awdl_attrs - attributes of the AWDL vendor commands and events
 + *
++ * @BRCMF_AWDL_ATTR_UNSPEC: not used.
 + * @BRCMF_AWDL_ATTR_ADDR: MAC address, of the AWDL interface or of a peer.
 + * @BRCMF_AWDL_ATTR_PAYLOAD: AWDL TLVs for the firmware parameter
 + *	awdl_payload.
@@ -968,6 +1073,7 @@ index 418f33e..ce7f7c4 100644
 + * @BRCMF_AWDL_ATTR_IFINDEX: interface index of the AWDL interface (u32).
 + * @BRCMF_AWDL_ATTR_PEER_IES: HT and VHT capabilities elements of a peer,
 + *	built from the AWDL TLVs it sends, as macOS passes them.
++ * @__BRCMF_AWDL_ATTR_AFTER_LAST: internal use.
 + * @BRCMF_AWDL_ATTR_MAX: highest attribute.
 + */
 +enum brcmf_awdl_attrs {
@@ -990,7 +1096,7 @@ index 418f33e..ce7f7c4 100644
  /**
   * enum brcmf_nlattrs - nl80211 message attributes
   *
-@@ -49,5 +134,6 @@ struct brcmf_vndr_dcmd_hdr {
+@@ -49,5 +140,6 @@ struct brcmf_vndr_dcmd_hdr {
  };
  
  extern const struct wiphy_vendor_command brcmf_vendor_cmds[];

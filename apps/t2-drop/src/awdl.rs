@@ -365,7 +365,12 @@ impl Awdl {
                             if let Some(label) = first_label(data) {
                                 instance = Some(label);
                             }
-                        } else if kind == DNS_SRV && data.len() >= 6 {
+                        } else if kind == DNS_SRV
+                            && name.ends_with(&AIRDROP_PTR_NAME)
+                            && data.len() >= 6
+                        {
+                            // Only the SRV of an AirDrop instance, a Mac
+                            // announces other services the same way
                             airdrop = Some(u16::from_be_bytes([data[4], data[5]]));
                         }
                     }
@@ -427,11 +432,15 @@ impl Awdl {
         if better {
             info!("following AWDL master {} metric {:#x}", mac_str(&e.master), e.master_metric);
             self.master = Some(e);
-            self.nl.set_sync(Some(Master {
+            // The firmware rejects awdl_opmode until it knows the new master,
+            // the refresh right after sends the synchronization state again
+            if let Err(err) = self.nl.set_sync(Some(Master {
                 addr: e.master,
                 metric: e.master_metric,
                 distance: (e.distance + 1) as u8,
-            }))?;
+            })) {
+                debug!("AWDL sync to {}: {err:#}, sent again with the frames", mac_str(&e.master));
+            }
             self.refresh()?;
         } else if same {
             // Keep the counter of the current master up to date
