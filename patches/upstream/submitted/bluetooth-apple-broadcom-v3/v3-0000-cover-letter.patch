@@ -1,0 +1,46 @@
+From c8ab2af1da6229f0c6683b053e8d5a4f0b31311b Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Fri, 27 Nov 2026 14:08:06 +0100
+Subject: [PATCH v3 0/2] Bluetooth: Broadcom controllers of the Apple T2 Macs
+
+This series is for the Broadcom Bluetooth controllers of the Apple T2
+Macs, the BCM4364 over UART (hci_bcm) and the BCM4377 over PCIe
+(hci_bcm4377).
+
+Patch 1 builds on a vendor command the Android Broadcom vendor library
+uses, 0xfc57, to keep A2DP from dropping out while WLAN runs on 2.4 GHz.
+Patch 2 sets the strict duplicate filter quirk in both drivers, so a
+discovery reports changed advertisement data before its next cycle.
+
+The T2 Linux community runs these patches. Users reported them working
+on the MacBookPro15,1, 15,2, 15,3, 15,4, 16,1, 16,4, MacBookAir9,1 and
+iMac20,1.
+
+Changes in v3:
+- Rebase on bluetooth-next. Patch 2 sets the quirk after the new
+  platform address check in bcm_setup()
+- Patch 2: shorter subject
+- Patch 1 is unchanged. The comparison with Sasha Finkelstein's channel
+  priority patch is in the v2 thread
+
+Changes in v2:
+- Dropped "Bluetooth: btbcm: clear vendor bits in LE advertising report
+  types" and the revert of 88397423671f. The mask in hci_event.c stays
+  as it is.
+
+v2: https://lore.kernel.org/all/20261105085750.120392-1-dev@deq.rocks/
+v1: https://lore.kernel.org/all/20261104151601.70493-1-dev@deq.rocks/
+
+Andre Eikmeyer (2):
+  Bluetooth: btbcm: raise ACL priority on Apple Broadcom controllers
+  Bluetooth: set the strict duplicate filter quirk on Apple Broadcom
+
+ drivers/bluetooth/Kconfig       |  1 +
+ drivers/bluetooth/btbcm.c       | 71 +++++++++++++++++++++++++++++++++
+ drivers/bluetooth/btbcm.h       |  7 ++++
+ drivers/bluetooth/hci_bcm.c     | 23 +++++++++--
+ drivers/bluetooth/hci_bcm4377.c |  8 ++++
+ 5 files changed, 107 insertions(+), 3 deletions(-)
+
+
+base-commit: f57f78086ab54f3b3122fbaeba2c842ba7bb6d00

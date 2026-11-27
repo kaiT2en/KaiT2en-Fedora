@@ -1,6 +1,6 @@
 # [PATCH v2 0/3] Bluetooth: hci_bcm4377: resume after ACPI S3 and ASPM
 
-- Status: submitted
+- Status: superseded by bluetooth-bcm4377-resume-v3
 - Version: v2
 - Date: 2026-11-11
 - Base: bluetooth-next `3f425f95ba3`
@@ -8,6 +8,8 @@
 - Link: https://lore.kernel.org/all/20261111120248.21062-1-dev@deq.rocks/
 - Previous: bluetooth-bcm4377-resume-v1, https://lore.kernel.org/all/20261107154839.89941-1-dev@deq.rocks/
 - Companion: brcmfmac-t2-suspend
+- Reviewed-by: Sven Peter on 1/3 (given on v1, missed in v2, restated 2026-11-12)
+- Acked-by: Sven Peter on 3/3, 2026-11-11
 
 ## Mails
 

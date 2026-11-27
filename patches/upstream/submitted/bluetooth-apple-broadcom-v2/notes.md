@@ -1,6 +1,6 @@
 # [PATCH v2 0/2] Bluetooth: Broadcom controllers of the Apple T2 Macs
 
-- Status: submitted
+- Status: superseded by bluetooth-apple-broadcom-v3
 - Version: v2
 - Date: 2026-11-05
 - Base: bluetooth-next `3f425f95ba3`

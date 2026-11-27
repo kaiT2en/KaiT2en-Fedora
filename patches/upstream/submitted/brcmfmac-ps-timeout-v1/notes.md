@@ -1,11 +1,12 @@
 # [PATCH] wifi: brcmfmac: use a 200 ms power save timeout by default
 
-- Status: submitted
+- Status: applied to wireless-next by Johannes Berg, 2026-11-24, commit `d87b05dc6c03`
 - Version: v1
 - Date: 2026-11-04
 - Base: wireless-next `991a73f4909`
 - Message-ID: `<20261104151626.70737-1-dev@deq.rocks>`
 - Link: https://lore.kernel.org/all/20261104151626.70737-1-dev@deq.rocks/
+- Acked-by: Arend van Spriel, 2026-11-15
 
 ## Mails
 

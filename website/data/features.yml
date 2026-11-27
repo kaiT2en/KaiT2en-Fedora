@@ -509,13 +509,13 @@ items:
     title: "ACL priority on Broadcom controllers"
     state: available
     upstream: submitted
-    version: v2
+    version: v3
     project: Linux kernel
     subsystem: Bluetooth / btbcm
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261105085750.120392-1-dev@deq.rocks/"
-    updated: "2026-11-05"
+    link: "https://lore.kernel.org/all/20261127132513.262754-1-dev@deq.rocks/"
+    updated: "2026-11-27"
     notes: >-
       With 2.4 GHz Wi-Fi traffic the controller held Bluetooth packets
       for up to 200 ms and A2DP dropped out. hci_bcm and hci_bcm4377 set
@@ -525,14 +525,14 @@ items:
   - id: brcmfmac-ps-timeout
     title: "Power save timeout"
     state: available
-    upstream: submitted
+    upstream: merged
     version: v1
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
     link: "https://lore.kernel.org/all/20261104151626.70737-1-dev@deq.rocks/"
-    updated: "2026-11-04"
+    updated: "2026-11-24"
     notes: >-
       brcmfmac used a 2 s power save timeout when NetworkManager set
       none. It now uses 200 ms, the macOS value on BCM4377. Idle power
@@ -592,13 +592,13 @@ items:
     title: "LE scanning on Broadcom controllers"
     state: available
     upstream: submitted
-    version: v2
+    version: v3
     project: Linux kernel
     subsystem: Bluetooth / btbcm
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261105085750.120392-1-dev@deq.rocks/"
-    updated: "2026-11-05"
+    link: "https://lore.kernel.org/all/20261127132513.262754-1-dev@deq.rocks/"
+    updated: "2026-11-27"
     notes: >-
       The controllers set extra bits in the LE advertising report type
       and the kernel dropped those reports. Controller duplicate
@@ -700,13 +700,13 @@ items:
     title: "Cold resume after S3"
     state: available
     upstream: submitted
-    version: v2
+    version: v3
     project: Linux kernel
     subsystem: Bluetooth / hci_bcm4377
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261111120248.21062-1-dev@deq.rocks/"
-    updated: "2026-11-11"
+    link: "https://lore.kernel.org/all/20261127132501.262651-1-dev@deq.rocks/"
+    updated: "2026-11-27"
     notes: >-
       The controller loses its firmware in S3. hci_bcm4377 now probes it
       again after such a resume and skips the ring teardown messages
@@ -716,13 +716,13 @@ items:
     title: "Probe with another controller present"
     state: available
     upstream: submitted
-    version: v2
+    version: v3
     project: Linux kernel
     subsystem: Bluetooth / hci_bcm4377
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261111120248.21062-2-dev@deq.rocks/"
-    updated: "2026-11-11"
+    link: "https://lore.kernel.org/all/20261127132501.262651-2-dev@deq.rocks/"
+    updated: "2026-11-27"
     notes: >-
       With another controller on hci0, a USB dongle for example, probe
       returned the new index and the PCI core took it as success without
@@ -769,13 +769,13 @@ items:
     title: "Link power management"
     state: available
     upstream: submitted
-    version: v2
+    version: v3
     project: Linux kernel
     subsystem: Bluetooth / hci_bcm4377
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261111120248.21062-4-dev@deq.rocks/"
-    updated: "2026-11-11"
+    link: "https://lore.kernel.org/all/20261127132501.262651-4-dev@deq.rocks/"
+    updated: "2026-11-27"
     notes: >-
       hci_bcm4377 kept ASPM off on the whole link to the Wi-Fi and
       Bluetooth chip because of a hardware erratum, which held the
