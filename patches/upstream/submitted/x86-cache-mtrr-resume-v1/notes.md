@@ -6,6 +6,7 @@
 - Base: tip/master `c6279551a`
 - Message-ID: `<20261111123747.49446-1-dev@deq.rocks>`
 - Link: https://lore.kernel.org/all/20261111123747.49446-1-dev@deq.rocks/
+- Ping: 2026-11-27 `<20261127150014.285304-1-dev@deq.rocks>`
 - Based on: Chen Yu, https://lore.kernel.org/all/20180319041843.28218-1-yu.c.chen@intel.com/
 - Supersedes: apple-t2-early-cpu-offlining-v1, withdrawn in a reply on its thread
 

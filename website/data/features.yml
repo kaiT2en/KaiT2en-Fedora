@@ -630,22 +630,22 @@ items:
     title: "Cold resume after S3"
     state: available
     upstream: submitted
-    version: v2
+    version: v3
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261111120748.23795-1-dev@deq.rocks/"
-    updated: "2026-11-11"
+    link: "https://lore.kernel.org/all/20261127173549.29335-1-dev@deq.rocks/"
+    updated: "2026-11-27"
     notes: >-
-      The chip loses its firmware in S3 but its registers can read as
-      running, so brcmfmac took the hot resume path and commands timed
-      out. It now reloads the firmware when platform firmware handled
-      the resume and Wake-on-WLAN is off. The suspend service keeps the
-      drivers loaded, so sleep starts 10 to 15 s sooner on BCM4377. The
-      BCM4377 D3 acknowledgement uses patch 5 of Michael Reeves' BCM4388
-      series, carried until merged:
-      https://lore.kernel.org/all/20260925-brcm4388-submit-v1-5-b5cbc2cde2fb@gmail.com/
+      The BCM4364 and BCM4377 lose their firmware in S3 but their
+      registers can read as running, so brcmfmac took the hot resume
+      path and commands timed out. It now reloads the firmware on these
+      chips when platform firmware handled the resume and Wake-on-WLAN
+      is off. The suspend service keeps the drivers loaded, so sleep
+      starts 10 to 15 s sooner on BCM4377. The BCM4377 D3
+      acknowledgement comes from Michael Reeves' BCM4388 series, now in
+      wireless-next.
 
   - id: brcmfmac-d3-ack-reload
     title: "Firmware reload after a missing D3 ACK"
@@ -734,34 +734,34 @@ items:
     title: "BCM4377 flowring delete"
     state: available
     upstream: submitted
-    version: v2
+    version: v3
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261111120748.23795-1-dev@deq.rocks/"
-    updated: "2026-11-11"
+    link: "https://lore.kernel.org/all/20261127173549.29335-5-dev@deq.rocks/"
+    updated: "2026-11-27"
     notes: >-
-      The firmware reports queued packets only after the host deletes a
-      flowring. brcmfmac waited up to 100 ms per flowring first, on
-      every disconnect and suspend, and miscounted them. It now deletes
-      right away.
+      The BCM4377 firmware reports queued packets only after the host
+      deletes a flowring. brcmfmac waited up to 100 ms per flowring
+      first, on every disconnect and suspend. On the BCM4377 it now
+      deletes right away, other chips keep the wait.
 
   - id: brcmfmac-deep-sleep
     title: "Deep sleep on BCM4364 and BCM4377"
     state: available
     upstream: submitted
-    version: v2
+    version: v3
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261111120748.23795-6-dev@deq.rocks/"
-    updated: "2026-11-11"
+    link: "https://lore.kernel.org/all/20261127173549.29335-6-dev@deq.rocks/"
+    updated: "2026-11-27"
     notes: >-
       The firmware supports inband deep sleep, but brcmfmac left it
       disabled, so the chip stayed awake and its latency tolerance held
-      the package out of PC10. brcmfmac now follows the deep sleep
+      the CPU package out of PC10. brcmfmac now follows the deep sleep
       handshake of the firmware and the package reaches PC10 with Wi-Fi
       associated, without ignoring the LTR of the Wi-Fi port.
 

@@ -6,6 +6,7 @@
 - Base: drm-intel-next `7b42cc130be`
 - Message-ID: `<20261108100926.28950-1-dev@deq.rocks>`
 - Link: https://lore.kernel.org/all/20261108100926.28950-1-dev@deq.rocks/
+- Ping: 2026-11-27 `<20261127150021.285379-1-dev@deq.rocks>`, asks for a Patchwork retest, the Intel CI skipped the series because the author is not on its allowlist (series 178109 and 178113)
 
 ## Mails
 

@@ -1,0 +1,52 @@
+From d5a198e135e205223b711c486d6a7432731d4f68 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Sat, 7 Nov 2026 16:28:27 +0100
+Subject: [PATCH wireless-next v3 4/5] wifi: brcmfmac: msgbuf: do not wait for
+ tx status on the BCM4377
+
+The BCM4377 firmware returns the tx status of the queued packets only
+when it gets the flowring delete request, before the delete response.
+brcmf_msgbuf_delete_flowring() waits up to 100 ms for them before it
+sends the request, so every disconnect logs a timeout.
+
+Send the delete right away on the BCM4377. Its tx status still comes
+before the delete response, so pend_8021x_cnt drains as before. Other
+chips keep the wait.
+
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ .../net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c  | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
+index 79c1891db59..195a1a362ba 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
+@@ -14,6 +14,7 @@
+ 
+ #include <brcmu_utils.h>
+ #include <brcmu_wifi.h>
++#include <brcm_hw_ids.h>
+ 
+ #include "core.h"
+ #include "debug.h"
+@@ -1505,8 +1506,13 @@ void brcmf_msgbuf_delete_flowring(struct brcmf_pub *drvr, u16 flowid)
+ 	flow->rings[flowid]->status = RING_CLOSING;
+ 	brcmf_commonring_unlock(commonring_del);
+ 
+-	/* wait for commonring txflow finished */
+-	while (retry && atomic_read(&commonring_del->outstanding_tx)) {
++	/*
++	 * Wait for commonring txflow finished. The BCM4377 firmware returns
++	 * the tx status of the posted packets only on the delete request,
++	 * before the delete response.
++	 */
++	while (drvr->bus_if->chip != BRCM_CC_4377_CHIP_ID && retry &&
++	       atomic_read(&commonring_del->outstanding_tx)) {
+ 		usleep_range(5000, 10000);
+ 		retry--;
+ 	}
+-- 
+2.56.0
+

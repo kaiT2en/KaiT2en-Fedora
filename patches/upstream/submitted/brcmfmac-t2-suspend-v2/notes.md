@@ -1,6 +1,6 @@
 # [PATCH v2 0/5] wifi: brcmfmac: pcie: S3 and deep sleep on the T2 Mac chips
 
-- Status: submitted
+- Status: superseded by brcmfmac-t2-suspend-v3
 - Version: v2
 - Date: 2026-11-11
 - Base: wireless-next `991a73f4909` with Michael Reeves' BCM4388 series 01-05

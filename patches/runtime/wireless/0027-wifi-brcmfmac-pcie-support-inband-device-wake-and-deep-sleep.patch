@@ -3,23 +3,39 @@ Subject: [PATCH] wifi: brcmfmac: pcie: support inband device wake and deep sleep
 
 The BCM4364 and BCM4377 firmware report inband deep sleep in the PCIe
 shared flags. The driver only advertises that it has no out-of-band
-device wake, which leaves deep sleep disabled. The firmware keeps
-its latency tolerance short enough to hold the package out of PC10.
+device wake. That leaves deep sleep disabled. The firmware stays awake
+and its latency tolerance holds the CPU package out of PC10.
 
-Advertise inband device wake when the firmware supports it and follow
-the handshake of the firmware. The device asks for deep sleep while
-device wake is deasserted, the host acknowledges it once it has nothing
-to send, asserts device wake before it uses the rings again and waits
-for the exit note, and deasserts device wake after 200 ms without ring
-writes. The ring lock hooks cover every host to device ring writer. A
-system suspend asserts device wake before D3_INFORM and acknowledges no
-deep sleep request until the resume.
+On these chips, advertise inband device wake when the firmware supports
+it and the mailbox goes over the control ring. It comes on top of no
+out-of-band device wake, as in Broadcom's DHD driver.
 
+The host then follows the handshake of the firmware:
+- The device asks for deep sleep while device wake is deasserted.
+- The host acknowledges once it has nothing to send.
+- Before it uses the rings again, it asserts device wake and waits for
+  the exit note.
+- After 200 ms without ring writes, it deasserts device wake.
+
+Hooks around the ring lock cover every host to device ring writer. A
+system suspend asserts device wake before D3_INFORM and keeps the
+device out of deep sleep until the resume. Removing the device asserts
+device wake first, so brcmf_detach() still reaches it.
+
+Tested on a MacBookPro15,1 (BCM4364 B2), a MacBookPro16,1 (BCM4364 B3)
+and a MacBookAir9,1 (BCM4377). At idle with Wi-Fi associated, the
+firmware enters and leaves deep sleep, also after S3. Traffic works,
+and the driver unloads with deep sleep active. The CPU package reaches
+PC10 without ignoring the latency tolerance of the Wi-Fi port.
+
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+
 ---
+index e44236c..881505b 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/commonring.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/commonring.c
-@@ -28,6 +28,16 @@
+@@ -28,6 +28,16 @@ void brcmf_commonring_register_cb(struct brcmf_commonring *commonring,
  }
  
  
@@ -36,7 +52,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  void brcmf_commonring_config(struct brcmf_commonring *commonring, u16 depth,
  			     u16 item_len, void *buf_addr)
  {
-@@ -53,6 +63,8 @@
+@@ -53,6 +63,8 @@ void brcmf_commonring_lock(struct brcmf_commonring *commonring)
  {
  	unsigned long flags;
  
@@ -45,7 +61,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  	spin_lock_irqsave(&commonring->lock, flags);
  	commonring->flags = flags;
  }
-@@ -62,6 +74,8 @@
+@@ -62,6 +74,8 @@ void brcmf_commonring_unlock(struct brcmf_commonring *commonring)
  		__releases(&commonring->lock)
  {
  	spin_unlock_irqrestore(&commonring->lock, commonring->flags);
@@ -54,9 +70,10 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  }
  
  
+index 7fb11f4..a27be6d 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/commonring.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/commonring.h
-@@ -20,6 +20,8 @@
+@@ -20,6 +20,8 @@ struct brcmf_commonring {
  	int (*cr_update_wptr)(void *ctx);
  	int (*cr_write_rptr)(void *ctx);
  	int (*cr_write_wptr)(void *ctx);
@@ -65,7 +82,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  
  	void *cr_ctx;
  
-@@ -38,6 +40,9 @@
+@@ -38,6 +40,9 @@ void brcmf_commonring_register_cb(struct brcmf_commonring *commonring,
  				  int (*cr_update_wptr)(void *ctx),
  				  int (*cr_write_rptr)(void *ctx),
  				  int (*cr_write_wptr)(void *ctx), void *ctx);
@@ -75,9 +92,10 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  void brcmf_commonring_config(struct brcmf_commonring *commonring, u16 depth,
  			     u16 item_len, void *buf_addr);
  void brcmf_commonring_lock(struct brcmf_commonring *commonring);
+index aee29f4..01f6bbd 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
-@@ -222,10 +222,12 @@
+@@ -222,10 +222,12 @@ static const struct brcmf_firmware_mapping brcmf_pcie_fwnames[] = {
  #define BRCMF_PCIE_SHARED_DMA_2B_IDX		0x100000
  #define BRCMF_PCIE_SHARED_USE_MAILBOX		0x2000000
  #define BRCMF_PCIE_SHARED_HOSTRDY_DB1		0x10000000
@@ -90,7 +108,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  #define BRCMF_HOSTCAP_H2D_DAR			0x10000
  
  #define BRCMF_PCIE_FLAGS_HTOD_SPLIT		0x4000
-@@ -274,6 +276,11 @@
+@@ -274,6 +276,11 @@ static const struct brcmf_firmware_mapping brcmf_pcie_fwnames[] = {
  #define BRCMF_H2D_HOST_DS_ACK			0x00000002
  #define BRCMF_H2D_HOST_D0_INFORM_IN_USE		0x00000008
  #define BRCMF_H2D_HOST_D0_INFORM		0x00000010
@@ -102,7 +120,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  
  #define BRCMF_PCIE_MBDATA_TIMEOUT		msecs_to_jiffies(2000)
  
-@@ -338,6 +345,15 @@
+@@ -338,6 +345,15 @@ struct brcmf_otp_params {
  	bool valid;
  };
  
@@ -118,7 +136,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  struct brcmf_pciedev_info {
  	enum brcmf_pcie_state state;
  	bool in_irq;
-@@ -371,6 +387,16 @@
+@@ -371,6 +387,18 @@ struct brcmf_pciedev_info {
  	struct brcmf_mp_device *settings;
  	struct brcmf_otp_params otp;
  	bool fwseed;
@@ -130,22 +148,28 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	/* serializes the deep sleep mailbox messages */
 +	struct mutex ds_mutex;
 +	struct task_struct *ds_sender;
++	/* the interrupt thread while it runs */
++	struct task_struct *irq_thread;
 +	wait_queue_head_t ds_wait;
 +	struct delayed_work ds_deassert_work;
  #ifdef DEBUG
  	u32 console_interval;
  	bool console_active;
-@@ -892,17 +918,184 @@
+@@ -892,17 +920,219 @@ brcmf_pcie_send_mb_data(struct brcmf_pciedev_info *devinfo, u32 htod_mb_data)
  }
  
  
-+static void brcmf_pcie_ds_send(struct brcmf_pciedev_info *devinfo, u32 data)
++static int brcmf_pcie_ds_send(struct brcmf_pciedev_info *devinfo, u32 data)
 +{
++	int err;
++
 +	mutex_lock(&devinfo->ds_mutex);
 +	WRITE_ONCE(devinfo->ds_sender, current);
-+	brcmf_pcie_send_mb_data(devinfo, data);
++	err = brcmf_pcie_send_mb_data(devinfo, data);
 +	WRITE_ONCE(devinfo->ds_sender, NULL);
 +	mutex_unlock(&devinfo->ds_mutex);
++
++	return err;
 +}
 +
 +/* The handshake messages themselves go through the hooked rings */
@@ -172,37 +196,62 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	return false;
 +}
 +
++/* Without the ack the device stays awake */
++static void brcmf_pcie_ds_ack(struct brcmf_pciedev_info *devinfo)
++{
++	if (!brcmf_pcie_ds_send(devinfo, BRCMF_H2D_HOST_DS_ACK))
++		return;
++
++	spin_lock(&devinfo->ds_lock);
++	if (devinfo->ds_state == BRCMF_PCIE_DS_SLEEP)
++		devinfo->ds_state = BRCMF_PCIE_DS_ALLOWED;
++	spin_unlock(&devinfo->ds_lock);
++}
++
++static bool brcmf_pcie_ds_exited(struct brcmf_pciedev_info *devinfo)
++{
++	return READ_ONCE(devinfo->ds_state) != BRCMF_PCIE_DS_EXIT_WAIT ||
++	       READ_ONCE(devinfo->state) != BRCMFMAC_PCIE_STATE_UP;
++}
++
 +static void brcmf_pcie_ds_wake(struct brcmf_pciedev_info *devinfo)
 +{
-+	bool assert = false, wait;
++	bool up, assert = false, wait;
 +
 +	if (brcmf_pcie_ds_skip(devinfo))
 +		return;
 +
++	/* A device that is not up does not answer */
++	up = READ_ONCE(devinfo->state) == BRCMFMAC_PCIE_STATE_UP;
 +	spin_lock(&devinfo->ds_lock);
 +	devinfo->ds_active++;
-+	if (devinfo->ds_state == BRCMF_PCIE_DS_SLEEP) {
++	if (up && devinfo->ds_state == BRCMF_PCIE_DS_SLEEP) {
 +		devinfo->ds_state = BRCMF_PCIE_DS_EXIT_WAIT;
 +		assert = true;
 +	}
-+	wait = devinfo->ds_state == BRCMF_PCIE_DS_EXIT_WAIT;
++	wait = up && devinfo->ds_state == BRCMF_PCIE_DS_EXIT_WAIT;
 +	spin_unlock(&devinfo->ds_lock);
 +
 +	if (assert) {
 +		brcmf_dbg(PCIE, "deep sleep: assert device wake\n");
-+		brcmf_pcie_ds_send(devinfo, BRCMF_H2D_HOST_DW_ASSERT);
++		if (brcmf_pcie_ds_send(devinfo, BRCMF_H2D_HOST_DW_ASSERT)) {
++			spin_lock(&devinfo->ds_lock);
++			if (devinfo->ds_state == BRCMF_PCIE_DS_EXIT_WAIT)
++				devinfo->ds_state = BRCMF_PCIE_DS_SLEEP;
++			spin_unlock(&devinfo->ds_lock);
++			wake_up(&devinfo->ds_wait);
++			return;
++		}
 +	}
 +	if (!wait)
 +		return;
 +
 +	/* The exit note arrives through the interrupt thread itself */
-+	if (devinfo->in_irq) {
++	if (READ_ONCE(devinfo->irq_thread) == current) {
 +		usleep_range(1000, 1100);
 +		return;
 +	}
-+	if (wait_event_timeout(devinfo->ds_wait,
-+			       READ_ONCE(devinfo->ds_state) !=
-+			       BRCMF_PCIE_DS_EXIT_WAIT,
++	if (wait_event_timeout(devinfo->ds_wait, brcmf_pcie_ds_exited(devinfo),
 +			       BRCMF_PCIE_DS_EXIT_TIMEOUT))
 +		return;
 +
@@ -228,7 +277,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +
 +	if (ack) {
 +		brcmf_dbg(PCIE, "deep sleep: ack pending request\n");
-+		brcmf_pcie_ds_send(devinfo, BRCMF_H2D_HOST_DS_ACK);
++		brcmf_pcie_ds_ack(devinfo);
 +	}
 +}
 +
@@ -247,9 +296,15 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	}
 +	spin_unlock(&devinfo->ds_lock);
 +
-+	if (deassert) {
-+		brcmf_dbg(PCIE, "deep sleep: deassert device wake\n");
-+		brcmf_pcie_ds_send(devinfo, BRCMF_H2D_HOST_DW_DEASSERT);
++	if (!deassert)
++		return;
++
++	brcmf_dbg(PCIE, "deep sleep: deassert device wake\n");
++	if (brcmf_pcie_ds_send(devinfo, BRCMF_H2D_HOST_DW_DEASSERT)) {
++		spin_lock(&devinfo->ds_lock);
++		if (devinfo->ds_state == BRCMF_PCIE_DS_ALLOWED)
++			devinfo->ds_state = BRCMF_PCIE_DS_AWAKE;
++		spin_unlock(&devinfo->ds_lock);
 +	}
 +}
 +
@@ -273,7 +328,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 +	spin_unlock(&devinfo->ds_lock);
 +
 +	if (ack)
-+		brcmf_pcie_ds_send(devinfo, BRCMF_H2D_HOST_DS_ACK);
++		brcmf_pcie_ds_ack(devinfo);
 +}
 +
 +static void brcmf_pcie_ds_exit_note(struct brcmf_pciedev_info *devinfo)
@@ -323,7 +378,23 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  	if (dtoh_mb_data & BRCMF_D2H_DEV_D3_ACK) {
  		brcmf_dbg(PCIE, "D2H_MB_DATA: D3 ACK\n");
  		devinfo->mbdata_completed = true;
-@@ -1308,6 +1501,10 @@
+@@ -1072,6 +1302,7 @@ static irqreturn_t brcmf_pcie_isr_thread(int irq, void *arg)
+ 		return IRQ_HANDLED;
+ 
+ 	devinfo->in_irq = true;
++	WRITE_ONCE(devinfo->irq_thread, current);
+ 	status = brcmf_pcie_read_pcie32(devinfo, devinfo->reginfo->mailboxint);
+ 	brcmf_dbg(PCIE, "Enter %x\n", status);
+ 	if (status) {
+@@ -1089,6 +1320,7 @@ static irqreturn_t brcmf_pcie_isr_thread(int irq, void *arg)
+ 		brcmf_pcie_write_pcie32(devinfo, devinfo->reginfo->mailboxmask,
+ 					devinfo->reginfo->int_d2h_db |
+ 					devinfo->reginfo->int_fn0);
++	WRITE_ONCE(devinfo->irq_thread, NULL);
+ 	devinfo->in_irq = false;
+ 	return IRQ_HANDLED;
+ }
+@@ -1308,6 +1540,10 @@ brcmf_pcie_alloc_dma_and_ring(struct brcmf_pciedev_info *devinfo, u32 ring_id,
  				     brcmf_pcie_ring_mb_update_wptr,
  				     brcmf_pcie_ring_mb_write_rptr,
  				     brcmf_pcie_ring_mb_write_wptr, ring);
@@ -334,7 +405,7 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  
  	return (ring);
  }
-@@ -1501,6 +1698,9 @@
+@@ -1501,6 +1737,9 @@ static int brcmf_pcie_init_ringbuffers(struct brcmf_pciedev_info *devinfo)
  					     brcmf_pcie_ring_mb_write_rptr,
  					     brcmf_pcie_ring_mb_write_wptr,
  					     ring);
@@ -344,18 +415,27 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  		ring->w_idx_addr = h2d_w_idx_ptr;
  		ring->r_idx_addr = h2d_r_idx_ptr;
  		h2d_w_idx_ptr += idx_offset;
-@@ -1821,6 +2021,10 @@
+@@ -1821,6 +2060,19 @@ brcmf_pcie_init_share_ram_info(struct brcmf_pciedev_info *devinfo,
  		if (shared->flags & BRCMF_PCIE_SHARED_DAR)
  			host_cap |= BRCMF_HOSTCAP_H2D_DAR;
  		host_cap |= BRCMF_HOSTCAP_DS_NO_OOB_DW;
-+		if (shared->flags & BRCMF_PCIE_SHARED_INBAND_DS) {
++		/*
++		 * Inband device wake comes on top of no out-of-band device
++		 * wake, as Broadcom's DHD driver sets it. The handshake is
++		 * tested with the mailbox on the control ring of the BCM4364
++		 * and BCM4377.
++		 */
++		if ((shared->flags & BRCMF_PCIE_SHARED_INBAND_DS) &&
++		    shared->mb_via_ctl &&
++		    (devinfo->ci->chip == BRCM_CC_4364_CHIP_ID ||
++		     devinfo->ci->chip == BRCM_CC_4377_CHIP_ID)) {
 +			host_cap |= BRCMF_HOSTCAP_DS_INBAND_DW;
 +			devinfo->ds_state = BRCMF_PCIE_DS_ALLOWED;
 +		}
  
  		brcmf_pcie_write_tcm32(devinfo, sharedram_addr +
  				       BRCMF_SHARED_HOST_CAP_OFFSET,
-@@ -2645,6 +2849,11 @@
+@@ -2645,6 +2897,11 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
  		return ret;
  
  	devinfo->pdev = pdev;
@@ -367,16 +447,42 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  	pcie_bus_dev = NULL;
  	devinfo->ci = brcmf_chip_attach(devinfo, pdev->device,
  					&brcmf_pcie_buscore_ops);
-@@ -2772,6 +2981,8 @@
+@@ -2772,6 +3029,15 @@ brcmf_pcie_remove(struct pci_dev *pdev)
  		return;
  
  	devinfo = bus->bus_priv.pcie->devinfo;
-+	WRITE_ONCE(devinfo->ds_state, BRCMF_PCIE_DS_NONE);
-+	cancel_delayed_work_sync(&devinfo->ds_deassert_work);
++	if (devinfo->ds_state != BRCMF_PCIE_DS_NONE) {
++		/* brcmf_detach() still sends ioctls and flowring deletes */
++		brcmf_pcie_ds_wake(devinfo);
++		spin_lock(&devinfo->ds_lock);
++		devinfo->ds_state = BRCMF_PCIE_DS_NONE;
++		spin_unlock(&devinfo->ds_lock);
++		/* nothing queues it once the state is NONE */
++		cancel_delayed_work_sync(&devinfo->ds_deassert_work);
++	}
  	brcmf_pcie_bus_console_read(devinfo, false);
  	brcmf_pcie_fwcon_timer(devinfo, false);
  
-@@ -2826,6 +3037,15 @@
+@@ -2813,6 +3079,18 @@ brcmf_pcie_remove(struct pci_dev *pdev)
+ #ifdef CONFIG_PM
+ 
+ 
++/* The device is awake, let it sleep again once idle */
++static void brcmf_pcie_ds_end_suspend(struct brcmf_pciedev_info *devinfo)
++{
++	spin_lock(&devinfo->ds_lock);
++	if (devinfo->ds_state != BRCMF_PCIE_DS_NONE) {
++		devinfo->ds_suspend = false;
++		devinfo->ds_state = BRCMF_PCIE_DS_AWAKE;
++		brcmf_pcie_ds_idle_locked(devinfo);
++	}
++	spin_unlock(&devinfo->ds_lock);
++}
++
+ static int brcmf_pcie_pm_enter_D3(struct device *dev)
+ {
+ 	struct brcmf_pciedev_info *devinfo;
+@@ -2826,6 +3104,15 @@ static int brcmf_pcie_pm_enter_D3(struct device *dev)
  	brcmf_pcie_fwcon_timer(devinfo, false);
  	brcmf_bus_change_state(bus, BRCMF_BUS_DOWN);
  
@@ -392,17 +498,19 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  	devinfo->mbdata_completed = false;
  	brcmf_pcie_send_mb_data(devinfo, BRCMF_H2D_HOST_D3_INFORM);
  
-@@ -2876,6 +3096,13 @@
+@@ -2834,6 +3121,7 @@ static int brcmf_pcie_pm_enter_D3(struct device *dev)
+ 	if (!devinfo->mbdata_completed) {
+ 		if (devinfo->wowl_enabled) {
+ 			brcmf_err(bus, "Timeout on response for entering D3 substate\n");
++			brcmf_pcie_ds_end_suspend(devinfo);
+ 			brcmf_bus_change_state(bus, BRCMF_BUS_UP);
+ 			return -EIO;
+ 		}
+@@ -2878,6 +3166,7 @@ static int brcmf_pcie_pm_leave_D3(struct device *dev)
  		if (brcmf_pcie_send_mb_data(devinfo, BRCMF_H2D_HOST_D0_INFORM))
  			goto cleanup;
  		brcmf_dbg(PCIE, "Hot resume, continue....\n");
-+		if (devinfo->ds_state != BRCMF_PCIE_DS_NONE) {
-+			spin_lock(&devinfo->ds_lock);
-+			devinfo->ds_suspend = false;
-+			devinfo->ds_state = BRCMF_PCIE_DS_AWAKE;
-+			brcmf_pcie_ds_idle_locked(devinfo);
-+			spin_unlock(&devinfo->ds_lock);
-+		}
++		brcmf_pcie_ds_end_suspend(devinfo);
  		brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
  		brcmf_bus_change_state(bus, BRCMF_BUS_UP);
  		brcmf_pcie_intr_enable(devinfo);

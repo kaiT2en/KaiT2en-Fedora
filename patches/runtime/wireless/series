@@ -19,8 +19,8 @@
 0019-wifi-brcmfmac-set-the-PCIe-state-before-D0-INFORM-on-resume.patch
 0020-wifi-brcmfmac-pcie-probe-again-after-a-resume-through-firmware.patch
 0021-Bluetooth-hci-bcm4377-probe-again-after-a-resume-through-firmware.patch
-0022-wifi-brcmfmac-msgbuf-send-the-flowring-delete-without-waiting-for-tx-status.patch
-0023-wifi-brcmfmac-pcie-skip-the-host-ready-doorbell-at-init-once-it-is-a-capability.patch
+0022-wifi-brcmfmac-msgbuf-do-not-wait-for-tx-status-on-the-BCM4377.patch
+0023-wifi-brcmfmac-pcie-skip-the-host-ready-doorbell-at-init-on-the-BCM4364.patch
 0024-Bluetooth-hci-bcm4377-treat-only-negative-hci-register-dev-returns-as-errors.patch
 0025-wifi-brcmfmac-pcie-make-the-antenna-SKU-check-optional-on-BCM4364-3.patch
 0026-Bluetooth-hci-bcm4377-keep-ASPM-off-only-while-the-firmware-boots.patch

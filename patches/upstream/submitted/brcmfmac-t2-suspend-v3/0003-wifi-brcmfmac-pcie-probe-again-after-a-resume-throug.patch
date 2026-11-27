@@ -1,0 +1,54 @@
+From cac19b1fc6fcf1fde2aaab3172c536c95d2a3639 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Sat, 7 Nov 2026 16:28:27 +0100
+Subject: [PATCH wireless-next v3 3/5] wifi: brcmfmac: pcie: probe again after
+ a resume through firmware
+
+After ACPI S3 the BCM4364 and BCM4377 of the T2 Macs come back without
+their firmware, but the interrupt mask can read back nonzero, so
+brcmf_pcie_pm_leave_D3() takes the hot resume path and every command
+times out afterwards.
+
+On these chips, when the platform firmware handled the resume and WoWL
+is off, go straight to the existing remove and re-probe path. Other
+chips keep the hot resume path.
+
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ .../net/wireless/broadcom/brcm80211/brcmfmac/pcie.c  | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+index 4aed21061dd..ea51ef6189d 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -7,6 +7,7 @@
+ #include <linux/module.h>
+ #include <linux/firmware.h>
+ #include <linux/pci.h>
++#include <linux/suspend.h>
+ #include <linux/vmalloc.h>
+ #include <linux/delay.h>
+ #include <linux/interrupt.h>
+@@ -3107,6 +3108,17 @@ static int brcmf_pcie_pm_leave_D3(struct device *dev)
+ 	devinfo = bus->bus_priv.pcie->devinfo;
+ 	brcmf_dbg(PCIE, "Enter, dev=%p, bus=%p\n", dev, bus);
+ 
++	/*
++	 * Without WoWL the BCM4364 and BCM4377 of the T2 Macs are powered off
++	 * when the platform firmware handles the system sleep, as with ACPI
++	 * S3, and come back without their firmware. Their registers can still
++	 * read back nonzero, so probe them again.
++	 */
++	if (pm_resume_via_firmware() && !devinfo->wowl_enabled &&
++	    (devinfo->ci->chip == BRCM_CC_4364_CHIP_ID ||
++	     devinfo->ci->chip == BRCM_CC_4377_CHIP_ID))
++		goto cleanup;
++
+ 	/* Check if device is still up and running, if so we are ready */
+ 	if (brcmf_pcie_read_pcie32(devinfo, devinfo->reginfo->intmask) != 0) {
+ 		brcmf_dbg(PCIE, "Try to wakeup device....\n");
+-- 
+2.56.0
+

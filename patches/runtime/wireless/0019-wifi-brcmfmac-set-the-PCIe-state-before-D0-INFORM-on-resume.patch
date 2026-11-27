@@ -1,18 +1,23 @@
 From: Andre Eikmeyer <dev@deq.rocks>
-Subject: [PATCH] wifi: brcmfmac: set the PCIe state before D0_INFORM on resume
+Subject: [PATCH] wifi: brcmfmac: pcie: set the state before D0_INFORM on resume
 
-With the mailbox moved to the control ring, brcmf_pcie_pm_leave_D3()
-sends D0_INFORM while devinfo->state is still DOWN. The ring write path
-refuses that with -EIO, so every hot resume falls back to remove and
-re-probe:
+With the mailbox on the control ring, D0_INFORM goes through the ring
+write path, which refuses to write while devinfo->state is DOWN.
+brcmf_pcie_pm_leave_D3() sets the state only after D0_INFORM, so every
+hot resume fails and falls back to remove and re-probe:
 
   brcmf_pcie_send_mb_data: Failed to send H2D mailbox data (-5)
 
-Set the state to UP before D0_INFORM and back to DOWN when the hot
-resume fails.
+Set the state before D0_INFORM and back to DOWN when the hot resume
+fails.
 
+Fixes: a83a99d063a0 ("wifi: brcmfmac: Negotiate PCIe mailbox transport with firmware")
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
+Acked-by: Arend van Spriel <arend.vanspriel@broadcom.com>
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+
 ---
+index 4de157d..231a2fb 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 @@ -2838,10 +2838,10 @@ static int brcmf_pcie_pm_leave_D3(struct device *dev)

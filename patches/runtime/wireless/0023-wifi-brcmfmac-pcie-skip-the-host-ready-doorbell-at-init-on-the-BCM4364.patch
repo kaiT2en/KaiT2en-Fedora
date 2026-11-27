@@ -1,25 +1,26 @@
 From: Andre Eikmeyer <dev@deq.rocks>
-Subject: [PATCH] wifi: brcmfmac: pcie: skip the host ready doorbell at init once it is a capability
+Subject: [PATCH] wifi: brcmfmac: pcie: skip the host ready doorbell at init on the BCM4364
 
-Since the host capabilities are written, brcmfmac enables host ready
-when the firmware reports BRCMF_PCIE_SHARED_HOSTRDY_DB1, and still rings
-the host ready doorbell in brcmf_pcie_preinit(). The BCM4364B3 firmware
-of the MacBookPro16,1 halts on that doorbell before it answers the first
-ioctl, and the BCM4364B2 firmware of the MacBookPro15,1 does so on some
-loads:
+With host ready in the host capabilities, the BCM4364 firmware halts on
+the doorbell that brcmf_pcie_preinit() rings, before it answers the
+first ioctl. The B3 of the MacBookPro16,1 does so on every load, the B2
+of the MacBookPro15,1 on some:
 
   brcmf_pcie_handle_mb_data D2H_MB_DATA: FW HALT
   brcmf_attach: dongle is not responding: err=-5
 
-Without the host ready capability the BCM4377 firmware leaves the first
-ioctl unanswered, so the capability stays. With host ready enabled the
-firmware takes the doorbell as the exit from D3, which is where Broadcom's
-DHD driver rings it, after D0_INFORM. Ring it at init only when host ready
-is not a capability. brcmf_pcie_pm_leave_D3() keeps ringing it after
-D0_INFORM.
+The BCM4364 loads without host ready in the host capabilities, or with
+it but without the doorbell at init. The BCM4377 does not answer
+without host ready in the host capabilities, so the capability has to
+stay, and it runs with the doorbell at init. Skip the doorbell at init
+on the BCM4364 when host ready is a capability.
 
+Fixes: a83a99d063a0 ("wifi: brcmfmac: Negotiate PCIe mailbox transport with firmware")
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+
 ---
+index aee982c..9a3ccf2 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
 @@ -326,6 +326,7 @@ struct brcmf_pcie_shared_info {
@@ -36,11 +37,11 @@ Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
  	brcmf_pcie_intr_enable(buspub->devinfo);
 -	brcmf_pcie_hostready(buspub->devinfo);
 +	/*
-+	 * Once the host capabilities enable host ready, the firmware takes the
-+	 * doorbell as the exit from D3 only. The BCM4364 firmware halts on it
-+	 * here.
++	 * With host ready in the host capabilities, the BCM4364 firmware halts
++	 * on this doorbell.
 +	 */
-+	if (!buspub->devinfo->shared.hostrdy)
++	if (!buspub->devinfo->shared.hostrdy ||
++	    buspub->devinfo->ci->chip != BRCM_CC_4364_CHIP_ID)
 +		brcmf_pcie_hostready(buspub->devinfo);
  
  	return 0;

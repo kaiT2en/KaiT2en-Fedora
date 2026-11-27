@@ -1,0 +1,69 @@
+From 331f28a0acba9ab4b22baa593e67a07f3025d641 Mon Sep 17 00:00:00 2001
+From: Andre Eikmeyer <dev@deq.rocks>
+Date: Sat, 7 Nov 2026 10:30:19 +0100
+Subject: [PATCH wireless-next v3 2/5] wifi: brcmfmac: pcie: skip the host
+ ready doorbell at init on the BCM4364
+
+With host ready in the host capabilities, the BCM4364 firmware halts on
+the doorbell that brcmf_pcie_preinit() rings, before it answers the
+first ioctl. The B3 of the MacBookPro16,1 does so on every load, the B2
+of the MacBookPro15,1 on some:
+
+  brcmf_pcie_handle_mb_data D2H_MB_DATA: FW HALT
+  brcmf_attach: dongle is not responding: err=-5
+
+The BCM4364 loads without host ready in the host capabilities, or with
+it but without the doorbell at init. The BCM4377 does not answer
+without host ready in the host capabilities, so the capability has to
+stay, and it runs with the doorbell at init. Skip the doorbell at init
+on the BCM4364 when host ready is a capability.
+
+Fixes: a83a99d063a0 ("wifi: brcmfmac: Negotiate PCIe mailbox transport with firmware")
+Tested-by: Yossef Osman <Yossef.Osman@proton.me>
+Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
+---
+ .../net/wireless/broadcom/brcm80211/brcmfmac/pcie.c | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+index 6f329eca2cd..4aed21061dd 100644
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -330,6 +330,7 @@ struct brcmf_pcie_shared_info {
+ 	dma_addr_t ringupd_dmahandle;
+ 	u8 version;
+ 	bool mb_via_ctl;
++	bool hostrdy;
+ };
+ 
+ #define BRCMF_OTP_MAX_PARAM_LEN 16
+@@ -1648,7 +1649,13 @@ static int brcmf_pcie_preinit(struct device *dev)
+ 	brcmf_dbg(PCIE, "Enter\n");
+ 
+ 	brcmf_pcie_intr_enable(buspub->devinfo);
+-	brcmf_pcie_hostready(buspub->devinfo);
++	/*
++	 * With host ready in the host capabilities, the BCM4364 firmware halts
++	 * on this doorbell.
++	 */
++	if (!buspub->devinfo->shared.hostrdy ||
++	    buspub->devinfo->ci->chip != BRCM_CC_4364_CHIP_ID)
++		brcmf_pcie_hostready(buspub->devinfo);
+ 
+ 	return 0;
+ }
+@@ -1855,8 +1862,10 @@ brcmf_pcie_init_share_ram_info(struct brcmf_pciedev_info *devinfo,
+ 			!(shared->flags & BRCMF_PCIE_SHARED_USE_MAILBOX);
+ 
+ 		host_cap = shared->version;
+-		if (shared->flags & BRCMF_PCIE_SHARED_HOSTRDY_DB1)
++		if (shared->flags & BRCMF_PCIE_SHARED_HOSTRDY_DB1) {
+ 			host_cap |= BRCMF_HOSTCAP_H2D_ENABLE_HOSTRDY;
++			shared->hostrdy = true;
++		}
+ 		if (shared->flags & BRCMF_PCIE_SHARED_DAR)
+ 			host_cap |= BRCMF_HOSTCAP_H2D_DAR;
+ 		host_cap |= BRCMF_HOSTCAP_DS_NO_OOB_DW;
+-- 
+2.56.0
+
