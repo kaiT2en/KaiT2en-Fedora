@@ -103,7 +103,7 @@
     },
     "brcmfmac-cold-resume": {
       "message_id": "1568654937867555029",
-      "hash": "da7b8060167f875ad4d42f7d2cacea8da5a01e3c8f9db1be5974e46607f729dc"
+      "hash": "783ef0324d46fecf874198fede5b1aa32b32a0801af866784452ba7239685ef6"
     },
     "brcmfmac-d3-ack-reload": {
       "message_id": "1567559811908903124",
@@ -127,11 +127,11 @@
     },
     "brcmfmac-flowring-delete": {
       "message_id": "1568654946235191326",
-      "hash": "34ee50ce767cedc91df5be5c592888da710a34ca49667c0858fd96d10fd7a031"
+      "hash": "1f199e002a1eedd8ebb3e0910bf9a73d9f61425cfc19143fd1931c9e31bb3019"
     },
     "brcmfmac-deep-sleep": {
       "message_id": "1570056616991264896",
-      "hash": "df79c71af955f389f4b3a1b8540ee8be271194113570364f05bf2e5541fea64d"
+      "hash": "c0d51a0410274dd85ea8ace5e14b1774efc6712a4ab96a960a0d396635c084ef"
     },
     "bluetooth-bcm4377-aspm": {
       "message_id": "1570056621458067526",
