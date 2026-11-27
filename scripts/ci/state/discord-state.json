@@ -79,11 +79,11 @@
     },
     "btbcm-acl-priority": {
       "message_id": "1567559781986603140",
-      "hash": "a10a8e410e82471243b8633dc82460326004367590f84a35534e4431a10ef576"
+      "hash": "a0917c9c740250ea47eb04323939904bb3ac13cbabcf7ef241d97466934c4a5b"
     },
     "brcmfmac-ps-timeout": {
       "message_id": "1567559786172649515",
-      "hash": "7b335653fe9d3fd7eb98347b6a7e6939a026eeef5573095cc30551e976824ccc"
+      "hash": "5dc038df208546e3fa1039ace8ed762571506f2b80fd51cb260153660db727b8"
     },
     "brcmfmac-bcm4364-ap-fwauth": {
       "message_id": "1567559795186204756",
@@ -91,11 +91,11 @@
     },
     "brcmfmac-awdl": {
       "message_id": "1567559799921713182",
-      "hash": "bd18cb268c5ab92d660d373e5ad4ce4605a165a27e80b6a949f5867ebae3b4a5"
+      "hash": "e56689695c6f5f44d1bbaa4b92062f471ffdd8817b07dad2aedf0adcd45adfce"
     },
     "hci-bcm-le-scan": {
       "message_id": "1567559803453313107",
-      "hash": "f4093398777f5dd6064cde906e729e5a36aa39f59674e9d509346d84bf360240"
+      "hash": "98f43f1835513cad23057507abce3c1dad5f1a8141623d25101d93644b456acd"
     },
     "brcmfmac-bcm4364-ndoe": {
       "message_id": "1567559807760597002",
@@ -119,11 +119,11 @@
     },
     "bluetooth-bcm4377-cold-resume": {
       "message_id": "1568654941910736956",
-      "hash": "1ea2e8cfa608c2dc4827e13367210cbe7961b4452daa106460e7fa422cc6efe7"
+      "hash": "3b63c88fc2cacb89c16d5c70f436b248ede37f946e079c29ebf9494938bba20b"
     },
     "bluetooth-bcm4377-register-index": {
       "message_id": "1568983322196185169",
-      "hash": "4cbb5708ae6ef92efb6a4dc76755ef66045a28070639506cc36af80d432c422d"
+      "hash": "c5e61e1cd05fe0d9c67d7ff5be05725b1df9768ffa8f798a74b05f5d4cfc5702"
     },
     "brcmfmac-flowring-delete": {
       "message_id": "1568654946235191326",
@@ -135,7 +135,7 @@
     },
     "bluetooth-bcm4377-aspm": {
       "message_id": "1570056621458067526",
-      "hash": "06e14e1a3e94cb530b2c1c4bc8d8da96598d6668e4375e6e0841ea7a2c7b7854"
+      "hash": "4e08cd8ddda6b77b574ce66c44cbe5647c66eb627ee58d4936b67b614f01c233"
     },
     "card-reader-fix": {
       "message_id": "1572031541599670292",
