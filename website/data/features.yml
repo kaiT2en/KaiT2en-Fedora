@@ -575,18 +575,18 @@ items:
     title: "AWDL on BCM4364 and BCM4377"
     state: available
     upstream: submitted
-    version: v2
+    version: v3
     project: Linux kernel
     subsystem: Wi-Fi / brcmfmac
     authors:
       - deqrocks
-    link: "https://lore.kernel.org/all/20261125190254.176055-1-dev@deq.rocks/"
-    updated: "2026-11-25"
+    link: "https://lore.kernel.org/all/20261127124104.233236-1-dev@deq.rocks/"
+    updated: "2026-11-27"
     notes: >-
       brcmfmac creates the AWDL interface, passes its firmware events to
       user space and carries data over awdl0. The t2-drop service drives
       it as macOS does. The vendor commands are the exception agreed for
-      AWDL, v2 covers the review of v1.
+      AWDL, v3 covers the review of v2.
 
   - id: hci-bcm-le-scan
     title: "LE scanning on Broadcom controllers"

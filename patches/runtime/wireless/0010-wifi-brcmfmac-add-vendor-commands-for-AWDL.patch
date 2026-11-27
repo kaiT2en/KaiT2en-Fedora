@@ -14,19 +14,23 @@ Broadcom OUI on the primary interface, described in vendor.h:
   go to.
 
 The driver sets the other AWDL parameters in the order and with the
-values macOS 15.4.1 sets on a MacBookAir 9,1. awdl_opmode fails while
+values macOS 15.4.1 sets on a MacBookAir9,1. awdl_opmode fails while
 the firmware does not know a new master yet, so every refresh sends the
 frames and the synchronization state, and SET_FRAMES and SET_SYNC
 report only the errors of their own part. The BCM4364 firmware traps
 with the SDB form of slot_bss while the station is on 5 GHz, the new
 quirk AWDL_NO_SDB selects the other form.
 
+When the firmware removes the AWDL interface on its own, a work item
+removes it on the host with RTNL and the wiphy mutex held and then sends
+AWDL_STOPPED.
+
 Tested-by: Yossef Osman <Yossef.Osman@proton.me>
 Tested-by: Aditya Garg <aditya.garg@linux.dev>
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-index 607cc8d..a3db05f 100644
+index e6cdad0..59cd8b4 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 @@ -27,13 +27,17 @@
@@ -47,7 +51,7 @@ index 607cc8d..a3db05f 100644
  #include "awdl.h"
  
  /* The firmware interface index of the AWDL interface */
-@@ -53,10 +57,126 @@ static const u8 brcmf_awdl_bssid[ETH_ALEN] = {
+@@ -53,10 +57,128 @@ static const u8 brcmf_awdl_bssid[ETH_ALEN] = {
  	0x00, 0x25, 0x00, 0xff, 0x94, 0x73,
  };
  
@@ -79,7 +83,7 @@ index 607cc8d..a3db05f 100644
 +	0x00, 0x00, 0x00, 0x00, 0x6e, 0x00, 0x6e, 0x00,
 +};
 +
-+/* Header of awdl_oob_af_auto, the AWDL BSSID at 8, followed by the TLV length */
++/* Header of awdl_oob_af_auto, the AWDL BSSID at 8, then the TLV length */
 +static const u8 brcmf_awdl_oob_hdr[] = {
 +	0xff, 0xff, 0xff, 0xff, 0xd8, 0x40, 0x00, 0x00,
 +	0x00, 0x25, 0x00, 0xff, 0x94, 0x73, 0xff, 0xff,
@@ -158,6 +162,7 @@ index 607cc8d..a3db05f 100644
 +#define BRCMF_AWDL_PEER_IES_MAX		128
 +
 +static void brcmf_awdl_ctrl_work(struct work_struct *work);
++static void brcmf_awdl_remove_work(struct work_struct *work);
 +static void brcmf_awdl_aftx_work(struct wiphy *wiphy, struct wiphy_work *work);
 +static void brcmf_awdl_settle_work(struct wiphy *wiphy,
 +				   struct wiphy_work *work);
@@ -171,12 +176,13 @@ index 607cc8d..a3db05f 100644
 +	spin_lock_init(&awdl->lock);
 +	init_completion(&awdl->if_event);
 +	INIT_WORK(&awdl->ctrl_work, brcmf_awdl_ctrl_work);
++	INIT_WORK(&awdl->remove_work, brcmf_awdl_remove_work);
 +	wiphy_delayed_work_init(&awdl->aftx_work, brcmf_awdl_aftx_work);
 +	wiphy_delayed_work_init(&awdl->settle_work, brcmf_awdl_settle_work);
  }
  
  /*
-@@ -64,6 +184,8 @@ void brcmf_awdl_attach(struct brcmf_pub *drvr)
+@@ -64,6 +186,8 @@ void brcmf_awdl_attach(struct brcmf_pub *drvr)
   * the interface if it is the AWDL interface being created.
   */
  static void brcmf_awdl_drop_if(struct brcmf_pub *drvr, struct brcmf_if *ifp);
@@ -185,21 +191,91 @@ index 607cc8d..a3db05f 100644
  
  bool brcmf_awdl_if_added(struct brcmf_pub *drvr, struct brcmf_if *ifp)
  {
-@@ -116,9 +238,12 @@ bool brcmf_awdl_if_removed(struct brcmf_pub *drvr, struct brcmf_if *ifp)
- 			awdl->ifp = NULL;
+@@ -96,31 +220,34 @@ bool brcmf_awdl_if_added(struct brcmf_pub *drvr, struct brcmf_if *ifp)
+ 
+ /*
+  * Called from the firmware event worker before an interface is removed.
+- * Returns true if the removal of the AWDL interface was requested by
+- * brcmf_awdl_del(), which then removes it. When the firmware removes the
+- * AWDL interface on its own, it is forgotten here and removed by the caller.
++ * Returns true for the AWDL interface, which is then removed by
++ * brcmf_awdl_del() when it requested the removal, or by
++ * brcmf_awdl_remove_work() when the firmware removed it on its own.
+  */
+ bool brcmf_awdl_if_removed(struct brcmf_pub *drvr, struct brcmf_if *ifp)
+ {
+ 	struct brcmf_awdl *awdl = &drvr->awdl;
+-	bool requested = false;
++	bool requested = false, own = false;
+ 
+ 	if (!ifp->awdl)
+ 		return false;
+ 
+ 	spin_lock(&awdl->lock);
+ 	if (awdl->ifp == ifp) {
++		own = true;
+ 		requested = awdl->removing;
+ 		if (requested)
+ 			complete(&awdl->if_event);
+ 		else
+-			awdl->ifp = NULL;
++			awdl->fw_removed = true;
  	}
  	spin_unlock(&awdl->lock);
 -	if (!requested)
-+	if (!requested) {
- 		brcmf_proto_configure_addr_mode(drvr, ifp->ifidx,
- 						ADDR_INDIRECT);
-+		brcmf_awdl_send_result(drvr, BRCMF_VNDR_EVTS_AWDL_STOPPED,
-+				       -ENOLINK, NULL);
-+	}
- 	return requested;
+-		brcmf_proto_configure_addr_mode(drvr, ifp->ifidx,
+-						ADDR_INDIRECT);
+-	return requested;
++	/* The event worker cannot take RTNL and the wiphy mutex, which
++	 * brcmf_awdl_add() and brcmf_awdl_del() hold while they wait for it
++	 */
++	if (own && !requested)
++		schedule_work(&awdl->remove_work);
++	return own;
  }
  
-@@ -268,6 +393,8 @@ int brcmf_awdl_del(struct brcmf_pub *drvr)
+ /* The firmware interface index of the AWDL interface must be free */
+@@ -248,6 +375,21 @@ int brcmf_awdl_add(struct brcmf_pub *drvr, const u8 *mac,
+ 	return 0;
+ }
+ 
++/* Stops AWDL and removes the AWDL interface in the firmware */
++static int brcmf_awdl_fw_del(struct brcmf_pub *drvr, struct brcmf_if *ifp)
++{
++	int err;
++
++	brcmf_fil_iovar_int_set(ifp, "awdl", 0);
++	err = brcmf_fil_iovar_data_set(ifp, "interface_remove", NULL, 0);
++	if (!err && !wait_for_completion_timeout(&drvr->awdl.if_event,
++						 BRCMF_AWDL_IF_TIMEOUT)) {
++		bphy_err(drvr, "no interface event for the AWDL removal\n");
++		err = -ETIMEDOUT;
++	}
++	return err;
++}
++
+ /**
+  * brcmf_awdl_del() - remove the AWDL interface.
+  *
+@@ -255,7 +397,8 @@ int brcmf_awdl_add(struct brcmf_pub *drvr, const u8 *mac,
+  *
+  * Called with RTNL and the wiphy mutex held. Deletes the flowrings of the
+  * AWDL interface, stops AWDL and removes the interface in the firmware and on
+- * the host.
++ * the host. After the firmware removed it on its own, only the host side is
++ * removed.
+  *
+  * Return: 0 or a negative error code.
+  */
+@@ -263,6 +406,7 @@ int brcmf_awdl_del(struct brcmf_pub *drvr)
+ {
+ 	struct brcmf_awdl *awdl = &drvr->awdl;
+ 	struct brcmf_if *ifp;
++	bool fw_removed;
+ 	int err;
+ 
+ 	ASSERT_RTNL();
+@@ -272,25 +416,24 @@ int brcmf_awdl_del(struct brcmf_pub *drvr)
  	if (!ifp)
  		return -ENOENT;
  
@@ -208,7 +284,31 @@ index 607cc8d..a3db05f 100644
  	netif_tx_disable(ifp->ndev);
  	/* Deletes the flowrings of all peers */
  	brcmf_proto_configure_addr_mode(drvr, ifp->ifidx, ADDR_INDIRECT);
-@@ -359,6 +486,510 @@ int brcmf_awdl_decap(struct sk_buff *skb)
+-	brcmf_fil_iovar_int_set(ifp, "awdl", 0);
+ 
+ 	spin_lock(&awdl->lock);
+-	awdl->removing = true;
++	fw_removed = awdl->fw_removed;
++	awdl->removing = !fw_removed;
+ 	reinit_completion(&awdl->if_event);
+ 	spin_unlock(&awdl->lock);
+ 
+-	err = brcmf_fil_iovar_data_set(ifp, "interface_remove", NULL, 0);
+-	if (!err && !wait_for_completion_timeout(&awdl->if_event,
+-						 BRCMF_AWDL_IF_TIMEOUT)) {
+-		bphy_err(drvr, "no interface event for the AWDL removal\n");
+-		err = -ETIMEDOUT;
+-	}
++	/* After the firmware removed it, only the host side is left */
++	err = fw_removed ? 0 : brcmf_awdl_fw_del(drvr, ifp);
+ 
+ 	spin_lock(&awdl->lock);
+ 	awdl->removing = false;
++	awdl->fw_removed = false;
+ 	awdl->ifp = NULL;
+ 	spin_unlock(&awdl->lock);
+ 
+@@ -363,6 +506,541 @@ int brcmf_awdl_decap(struct sk_buff *skb)
  	return 0;
  }
  
@@ -503,18 +603,49 @@ index 607cc8d..a3db05f 100644
 +}
 +
 +/*
++ * Removes the AWDL interface on the host after the firmware removed it on
++ * its own. It holds RTNL and the wiphy mutex like brcmf_awdl_del(), so the
++ * vendor commands and the delayed works never see the interface go away.
++ * AWDL_STOPPED is sent once the interface is gone.
++ */
++static void brcmf_awdl_remove_work(struct work_struct *work)
++{
++	struct brcmf_awdl *awdl = container_of(work, struct brcmf_awdl,
++					       remove_work);
++	struct brcmf_pub *drvr = container_of(awdl, struct brcmf_pub, awdl);
++	bool gone;
++
++	rtnl_lock();
++	wiphy_lock(drvr->wiphy);
++	/* After a STOP, a suspend or the detach there is nothing left */
++	spin_lock(&awdl->lock);
++	gone = awdl->ifp && awdl->fw_removed;
++	spin_unlock(&awdl->lock);
++	if (gone && !brcmf_awdl_del(drvr))
++		brcmf_awdl_send_result(drvr, BRCMF_VNDR_EVTS_AWDL_STOPPED,
++				       -ENOLINK, NULL);
++	wiphy_unlock(drvr->wiphy);
++	rtnl_unlock();
++}
++
++/*
 + * Removes the AWDL interface before system sleep, with RTNL and the wiphy
-+ * mutex held, while the firmware still takes commands. A queued operation is
-+ * dropped.
++ * mutex held, while the firmware still takes commands. A queued START is
++ * answered with -ECANCELED, a queued STOP is done here.
 + */
 +void brcmf_awdl_suspend(struct brcmf_pub *drvr)
 +{
 +	struct brcmf_awdl *awdl = &drvr->awdl;
++	enum brcmf_awdl_op op;
 +	int err;
 +
 +	spin_lock(&awdl->lock);
++	op = awdl->op;
 +	awdl->op = BRCMF_AWDL_OP_NONE;
 +	spin_unlock(&awdl->lock);
++	if (op == BRCMF_AWDL_OP_START)
++		brcmf_awdl_send_result(drvr, BRCMF_VNDR_EVTS_AWDL_STARTED,
++				       -ECANCELED, NULL);
 +	if (!awdl->ifp)
 +		return;
 +	err = brcmf_awdl_del(drvr);
@@ -719,7 +850,7 @@ index 607cc8d..a3db05f 100644
  /* Called before the interfaces of the device are removed */
  void brcmf_awdl_detach(struct brcmf_pub *drvr)
  {
-@@ -366,10 +997,17 @@ void brcmf_awdl_detach(struct brcmf_pub *drvr)
+@@ -370,10 +1048,18 @@ void brcmf_awdl_detach(struct brcmf_pub *drvr)
  
  	rtnl_lock();
  	wiphy_lock(drvr->wiphy);
@@ -736,12 +867,13 @@ index 607cc8d..a3db05f 100644
 +
 +	/* A queued operation finds the device detached */
 +	cancel_work_sync(&awdl->ctrl_work);
++	cancel_work_sync(&awdl->remove_work);
  }
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
-index d41a79e..d8bc90b 100644
+index ce5b54d..20767cb 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
-@@ -10,12 +10,21 @@
+@@ -10,18 +10,27 @@
  #include <linux/completion.h>
  #include <linux/if_ether.h>
  #include <linux/spinlock.h>
@@ -763,13 +895,28 @@ index d41a79e..d8bc90b 100644
  /**
   * struct brcmf_awdl - AWDL interface of a device.
   *
-@@ -31,6 +40,22 @@ struct sk_buff;
+- * @lock: protects @mac, @adding, @abandoned, @abandoned_mac, @removing and
+- *	@ifp against the firmware event worker. Changes of @ifp also hold RTNL
+- *	and the wiphy mutex.
++ * @lock: protects @mac, @adding, @abandoned, @abandoned_mac, @removing,
++ *	@fw_removed and @ifp against the firmware event worker. Changes of
++ *	@ifp also hold RTNL and the wiphy mutex.
+  * @if_event: completed by the interface event of the AWDL interface.
+  * @mac: MAC address requested for the AWDL interface.
+  * @adding: interface_create was sent, its interface event is awaited.
+@@ -29,9 +38,28 @@ struct sk_buff;
+  *	with @abandoned_mac that shows up later is removed again.
+  * @abandoned_mac: MAC address of the abandoned AWDL interface.
+  * @removing: interface_remove was sent, its interface event is awaited.
++ * @fw_removed: the firmware removed the AWDL interface on its own,
++ *	@remove_work removes it on the host.
   * @detached: the device goes away, no new AWDL interface is created.
   * @ifp: the AWDL interface, NULL when there is none.
   * @tx_seq: sequence number of the next data frame sent.
 + * @ctrl_work: creates or removes the AWDL interface for the vendor commands,
 + *	which run without RTNL.
 + * @op: operation of @ctrl_work, under @lock.
++ * @remove_work: removes the AWDL interface after the firmware removed it.
 + * @start_mac: MAC address for %BRCMF_AWDL_OP_START.
 + * @payload: awdl_payload with the TLVs of user space.
 + * @payload_len: length of @payload.
@@ -786,12 +933,17 @@ index d41a79e..d8bc90b 100644
   */
  struct brcmf_awdl {
  	spinlock_t lock; /* AWDL state against the event worker */
-@@ -42,6 +67,19 @@ struct brcmf_awdl {
+@@ -41,9 +69,24 @@ struct brcmf_awdl {
+ 	bool abandoned;
+ 	u8 abandoned_mac[ETH_ALEN];
+ 	bool removing;
++	bool fw_removed;
  	bool detached;
  	struct brcmf_if *ifp;
  	u16 tx_seq;
 +	struct work_struct ctrl_work;
 +	enum brcmf_awdl_op op;
++	struct work_struct remove_work;
 +	u8 start_mac[ETH_ALEN];
 +	u8 *payload;
 +	u32 payload_len;
@@ -806,7 +958,7 @@ index d41a79e..d8bc90b 100644
  };
  
  /* Length of the LLC/SNAP and AWDL data header of AWDL data frames */
-@@ -52,9 +90,24 @@ void brcmf_awdl_detach(struct brcmf_pub *drvr);
+@@ -54,9 +97,24 @@ void brcmf_awdl_detach(struct brcmf_pub *drvr);
  int brcmf_awdl_add(struct brcmf_pub *drvr, const u8 *mac,
  		   struct net_device **ndev);
  int brcmf_awdl_del(struct brcmf_pub *drvr);
@@ -989,10 +1141,10 @@ index d07e7c7..34215aa 100644
 +	},
  };
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
-index 418f33e..63e5996 100644
+index 418f33e..4b372e0 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
-@@ -8,12 +8,103 @@
+@@ -8,12 +8,108 @@
  
  #define BROADCOM_OUI	0x001018
  
@@ -1012,7 +1164,10 @@ index 418f33e..63e5996 100644
 + * @BRCMF_VNDR_CMDS_AWDL_SET_SYNC: synchronize to the master of
 + *	%BRCMF_AWDL_ATTR_MASTER, %BRCMF_AWDL_ATTR_MASTER_METRIC and
 + *	%BRCMF_AWDL_ATTR_MASTER_DISTANCE. Without %BRCMF_AWDL_ATTR_MASTER the
-+ *	device is its own master.
++ *	device is its own master. The firmware rejects a new master for a few
++ *	seconds until it knows it, the command then fails with -%EBADE. The
++ *	next %BRCMF_VNDR_CMDS_AWDL_SET_FRAMES or %BRCMF_VNDR_CMDS_AWDL_SET_SYNC
++ *	sends the master again.
 + * @BRCMF_VNDR_CMDS_AWDL_PEER_ADD: add the peer %BRCMF_AWDL_ATTR_ADDR, data
 + *	frames to it are sent from then on. %BRCMF_AWDL_ATTR_PEER_IES gives its
 + *	HT and VHT capabilities, sent again it updates them.
@@ -1040,11 +1195,13 @@ index 418f33e..63e5996 100644
 + *
 + * @BRCMF_VNDR_EVTS_UNSPEC: not used.
 + * @BRCMF_VNDR_EVTS_AWDL_STARTED: result of %BRCMF_VNDR_CMDS_AWDL_START with
-+ *	%BRCMF_AWDL_ATTR_STATUS and, on success, %BRCMF_AWDL_ATTR_IFINDEX.
++ *	%BRCMF_AWDL_ATTR_STATUS and, on success, %BRCMF_AWDL_ATTR_IFINDEX. A
++ *	start still queued before system sleep gets -%ECANCELED.
 + * @BRCMF_VNDR_EVTS_AWDL_STOPPED: the AWDL interface was removed, with
 + *	%BRCMF_AWDL_ATTR_STATUS. After %BRCMF_VNDR_CMDS_AWDL_STOP and before
 + *	system sleep the status is 0 or the error of the removal. When the
-+ *	firmware removed the interface on its own it is -%ENOLINK.
++ *	firmware removed the interface on its own it is -%ENOLINK, sent once
++ *	the interface is gone on the host.
 + * @BRCMF_VNDR_EVTS_LAST: number of vendor events.
 + *
 + * The value of an event is its index in the vendor events and its vendor
@@ -1096,7 +1253,7 @@ index 418f33e..63e5996 100644
  /**
   * enum brcmf_nlattrs - nl80211 message attributes
   *
-@@ -49,5 +140,6 @@ struct brcmf_vndr_dcmd_hdr {
+@@ -49,5 +145,6 @@ struct brcmf_vndr_dcmd_hdr {
  };
  
  extern const struct wiphy_vendor_command brcmf_vendor_cmds[];

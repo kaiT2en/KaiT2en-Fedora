@@ -11,7 +11,7 @@
 
 use std::collections::HashMap;
 use std::process::Command;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
 use log::{debug, info, warn};
@@ -39,6 +39,10 @@ const HT_IE: [u8; 2] = [0x2d, 0x1a];
 const VHT_IE_ID: u8 = 0xbf;
 const TLV_ELECTION_V2: u8 = 0x18;
 
+/// How often and how long a master the firmware rejected is tried again.
+/// The firmware took up to about 8 s to take a new master.
+const SYNC_RETRY: Duration = Duration::from_millis(250);
+const SYNC_RETRY_FOR: Duration = Duration::from_secs(10);
 /// The compressed name macOS uses for _airdrop._tcp.local in PTR records.
 const AIRDROP_PTR_NAME: [u8; 2] = [0xc0, 0x07];
 const DNS_PTR: u8 = 0x0c;
@@ -169,6 +173,8 @@ pub struct Awdl {
     pub peers: HashMap<[u8; 6], Peer>,
     /// Peers added to the firmware, with the elements they were added with
     peer_ops: HashMap<[u8; 6], Vec<u8>>,
+    /// The firmware rejected the master: when it was first and last tried
+    sync_pending: Option<(Instant, Instant)>,
 }
 
 impl Awdl {
@@ -184,6 +190,7 @@ impl Awdl {
             master: None,
             peers: HashMap::new(),
             peer_ops: HashMap::new(),
+            sync_pending: None,
         };
         let (payload, oob) = awdl.frames();
         awdl.ifindex = awdl.nl.start(mac, &payload, &oob)?;
@@ -415,6 +422,48 @@ impl Awdl {
         Ok(())
     }
 
+    /// Makes the firmware a slave of the current master. The firmware rejects
+    /// a master it does not know yet for a few seconds, retry_sync() tries
+    /// again until it takes it.
+    fn sync(&mut self) {
+        let Some(e) = self.master else { return };
+        match self.nl.set_sync(Some(Master {
+            addr: e.master,
+            metric: e.master_metric,
+            distance: (e.distance + 1) as u8,
+        })) {
+            Ok(()) => {
+                if self.sync_pending.take().is_some() {
+                    debug!("AWDL synchronized to {}", mac_str(&e.master));
+                }
+            }
+            Err(err) => {
+                let first = match self.sync_pending {
+                    Some((first, _)) => first,
+                    None => {
+                        debug!("AWDL sync to {}: {err:#}, trying again", mac_str(&e.master));
+                        Instant::now()
+                    }
+                };
+                if first.elapsed() >= SYNC_RETRY_FOR {
+                    // The refresh of the frames sends the master again
+                    debug!("AWDL sync to {}: still rejected, left to the refresh", mac_str(&e.master));
+                    self.sync_pending = None;
+                } else {
+                    self.sync_pending = Some((first, Instant::now()));
+                }
+            }
+        }
+    }
+
+    /// Tries a rejected master again every SYNC_RETRY, for SYNC_RETRY_FOR
+    /// at most.
+    pub fn retry_sync(&mut self) {
+        if self.sync_pending.is_some_and(|(_, last)| last.elapsed() >= SYNC_RETRY) {
+            self.sync();
+        }
+    }
+
     /// Follows the master with the highest metric any peer announces.
     fn follow(&mut self, e: Election) -> Result<()> {
         if e.master == self.mac {
@@ -432,15 +481,8 @@ impl Awdl {
         if better {
             info!("following AWDL master {} metric {:#x}", mac_str(&e.master), e.master_metric);
             self.master = Some(e);
-            // The firmware rejects awdl_opmode until it knows the new master,
-            // the refresh right after sends the synchronization state again
-            if let Err(err) = self.nl.set_sync(Some(Master {
-                addr: e.master,
-                metric: e.master_metric,
-                distance: (e.distance + 1) as u8,
-            })) {
-                debug!("AWDL sync to {}: {err:#}, sent again with the frames", mac_str(&e.master));
-            }
+            self.sync_pending = None;
+            self.sync();
             self.refresh()?;
         } else if same {
             // Keep the counter of the current master up to date

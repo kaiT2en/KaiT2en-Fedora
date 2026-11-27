@@ -16,13 +16,14 @@ vendor events AWDL_FRAME and AWDL_ROLE.
 
 Tested-by: Yossef Osman <Yossef.Osman@proton.me>
 Tested-by: Aditya Garg <aditya.garg@linux.dev>
+Acked-by: Arend van Spriel <arend.vanspriel@broadcom.com>
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-index a3db05f..aed199b 100644
+index 59cd8b4..710a015 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-@@ -711,17 +711,113 @@ static void brcmf_awdl_settle_work(struct wiphy *wiphy,
+@@ -731,17 +731,113 @@ static void brcmf_awdl_settle_work(struct wiphy *wiphy,
  		       sizeof(dwell_off));
  }
  
@@ -142,7 +143,7 @@ index a3db05f..aed199b 100644
  	if (!skb)
  		return;
  	if (nla_put_s32(skb, BRCMF_AWDL_ATTR_STATUS, status) ||
-@@ -808,6 +904,8 @@ const struct nla_policy brcmf_awdl_vndr_policy[BRCMF_AWDL_ATTR_MAX + 1] = {
+@@ -859,6 +955,8 @@ const struct nla_policy brcmf_awdl_vndr_policy[BRCMF_AWDL_ATTR_MAX + 1] = {
  	[BRCMF_AWDL_ATTR_IFINDEX] = { .type = NLA_REJECT },
  	[BRCMF_AWDL_ATTR_PEER_IES] = { .type = NLA_BINARY,
  				       .len = BRCMF_AWDL_PEER_IES_MAX },
@@ -152,7 +153,7 @@ index a3db05f..aed199b 100644
  
  /* The device of a vendor command and its parsed attributes */
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
-index d8bc90b..47dab40 100644
+index 20767cb..6950c94 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
 @@ -18,6 +18,7 @@ struct brcmf_pub;
@@ -163,7 +164,7 @@ index d8bc90b..47dab40 100644
  
  enum brcmf_awdl_op {
  	BRCMF_AWDL_OP_NONE,
-@@ -91,6 +92,8 @@ int brcmf_awdl_add(struct brcmf_pub *drvr, const u8 *mac,
+@@ -98,6 +99,8 @@ int brcmf_awdl_add(struct brcmf_pub *drvr, const u8 *mac,
  		   struct net_device **ndev);
  int brcmf_awdl_del(struct brcmf_pub *drvr);
  void brcmf_awdl_suspend(struct brcmf_pub *drvr);
@@ -229,13 +230,13 @@ index 34215aa..c4a8b68 100644
 +	},
  };
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
-index 63e5996..889d1c4 100644
+index 4b372e0..989232f 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/vendor.h
-@@ -57,6 +57,11 @@ enum brcmf_vndr_cmds {
-  *	%BRCMF_AWDL_ATTR_STATUS. After %BRCMF_VNDR_CMDS_AWDL_STOP and before
+@@ -62,6 +62,11 @@ enum brcmf_vndr_cmds {
   *	system sleep the status is 0 or the error of the removal. When the
-  *	firmware removed the interface on its own it is -%ENOLINK.
+  *	firmware removed the interface on its own it is -%ENOLINK, sent once
+  *	the interface is gone on the host.
 + * @BRCMF_VNDR_EVTS_AWDL_FRAME: AWDL action frame received from
 + *	%BRCMF_AWDL_ATTR_ADDR, the frame body from the category on in
 + *	%BRCMF_AWDL_ATTR_FRAME.
@@ -244,7 +245,7 @@ index 63e5996..889d1c4 100644
   * @BRCMF_VNDR_EVTS_LAST: number of vendor events.
   *
   * The value of an event is its index in the vendor events and its vendor
-@@ -66,6 +71,8 @@ enum brcmf_vndr_evts {
+@@ -71,6 +76,8 @@ enum brcmf_vndr_evts {
  	BRCMF_VNDR_EVTS_UNSPEC,
  	BRCMF_VNDR_EVTS_AWDL_STARTED,
  	BRCMF_VNDR_EVTS_AWDL_STOPPED,
@@ -253,7 +254,7 @@ index 63e5996..889d1c4 100644
  	BRCMF_VNDR_EVTS_LAST
  };
  
-@@ -85,6 +92,9 @@ enum brcmf_vndr_evts {
+@@ -90,6 +97,9 @@ enum brcmf_vndr_evts {
   * @BRCMF_AWDL_ATTR_IFINDEX: interface index of the AWDL interface (u32).
   * @BRCMF_AWDL_ATTR_PEER_IES: HT and VHT capabilities elements of a peer,
   *	built from the AWDL TLVs it sends, as macOS passes them.
@@ -263,7 +264,7 @@ index 63e5996..889d1c4 100644
   * @__BRCMF_AWDL_ATTR_AFTER_LAST: internal use.
   * @BRCMF_AWDL_ATTR_MAX: highest attribute.
   */
-@@ -100,6 +110,8 @@ enum brcmf_awdl_attrs {
+@@ -105,6 +115,8 @@ enum brcmf_awdl_attrs {
  	BRCMF_AWDL_ATTR_STATUS,
  	BRCMF_AWDL_ATTR_IFINDEX,
  	BRCMF_AWDL_ATTR_PEER_IES,

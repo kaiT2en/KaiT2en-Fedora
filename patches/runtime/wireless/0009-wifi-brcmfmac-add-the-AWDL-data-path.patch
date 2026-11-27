@@ -18,7 +18,7 @@ Acked-by: Arend van Spriel <arend.vanspriel@broadcom.com>
 Signed-off-by: Andre Eikmeyer <dev@deq.rocks>
 ---
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-index 1ef6dd5..607cc8d 100644
+index d92b132..e6cdad0 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 @@ -8,11 +8,25 @@
@@ -62,7 +62,7 @@ index 1ef6dd5..607cc8d 100644
  /* The BSSID of all AWDL frames */
  static const u8 brcmf_awdl_bssid[ETH_ALEN] = {
  	0x00, 0x25, 0x00, 0xff, 0x94, 0x73,
-@@ -272,6 +294,71 @@ int brcmf_awdl_del(struct brcmf_pub *drvr)
+@@ -276,6 +298,71 @@ int brcmf_awdl_del(struct brcmf_pub *drvr)
  	return err;
  }
  
@@ -135,7 +135,7 @@ index 1ef6dd5..607cc8d 100644
  void brcmf_awdl_detach(struct brcmf_pub *drvr)
  {
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
-index 361958c..d41a79e 100644
+index cac2310..ce5b54d 100644
 --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
 @@ -13,6 +13,8 @@
@@ -147,7 +147,7 @@ index 361958c..d41a79e 100644
  
  /**
   * struct brcmf_awdl - AWDL interface of a device.
-@@ -28,6 +30,7 @@ struct brcmf_if;
+@@ -29,6 +31,7 @@ struct brcmf_if;
   * @removing: interface_remove was sent, its interface event is awaited.
   * @detached: the device goes away, no new AWDL interface is created.
   * @ifp: the AWDL interface, NULL when there is none.
@@ -155,7 +155,7 @@ index 361958c..d41a79e 100644
   */
  struct brcmf_awdl {
  	spinlock_t lock; /* AWDL state against the event worker */
-@@ -38,8 +41,12 @@ struct brcmf_awdl {
+@@ -40,8 +43,12 @@ struct brcmf_awdl {
  	bool removing;
  	bool detached;
  	struct brcmf_if *ifp;
@@ -168,7 +168,7 @@ index 361958c..d41a79e 100644
  void brcmf_awdl_attach(struct brcmf_pub *drvr);
  void brcmf_awdl_detach(struct brcmf_pub *drvr);
  int brcmf_awdl_add(struct brcmf_pub *drvr, const u8 *mac,
-@@ -47,5 +54,7 @@ int brcmf_awdl_add(struct brcmf_pub *drvr, const u8 *mac,
+@@ -49,5 +56,7 @@ int brcmf_awdl_add(struct brcmf_pub *drvr, const u8 *mac,
  int brcmf_awdl_del(struct brcmf_pub *drvr);
  bool brcmf_awdl_if_added(struct brcmf_pub *drvr, struct brcmf_if *ifp);
  bool brcmf_awdl_if_removed(struct brcmf_pub *drvr, struct brcmf_if *ifp);

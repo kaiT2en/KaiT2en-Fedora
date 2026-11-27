@@ -1,6 +1,6 @@
 # [PATCH wireless-next v2 0/6] wifi: brcmfmac: AWDL for AirDrop on Apple T2 Macs
 
-- Status: submitted
+- Status: superseded by brcmfmac-awdl-v3
 - Version: v2
 - Date: 2026-11-25
 - Base: wireless-next `18d0bedbb5f0`

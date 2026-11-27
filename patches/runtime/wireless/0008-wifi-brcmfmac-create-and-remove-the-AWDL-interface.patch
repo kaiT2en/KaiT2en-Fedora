@@ -36,13 +36,13 @@ index e5ca0f5..36c6341 100644
  		fwsignal.o
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
 new file mode 100644
-index 0000000..1ef6dd5
+index 0000000..d92b132
 --- /dev/null
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.c
-@@ -0,0 +1,288 @@
-+// SPDX-License-Identifier: GPL-2.0
+@@ -0,0 +1,292 @@
++// SPDX-License-Identifier: ISC
 +/*
-+ * Copyright (c) 2026 André Eikmeyer <dev@deq.rocks>
++ * Copyright (c) 2026 Andre Eikmeyer <dev@deq.rocks>
 + *
 + * AWDL interface of the Apple firmware of the BCM4364 and BCM4377.
 + *
@@ -91,9 +91,11 @@ index 0000000..1ef6dd5
 +	bool own, late = false;
 +
 +	spin_lock(&awdl->lock);
-+	own = (awdl->adding || awdl->abandoned) && ifp->ndev &&
++	own = awdl->adding && ifp->ndev &&
 +	      ether_addr_equal(ifp->mac_addr, awdl->mac);
-+	if (own && awdl->adding) {
++	late = !own && awdl->abandoned && ifp->ndev &&
++	       ether_addr_equal(ifp->mac_addr, awdl->abandoned_mac);
++	if (own) {
 +		ifp->awdl = true;
 +		strscpy(ifp->ndev->name, "awdl%d", IFNAMSIZ);
 +		/* Keeps udev from giving it a name from the bus path */
@@ -101,16 +103,15 @@ index 0000000..1ef6dd5
 +		awdl->ifp = ifp;
 +		awdl->adding = false;
 +		complete(&awdl->if_event);
-+	} else if (own) {
++	} else if (late) {
 +		awdl->abandoned = false;
-+		late = true;
 +	}
 +	spin_unlock(&awdl->lock);
 +
 +	/* brcmf_awdl_add() gave up on this interface */
 +	if (late)
 +		brcmf_awdl_drop_if(drvr, ifp);
-+	return own;
++	return own || late;
 +}
 +
 +/*
@@ -145,11 +146,14 @@ index 0000000..1ef6dd5
 +/* The firmware interface index of the AWDL interface must be free */
 +static bool brcmf_awdl_ifidx_used(struct brcmf_pub *drvr)
 +{
++	struct brcmf_if *ifp;
 +	int i;
 +
-+	for (i = 1; i < BRCMF_MAX_IFS; i++)
-+		if (drvr->iflist[i] && drvr->iflist[i]->ifidx == BRCMF_AWDL_IFIDX)
++	for (i = 1; i < BRCMF_MAX_IFS; i++) {
++		ifp = drvr->iflist[i];
++		if (ifp && ifp->ifidx == BRCMF_AWDL_IFIDX)
 +			return true;
++	}
 +	return false;
 +}
 +
@@ -188,7 +192,6 @@ index 0000000..1ef6dd5
 +	struct brcmf_if *pri = brcmf_get_ifp(drvr, 0);
 +	struct wl_interface_create_v3 req = {};
 +	struct brcmf_if *ifp;
-+	long left = 0;
 +	int err;
 +
 +	ASSERT_RTNL();
@@ -211,7 +214,6 @@ index 0000000..1ef6dd5
 +	spin_lock(&awdl->lock);
 +	ether_addr_copy(awdl->mac, mac);
 +	awdl->adding = true;
-+	awdl->abandoned = false;
 +	reinit_completion(&awdl->if_event);
 +	spin_unlock(&awdl->lock);
 +
@@ -227,22 +229,24 @@ index 0000000..1ef6dd5
 +	err = brcmf_fil_iovar_data_get(pri, "interface_create", &req,
 +				       sizeof(req));
 +	if (!err)
-+		left = wait_for_completion_timeout(&awdl->if_event,
-+						   BRCMF_AWDL_IF_TIMEOUT);
++		wait_for_completion_timeout(&awdl->if_event,
++					    BRCMF_AWDL_IF_TIMEOUT);
 +
 +	spin_lock(&awdl->lock);
 +	awdl->adding = false;
 +	ifp = awdl->ifp;
 +	/* The firmware created the interface, its event may still come */
-+	if (!err && !ifp)
++	if (!err && !ifp) {
 +		awdl->abandoned = true;
++		ether_addr_copy(awdl->abandoned_mac, mac);
++	}
 +	spin_unlock(&awdl->lock);
 +
 +	if (err) {
 +		bphy_err(drvr, "AWDL interface_create failed: %d\n", err);
 +		return err;
 +	}
-+	if (!left || !ifp) {
++	if (!ifp) {
 +		bphy_err(drvr, "no interface event for the AWDL interface\n");
 +		return -ETIMEDOUT;
 +	}
@@ -330,13 +334,13 @@ index 0000000..1ef6dd5
 +}
 diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
 new file mode 100644
-index 0000000..361958c
+index 0000000..cac2310
 --- /dev/null
 +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/awdl.h
-@@ -0,0 +1,51 @@
-+/* SPDX-License-Identifier: GPL-2.0 */
+@@ -0,0 +1,53 @@
++/* SPDX-License-Identifier: ISC */
 +/*
-+ * Copyright (c) 2026 André Eikmeyer <dev@deq.rocks>
++ * Copyright (c) 2026 Andre Eikmeyer <dev@deq.rocks>
 + *
 + * AWDL interface of the Apple firmware, see awdl.c
 + */
@@ -353,14 +357,15 @@ index 0000000..361958c
 +/**
 + * struct brcmf_awdl - AWDL interface of a device.
 + *
-+ * @lock: protects @mac, @adding, @abandoned, @removing and @ifp against the
-+ *	firmware event worker. Changes of @ifp also hold RTNL and the wiphy
-+ *	mutex.
++ * @lock: protects @mac, @adding, @abandoned, @abandoned_mac, @removing and
++ *	@ifp against the firmware event worker. Changes of @ifp also hold RTNL
++ *	and the wiphy mutex.
 + * @if_event: completed by the interface event of the AWDL interface.
 + * @mac: MAC address requested for the AWDL interface.
 + * @adding: interface_create was sent, its interface event is awaited.
 + * @abandoned: the interface event did not come in time, an AWDL interface
-+ *	that shows up later is removed again.
++ *	with @abandoned_mac that shows up later is removed again.
++ * @abandoned_mac: MAC address of the abandoned AWDL interface.
 + * @removing: interface_remove was sent, its interface event is awaited.
 + * @detached: the device goes away, no new AWDL interface is created.
 + * @ifp: the AWDL interface, NULL when there is none.
@@ -371,6 +376,7 @@ index 0000000..361958c
 +	u8 mac[ETH_ALEN];
 +	bool adding;
 +	bool abandoned;
++	u8 abandoned_mac[ETH_ALEN];
 +	bool removing;
 +	bool detached;
 +	struct brcmf_if *ifp;

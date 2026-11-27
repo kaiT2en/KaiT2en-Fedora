@@ -137,6 +137,7 @@ fn run(
                 warn!("{err:#}");
             }
         }
+        awdl.retry_sync();
         if last_refresh.elapsed() >= REFRESH {
             last_refresh = Instant::now();
             if let Err(err) = awdl.refresh() {
